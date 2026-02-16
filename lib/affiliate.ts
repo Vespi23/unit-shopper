@@ -17,6 +17,13 @@ export function getAffiliateLink(product: Product): string {
 
     try {
         const url = new URL(product.link);
+
+        // Security Check: Ensure protocol is http or https
+        if (!['http:', 'https:'].includes(url.protocol)) {
+            console.warn('Blocked non-http URL:', product.link);
+            return '#';
+        }
+
         const source = product.source.toLowerCase();
 
         if (source.includes('amazon') && AFFILIATE_CONFIG.amazon.enabled) {
