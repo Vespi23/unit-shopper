@@ -10,7 +10,7 @@ export function Header() {
                         <ShoppingBag className="h-5 w-5" />
                     </div>
                     <span className="hidden sm:inline-block">
-                        BangYourBuck
+                        BudgetLynx
                     </span>
                 </Link>
                 <nav className="flex items-center gap-6 text-sm font-medium">

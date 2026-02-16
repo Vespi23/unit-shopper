@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BangYourBuck - Unit Price Search",
+  title: "BudgetLynx - Unit Price Search",
   description: "Compare unit prices across Amazon and Walmart instantly.",
 };
 
