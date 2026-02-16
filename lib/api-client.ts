@@ -72,8 +72,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
                 title: item.title,
                 price: price,
                 image: item.thumbnail,
-                source: item.source?.toLowerCase().includes('amazon') ? 'amazon' :
-                    item.source?.toLowerCase().includes('walmart') ? 'walmart' : 'other',
+                source: item.source || 'Unknown',
                 rating: 4.5,
                 reviews: 0,
                 unit: unit,

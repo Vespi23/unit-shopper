@@ -49,7 +49,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                     <div className="p-8 flex flex-col gap-6">
                         <div>
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
-                                {product.source === 'amazon' ? 'Amazon' : 'Walmart'}
+                                {product.source}
                             </div>
                             <h2 className="text-2xl md:text-3xl font-bold leading-tight">
                                 {product.title}
@@ -110,7 +110,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                             rel="noopener noreferrer"
                             className="w-full py-4 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity mt-auto"
                         >
-                            View on {product.source === 'amazon' ? 'Amazon' : 'Walmart'} <ExternalLink className="w-5 h-5" />
+                            View on {product.source} <ExternalLink className="w-5 h-5" />
                         </a>
                     </div>
                 </div>
