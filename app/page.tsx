@@ -7,6 +7,7 @@ import { Search, Loader2 } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
+import { track } from '@vercel/analytics';
 
 export default function Home() {
   const [query, setQuery] = useState('');
@@ -42,6 +43,11 @@ export default function Home() {
         const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
         const data = await res.json();
         setResults(Array.isArray(data) ? data : []);
+
+        // Track successful search
+        if (Array.isArray(data) && data.length > 0) {
+          track('search_query', { query: debouncedQuery, resultCount: data.length });
+        }
       } catch (error) {
         console.error("Search failed", error);
         setResults([]);
