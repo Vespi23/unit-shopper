@@ -16,9 +16,10 @@ export interface Product {
         quantity: number;
         totalValue: number;
         formatted: string;
-        originalPrice: number;
-        pricePerUnit?: string;
-        score?: number; // Calculated field for sorting
-    }
+    };
+    originalPrice: number;
+    pricePerUnit?: string;
+    score?: number; // Calculated field for sorting
+}
 
 export type SortOption = 'price_asc' | 'price_desc' | 'unit_price_asc';
