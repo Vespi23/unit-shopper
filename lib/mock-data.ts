@@ -7,7 +7,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 3.48,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Skippy+16oz',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000000',
         source: 'amazon',
         rating: 4.8,
         reviews: 12000
@@ -18,7 +18,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 12.98,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Skippy+40oz+x2',
-        link: '#',
+        link: 'https://www.walmart.com/ip/123456789',
         source: 'walmart',
         rating: 4.7,
         reviews: 500
@@ -29,7 +29,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 10.29,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Jif+16oz+x3',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000001',
         source: 'amazon',
         rating: 4.9,
         reviews: 8500
@@ -40,7 +40,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 5.94,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=GV+64oz',
-        link: '#',
+        link: 'https://www.walmart.com/ip/987654321',
         source: 'walmart',
         rating: 4.5,
         reviews: 3000
@@ -52,7 +52,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 19.98,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Starbucks+28oz',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000002',
         source: 'amazon',
         rating: 4.8,
         reviews: 45000
@@ -63,7 +63,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 13.58,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Folgers+40oz',
-        link: '#',
+        link: 'https://www.walmart.com/ip/112233445',
         source: 'walmart',
         rating: 4.6,
         reviews: 12000
@@ -74,7 +74,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 21.34,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Dunkin+30oz',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000003',
         source: 'amazon',
         rating: 4.7,
         reviews: 15600
@@ -86,7 +86,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 12.97,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Tide+100floz',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000004',
         source: 'amazon',
         rating: 4.8,
         reviews: 25000
@@ -97,7 +97,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 5.44,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Tide+37floz',
-        link: '#',
+        link: 'https://www.walmart.com/ip/223344556',
         source: 'walmart',
         rating: 4.7,
         reviews: 5000
@@ -108,7 +108,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 15.94,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Gain+154floz',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000005',
         source: 'amazon',
         rating: 4.8,
         reviews: 12000
@@ -120,7 +120,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 33.58,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Bounty+12Rolls',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000006',
         source: 'amazon',
         rating: 4.8,
         reviews: 55000
@@ -131,7 +131,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 11.98,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Bounty+6Rolls',
-        link: '#',
+        link: 'https://www.walmart.com/ip/334455667',
         source: 'walmart',
         rating: 4.7,
         reviews: 8900
@@ -142,7 +142,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 32.99,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Charmin+24Rolls',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000007',
         source: 'amazon',
         rating: 4.9,
         reviews: 42000
@@ -154,7 +154,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 16.98,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Coke+35pk',
-        link: '#',
+        link: 'https://www.amazon.com/dp/B000000008',
         source: 'amazon',
         rating: 4.7,
         reviews: 1200
@@ -165,7 +165,7 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>
         price: 7.28,
         currency: 'USD',
         image: 'https://placehold.co/200x200?text=Coke+12pk',
-        link: '#',
+        link: 'https://www.walmart.com/ip/445566778',
         source: 'walmart',
         rating: 4.6,
         reviews: 3500

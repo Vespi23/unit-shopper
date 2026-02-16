@@ -17,8 +17,8 @@ export interface Product {
         totalValue: number;
         formatted: string;
     };
-    pricePerUnit?: string;
-    score?: number; // Internal score for sorting (lower is better)
+    originalPrice: number;
+    score?: number; // Calculated field for sorting
 }
 
 export type SortOption = 'price_asc' | 'price_desc' | 'unit_price_asc';

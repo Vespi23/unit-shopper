@@ -67,6 +67,11 @@ export async function searchProducts(query: string): Promise<Product[]> {
                 pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
             }
 
+            // Debug logging to see available fields
+            if (results.indexOf(item) === 0) {
+                console.log('Sample Raw Item:', JSON.stringify(item, null, 2));
+            }
+
             return {
                 id: item.product_id || String(Math.random()),
                 title: item.title,
@@ -79,7 +84,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
                 amount: value,
                 totalAmount: totalValue,
                 pricePerUnit: pricePerUnit,
-                link: item.link,
+                link: item.link || item.product_link, // Fallback to product_link
                 currency: 'USD',
                 originalPrice: 0,
                 score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
