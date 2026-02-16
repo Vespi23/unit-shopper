@@ -4,6 +4,7 @@ import { Product } from '@/lib/types';
 import { X, ExternalLink, Star } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
+import { getAffiliateLink } from '@/lib/affiliate';
 
 interface ComparisonViewProps {
     products: Product[];
@@ -105,16 +106,26 @@ export function ComparisonView({ products, onClose }: ComparisonViewProps) {
 
                                     {/* Source */}
                                     <div className="h-20 p-4 flex items-center justify-center">
-                                        <span className={`px-2 py-1 rounded text-xs font-medium text-white ${product.source === 'amazon' ? 'bg-orange-500' : 'bg-blue-600'}`}>
-                                            {product.source === 'amazon' ? 'Amazon' : 'Walmart'}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${(() => {
+                                                const sourceMap: Record<string, string> = {
+                                                    'amazon': 'bg-orange-500',
+                                                    'walmart': 'bg-blue-600',
+                                                    'target': 'bg-red-600'
+                                                };
+                                                const sourceKey = product.source?.toLowerCase() || 'other';
+                                                return sourceMap[sourceKey] || 'bg-gray-600';
+                                            })()
+                                            }`}>
+                                            {product.source || 'Unknown'}
                                         </span>
                                     </div>
 
                                     {/* CTA */}
                                     <div className="h-20 p-4 flex items-center justify-center">
                                         <a
-                                            href={product.link}
+                                            href={getAffiliateLink(product)}
                                             target="_blank"
+                                            rel="nofollow noopener noreferrer"
                                             className="p-2 rounded-lg bg-secondary hover:bg-primary hover:text-primary-foreground transition-colors"
                                         >
                                             <ExternalLink className="w-5 h-5" />

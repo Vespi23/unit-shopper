@@ -4,6 +4,7 @@ import { Product } from '@/lib/types';
 import { X, ExternalLink, TrendingDown, Star } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
+import { getAffiliateLink } from '@/lib/affiliate';
 
 interface ProductDetailModalProps {
     product: Product;
@@ -105,7 +106,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
                         {/* CTA */}
                         <a
-                            href={product.link}
+                            href={getAffiliateLink(product)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="w-full py-4 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity mt-auto"
