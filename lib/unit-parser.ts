@@ -9,17 +9,17 @@ export interface UnitInfo {
 }
 
 const UNIT_REGEX = {
-    oz: /(\d+(?:\.\d+)?)\s?(?:oz|ounce|ounces)/i,
-    fl_oz: /(\d+(?:\.\d+)?)\s?(?:fl\s?oz|fluid\s?ounce|fluid\s?ounces)/i,
-    lb: /(\d+(?:\.\d+)?)\s?(?:lb|lbs|pound|pounds)/i,
-    g: /(\d+(?:\.\d+)?)\s?(?:g|gram|rams)/i,
-    kg: /(\d+(?:\.\d+)?)\s?(?:kg|kilogram|kilograms)/i,
-    l: /(\d+(?:\.\d+)?)\s?(?:l|liter|liters)/i,
-    ml: /(\d+(?:\.\d+)?)\s?(?:ml|milliliter|milliliters)/i,
-    count: /(\d+)\s?(?:count|ct|pack|pcs)/i,
-    loads: /(\d+)\s?(?:load|loads)/i,
-    rolls: /(\d+)\s?(?:roll|rolls)/i,
-    sheets: /(\d+)\s?(?:sheet|sheets)/i,
+    oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:oz|ounce|ounces)\b/i,
+    fl_oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:fl\s?oz|fluid\s?ounce|fluid\s?ounces)\b/i,
+    lb: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:lb|lbs|pound|pounds)\b/i,
+    g: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:g|gram|rams)\b/i,
+    kg: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:kg|kilogram|kilograms)\b/i,
+    l: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:l|liter|liters)\b/i,
+    ml: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:ml|milliliter|milliliters)\b/i,
+    count: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:count|ct|pack|pcs)\b/i,
+    loads: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:load|loads)\b/i,
+    rolls: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:roll|rolls)\b/i,
+    sheets: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:sheet|sheets)\b/i,
 };
 
 const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack/i;
