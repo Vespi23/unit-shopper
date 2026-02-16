@@ -41,7 +41,7 @@ export default function Home() {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
         const data = await res.json();
-        setResults(data.results || []);
+        setResults(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Search failed", error);
         setResults([]);

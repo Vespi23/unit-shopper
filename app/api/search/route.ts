@@ -1,43 +1,37 @@
 import { NextResponse } from 'next/server';
 import { MOCK_PRODUCTS } from '@/lib/mock-data';
-import { parseUnit, normalizeUnit, calculatePricePerUnit } from '@/lib/unit-parser';
+import { searchProducts } from '@/lib/api-client';
 import { Product } from '@/lib/types';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q')?.toLowerCase() || '';
+    const query = searchParams.get('q');
 
-    // Filter mock data
-    let results: Product[] = MOCK_PRODUCTS.filter(p =>
-        query ? p.title.toLowerCase().includes(query) : true
-    );
+    if (!query) {
+        return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
+    }
 
-    // Apply Unit Logic
-    results = results.map(product => {
-        const unitInfo = parseUnit(product.title);
-        let pricePerUnit = 'N/A';
-        let normalizedUnitInfo = undefined;
-        let score = 999999;
+    try {
+        let results: Product[] = [];
 
-        if (unitInfo) {
-            normalizedUnitInfo = normalizeUnit(unitInfo);
-            pricePerUnit = calculatePricePerUnit(product.price, normalizedUnitInfo.totalValue, normalizedUnitInfo.unit);
-
-            if (normalizedUnitInfo.totalValue > 0) {
-                score = product.price / normalizedUnitInfo.totalValue;
-            }
+        // Use Real API if key is present
+        if (process.env.SERPAPI_KEY) {
+            console.log(`Fetching real data for: ${query}`);
+            results = await searchProducts(query);
+        } else {
+            console.log(`Using mock data for: ${query}`);
+            // Filter mock data
+            const lowerQuery = query.toLowerCase();
+            const mockData = MOCK_PRODUCTS as unknown as Product[]; // Cast because mock data omits some fields
+            results = mockData.filter((p: Product) =>
+                p.title.toLowerCase().includes(lowerQuery) ||
+                p.source.toLowerCase().includes(lowerQuery)
+            );
         }
 
-        return {
-            ...product,
-            unitInfo: normalizedUnitInfo || undefined,
-            pricePerUnit,
-            score
-        };
-    });
-
-    // Sort by Unit Price (Cheapest First) by default
-    results.sort((a, b) => (a.score || 999999) - (b.score || 999999));
-
-    return NextResponse.json({ results });
+        return NextResponse.json(results);
+    } catch (error) {
+        console.error('Search error:', error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
 }

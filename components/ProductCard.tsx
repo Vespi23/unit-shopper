@@ -27,7 +27,14 @@ export function ProductCardSkeleton() {
 }
 
 export function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
-    const isAmazon = product.source === 'amazon';
+    const sourceMap: Record<string, { name: string, color: string }> = {
+        'amazon': { name: 'Amazon', color: 'bg-orange-500' },
+        'walmart': { name: 'Walmart', color: 'bg-blue-600' },
+        'target': { name: 'Target', color: 'bg-red-600' }
+    };
+
+    const sourceInput = product.source?.toLowerCase() || 'other';
+    const source = sourceMap[sourceInput] || { name: product.source || 'Other', color: 'bg-gray-600' };
 
     return (
         <div
@@ -54,8 +61,8 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                     className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105 mix-blend-multiply dark:mix-blend-normal"
                 />
                 {/* Source Badge */}
-                <div className={`absolute top-2 right-2 rounded-full px-2 py-0.5 text-xs font-medium text-white ${isAmazon ? 'bg-orange-500' : 'bg-blue-600'}`}>
-                    {isAmazon ? 'Amazon' : 'Walmart'}
+                <div className={`absolute top-2 right-2 rounded-full px-2 py-0.5 text-xs font-medium text-white ${source.color}`}>
+                    {source.name}
                 </div>
             </div>
 

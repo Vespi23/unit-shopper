@@ -5,7 +5,7 @@ export interface Product {
     currency: string;
     image: string;
     link: string;
-    source: 'amazon' | 'walmart';
+    source: string;
     rating?: number;
     reviews?: number;
 
