@@ -17,14 +17,16 @@ export function getAffiliateLink(product: Product): string {
 
     try {
         const url = new URL(product.link);
+        const source = product.source.toLowerCase();
 
-        if (product.source === 'amazon' && AFFILIATE_CONFIG.amazon.enabled) {
+        if (source.includes('amazon') && AFFILIATE_CONFIG.amazon.enabled) {
             // Amazon: Append ?tag=xyz
+            url.searchParams.delete('tag'); // Remove existing tag
             url.searchParams.set('tag', AFFILIATE_CONFIG.amazon.tag);
             return url.toString();
         }
 
-        if (product.source === 'walmart' && AFFILIATE_CONFIG.walmart.enabled) {
+        if (source.includes('walmart') && AFFILIATE_CONFIG.walmart.enabled) {
             // Walmart: Usually requires wrapping in Impact Radius URL
             // For now, we'll just return the original URL as we don't have the format yet
             // thorough implementation would look like:
