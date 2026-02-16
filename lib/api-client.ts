@@ -81,7 +81,8 @@ export async function searchProducts(query: string): Promise<Product[]> {
                 pricePerUnit: pricePerUnit,
                 link: item.link,
                 currency: 'USD',
-                originalPrice: 0 // Adding missing field
+                originalPrice: 0,
+                score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
             };
         });
 

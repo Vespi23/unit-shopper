@@ -13,6 +13,8 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [results, setResults] = useState<Product[]>([]);
+  const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
+  const [filterSource, setFilterSource] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -71,6 +73,25 @@ export default function Home() {
     }
   };
 
+  // Filter and Sort Logic
+  const uniqueSources = Array.from(new Set(results.map(p => p.source)));
+
+  const filteredAndSortedResults = [...results]
+    .filter(p => filterSource.length === 0 || filterSource.includes(p.source))
+    .sort((a, b) => {
+      if (sortBy === 'price_asc') return a.price - b.price;
+      if (sortBy === 'price_desc') return b.price - a.price;
+      return (a.score || 999999) - (b.score || 999999); // score_asc (Best Value)
+    });
+
+  const toggleSourceFilter = (source: string) => {
+    setFilterSource(prev =>
+      prev.includes(source)
+        ? prev.filter(s => s !== source)
+        : [...prev, source]
+    );
+  };
+
   return (
     <div className="flex flex-col items-center w-full pb-20">
       {/* Hero Section */}
@@ -110,13 +131,58 @@ export default function Home() {
           </div>
         )}
 
+        {/* Controls Section */}
+        {results.length > 0 && !loading && (
+          <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
+
+            {/* Source Filters */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm font-medium text-muted-foreground mr-2">Filter:</span>
+              {uniqueSources.map(source => (
+                <button
+                  key={source}
+                  onClick={() => toggleSourceFilter(source)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${filterSource.includes(source)
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-border hover:border-primary/50'
+                    }`}
+                >
+                  {source}
+                </button>
+              ))}
+              {filterSource.length > 0 && (
+                <button
+                  onClick={() => setFilterSource([])}
+                  className="text-xs text-muted-foreground hover:text-primary underline ml-2"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="score_asc">Best Value (Unit Price)</option>
+                <option value="price_asc">Lowest Total Price</option>
+                <option value="price_desc">Highest Total Price</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => (
               <ProductCardSkeleton key={i} />
             ))
           ) : (
-            results.map((product) => (
+            filteredAndSortedResults.map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}
