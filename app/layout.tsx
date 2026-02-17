@@ -20,6 +20,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "BudgetLynx - Unit Price Search",
   description: "Compare unit prices across Amazon and Walmart instantly.",
+  other: {
+    "impact-site-verification": "81bc5835-fc1d-41ed-94be-799749315bd0",
+  },
 };
 
 export default function RootLayout({
