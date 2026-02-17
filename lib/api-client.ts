@@ -31,7 +31,8 @@ export async function searchProducts(query: string, engine: 'google_shopping' | 
         // Common params
         hl: 'en',
         gl: 'us',
-        num: '50'
+        num: '50',
+        no_cache: 'true'
     });
 
     if (engine === 'google_shopping') {
