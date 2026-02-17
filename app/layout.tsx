@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/react";
 import { ShoppingListProvider } from '@/components/ShoppingListContext';
+import { CookieConsent } from '@/components/CookieConsent';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,7 +38,9 @@ export default function RootLayout({
             {children}
           </div>
           <Footer />
+          <Footer />
           <Analytics />
+          <CookieConsent />
         </ShoppingListProvider>
       </body>
     </html>
