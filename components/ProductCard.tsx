@@ -1,3 +1,5 @@
+'use client';
+
 import { Product } from '@/lib/types';
 import { ExternalLink, ShoppingCart, Star } from 'lucide-react';
 import Image from 'next/image';
@@ -26,7 +28,23 @@ export function ProductCardSkeleton() {
     );
 }
 
+import { useShoppingList } from './ShoppingListContext';
+import { Button } from './ui/button';
+import { Heart, Plus, Check } from 'lucide-react';
+
 export function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
+    const { addToList, removeFromList, isInList } = useShoppingList();
+    const isAdded = isInList(product.id);
+
+    const toggleList = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (isAdded) {
+            removeFromList(product.id);
+        } else {
+            addToList(product);
+        }
+    };
+
     const sourceMap: Record<string, { name: string, color: string }> = {
         'amazon': { name: 'Amazon', color: 'bg-orange-500' },
         'walmart': { name: 'Walmart', color: 'bg-blue-600' },
@@ -42,13 +60,26 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
             onClick={onClick}
         >
             {/* Selection Checkbox */}
-            <div className="absolute top-0 left-0 z-20 p-3" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-2 left-2 z-20" onClick={(e) => e.stopPropagation()}>
                 <input
                     type="checkbox"
                     checked={isSelected}
                     onChange={(e) => onSelect(e.target.checked)}
-                    className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-transform hover:scale-110"
+                    className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-transform hover:scale-110 shadow-sm"
                 />
+            </div>
+
+            {/* Shopping List Button */}
+            <div className="absolute top-2 right-2 z-20">
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    className={`h-8 w-8 rounded-full shadow-sm transition-colors ${isAdded ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white/80 hover:bg-white text-muted-foreground'}`}
+                    onClick={toggleList}
+                    title={isAdded ? "Remove from list" : "Add to list"}
+                >
+                    {isAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                </Button>
             </div>
 
             {/* Image Section */}
@@ -61,7 +92,7 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                     className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105 mix-blend-multiply dark:mix-blend-normal"
                 />
                 {/* Source Badge */}
-                <div className={`absolute top-2 right-2 rounded-full px-2 py-0.5 text-xs font-medium text-white ${source.color}`}>
+                <div className={`absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-xs font-medium text-white shadow-sm ${source.color}`}>
                     {source.name}
                 </div>
             </div>

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/react";
+import { ShoppingListProvider } from '@/components/ShoppingListContext';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,18 +27,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
-        <Header />
-        <div className="flex flex-col min-h-screen">
-          <main className="flex-1">
+        <ShoppingListProvider>
+          <Header />
+          <div className="flex-grow">
             {children}
-          </main>
+          </div>
           <Footer />
           <Analytics />
-        </div>
+        </ShoppingListProvider>
       </body>
     </html>
   );
