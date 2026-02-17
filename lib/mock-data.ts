@@ -169,5 +169,74 @@ export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score' 
         source: 'walmart',
         rating: 4.6,
         reviews: 3500
+    },
+    // Diapers
+    {
+        id: 'amz-10',
+        title: "Pampers Swaddlers Disposable Baby Diapers, Size 1, 198 Count",
+        price: 55.94,
+        currency: 'USD',
+        image: 'https://placehold.co/200x200?text=Pampers+198ct',
+        link: 'https://www.amazon.com/dp/B000000009',
+        source: 'amazon',
+        rating: 4.9,
+        reviews: 34000
+    },
+    {
+        id: 'wm-7',
+        title: "Pampers Swaddlers Disposable Baby Diapers, Size 1, 96 Count",
+        price: 26.97,
+        currency: 'USD',
+        image: 'https://placehold.co/200x200?text=Pampers+96ct',
+        link: 'https://www.walmart.com/ip/556677889',
+        source: 'walmart',
+        rating: 4.8,
+        reviews: 8000
+    },
+    // Trash Bags
+    {
+        id: 'amz-11',
+        title: "Glad ForceFlex Tall Kitchen Trash Bags, 13 Gallon, 110 Count",
+        price: 23.49,
+        currency: 'USD',
+        image: 'https://placehold.co/200x200?text=Glad+110ct',
+        link: 'https://www.amazon.com/dp/B000000010',
+        source: 'amazon',
+        rating: 4.8,
+        reviews: 45000
+    },
+    {
+        id: 'wm-8',
+        title: "Great Value Tall Kitchen Trash Bags, 13 Gallon, 120 Count",
+        price: 15.98,
+        currency: 'USD',
+        image: 'https://placehold.co/200x200?text=GV+120ct',
+        link: 'https://www.walmart.com/ip/667788990',
+        source: 'walmart',
+        rating: 4.4,
+        reviews: 12000
+    },
+    // Pet Food
+    {
+        id: 'amz-12',
+        title: "Purina ONE SmartBlend Natural Adult Chicken & Rice Formula Dry Dog Food, 40 lb. Bag",
+        price: 53.98,
+        currency: 'USD',
+        image: 'https://placehold.co/200x200?text=Purina+40lb',
+        link: 'https://www.amazon.com/dp/B000000011',
+        source: 'amazon',
+        rating: 4.7,
+        reviews: 28000
+    },
+    {
+        id: 'wm-9',
+        title: "Purina ONE SmartBlend Natural Adult Chicken & Rice Formula Dry Dog Food, 8 lb. Bag",
+        price: 15.48,
+        currency: 'USD',
+        image: 'https://placehold.co/200x200?text=Purina+8lb',
+        link: 'https://www.walmart.com/ip/778899001',
+        source: 'walmart',
+        rating: 4.6,
+        reviews: 3500
     }
 ];
