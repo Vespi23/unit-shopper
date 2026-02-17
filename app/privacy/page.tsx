@@ -20,7 +20,7 @@ export default function PrivacyPolicy() {
                 <p className="lead">Last updated: {new Date().toLocaleDateString()}</p>
 
                 <p>
-                    At BudgetLynx (operated by FinFlow LLC, "we," "us," or "our"), accesible from this website, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by BudgetLynx and how we use it.
+                    At BudgetLynx (operated by FinFlow LLC, "we," "us," or "our"), accessible from this website, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by BudgetLynx and how we use it.
                 </p>
 
                 <h2>1. Information We Collect</h2>
@@ -53,7 +53,7 @@ export default function PrivacyPolicy() {
 
                 <h2>5. Contact Us</h2>
                 <p>
-                    If you have any questions about this Privacy Policy, please contact us via the website administrator.
+                    If you have any questions about this Privacy Policy, please <Link href="/contact" className="text-primary hover:underline">contact us</Link>.
                 </p>
             </article>
         </div>

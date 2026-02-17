@@ -48,6 +48,11 @@ export default function TermsOfService() {
                 <p>
                     We reserve the right to modify these Terms at any time. Your continued use of the Service after any such changes constitutes your acceptance of the new Terms.
                 </p>
+
+                <h2>7. Contact Us</h2>
+                <p>
+                    If you have any questions about these Terms, please <Link href="/contact" className="text-primary hover:underline">contact us</Link>.
+                </p>
             </article>
         </div>
     );
