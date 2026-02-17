@@ -13,25 +13,33 @@ export async function GET(request: Request) {
 
     try {
         let results: Product[] = [];
+        let usedMock = false;
 
-        // Use Real API if key is present
+        // 1. Try Real API if key is present
         if (process.env.SERPAPI_KEY) {
             console.log(`Fetching real data for: ${query}`);
-            results = await searchProducts(query);
-        } else {
-            console.log(`Using mock data for: ${query}`);
+            try {
+                results = await searchProducts(query);
+            } catch (e) {
+                console.error("Real API failed, falling back to mock", e);
+            }
+        }
+
+        // 2. Fallback to Mock Data if no results
+        if (results.length === 0) {
+            console.log(`Using mock data for: ${query} (Fallback or No Key)`);
+            usedMock = true;
+
             // Filter mock data
             const lowerQuery = query.toLowerCase();
-            const mockData = MOCK_PRODUCTS as unknown as Product[]; // Cast because mock data omits some fields
+            const mockData = MOCK_PRODUCTS as unknown as Product[];
 
             const filteredMock = mockData.filter((p: Product) =>
                 p.title.toLowerCase().includes(lowerQuery) ||
                 p.source.toLowerCase().includes(lowerQuery)
             );
 
-            // Calculate unit prices for mock data (mimicking api-client logic)
-            // We need to import the helper functions
-            // Note: In a real app, we'd share this logic better
+            // Calculate unit prices for mock data
             const { parseUnit, calculatePricePerUnit } = await import('@/lib/unit-parser');
 
             results = filteredMock.map((item) => {
@@ -39,7 +47,6 @@ export async function GET(request: Request) {
                 const price = item.price;
                 let pricePerUnit = 'N/A';
 
-                // Fields we need to add to the mock object
                 let unit: any = 'unknown';
                 let value = 0;
                 let totalValue = 0;
@@ -57,7 +64,6 @@ export async function GET(request: Request) {
                     amount: value,
                     totalAmount: totalValue,
                     pricePerUnit: pricePerUnit,
-                    // Score for sorting
                     score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999),
                     originalPrice: 0
                 };
