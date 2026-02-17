@@ -3,7 +3,7 @@ import { Product } from './types';
 // Replace these with real tags once approved
 const AFFILIATE_CONFIG = {
     amazon: {
-        tag: 'bangyourbuck-20', // Placeholder
+        tag: 'budgetlynx-20',
         enabled: true
     },
     walmart: {

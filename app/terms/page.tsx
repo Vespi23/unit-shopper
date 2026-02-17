@@ -21,7 +21,7 @@ export default function TermsOfService() {
 
                 <h2>1. Acceptance of Terms</h2>
                 <p>
-                    By accessing and using BudgetLynx (the "Service"), you agree to comply with and be bound by these Terms of Service. If you do not agree, please do not use the Service.
+                    By accessing and using BudgetLynx (operated by FinFlow LLC, the "Service"), you agree to comply with and be bound by these Terms of Service. If you do not agree, please do not use the Service.
                 </p>
 
                 <h2>2. Data Accuracy (No Warranty)</h2>

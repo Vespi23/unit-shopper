@@ -7,7 +7,7 @@ export function Footer() {
         <footer className="w-full border-t border-border bg-background py-8 text-center text-sm text-muted-foreground">
             <div className="container mx-auto px-4">
                 <p className="mb-4">
-                    &copy; {new Date().getFullYear()} BudgetLynx. All rights reserved.
+                    &copy; {new Date().getFullYear()} FinFlow LLC. All rights reserved.
                 </p>
                 <div className="max-w-2xl mx-auto space-y-2 text-xs opacity-70">
                     <p>
