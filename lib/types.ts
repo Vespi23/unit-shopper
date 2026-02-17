@@ -17,6 +17,11 @@ export interface Product {
         totalValue: number;
         formatted: string;
     };
+    // Flattened fields for easier access if needed, matching current usage
+    unit?: string;
+    amount?: number;
+    totalAmount?: number;
+
     originalPrice: number;
     pricePerUnit?: string;
     score?: number; // Calculated field for sorting

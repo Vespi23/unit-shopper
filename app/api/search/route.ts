@@ -19,7 +19,8 @@ export async function GET(request: Request) {
         if (process.env.SERPAPI_KEY) {
             console.log(`Fetching real data for: ${query}`);
             try {
-                results = await searchProducts(query);
+                // Default to Amazon as requested
+                results = await searchProducts(query, 'amazon');
             } catch (e) {
                 console.error("Real API failed, falling back to mock", e);
             }

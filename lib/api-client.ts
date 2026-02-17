@@ -18,21 +18,25 @@ interface SerpApiResult {
     delivery: string;
 }
 
-export async function searchProducts(query: string): Promise<Product[]> {
+export async function searchProducts(query: string, engine: 'google_shopping' | 'amazon' = 'amazon'): Promise<Product[]> {
     if (!SERPAPI_KEY) {
         console.warn('SERPAPI_KEY is missing, returning empty array');
         return [];
     }
 
     const params = new URLSearchParams({
-        engine: 'google_shopping',
+        engine: engine,
         q: query,
         api_key: SERPAPI_KEY,
-        google_domain: 'google.com',
-        gl: 'us',
+        // Common params
         hl: 'en',
-        num: '20' // Fetch 20 results
+        gl: 'us',
+        num: '20'
     });
+
+    if (engine === 'google_shopping') {
+        params.append('google_domain', 'google.com');
+    }
 
     try {
         const response = await fetch(`${BASE_URL}?${params.toString()}`);
@@ -48,51 +52,102 @@ export async function searchProducts(query: string): Promise<Product[]> {
             return [];
         }
 
-        const results: SerpApiResult[] = data.shopping_results || [];
+        let results: any[] = [];
 
-        return results.map(item => {
-            // Parse unit info (this is our secret sauce)
-            const unitInfo = parseUnit(item.title);
-            const price = item.extracted_price || 0;
+        if (engine === 'google_shopping') {
+            results = data.shopping_results || [];
+            return results.map(item => mapGoogleResult(item));
+        } else if (engine === 'amazon') {
+            results = data.organic_results || []; // Amazon uses 'organic_results'
+            return results.map(item => mapAmazonResult(item));
+        }
 
-            let pricePerUnit = 'N/A';
-            let unit: any = 'unknown'; // strictly type this if possible, but 'any' or string avoids the UnitType mismatch for now
-            let value = 0;
-            let totalValue = 0;
-
-            if (unitInfo) {
-                unit = unitInfo.unit;
-                value = unitInfo.value;
-                totalValue = unitInfo.totalValue;
-                pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
-            }
-
-            // Debug logging to see available fields
-            if (results.indexOf(item) === 0) {
-                console.log('Sample Raw Item:', JSON.stringify(item, null, 2));
-            }
-
-            return {
-                id: item.product_id || String(Math.random()),
-                title: item.title,
-                price: price,
-                image: item.thumbnail,
-                source: item.source || 'Unknown',
-                rating: 4.5,
-                reviews: 0,
-                unit: unit,
-                amount: value,
-                totalAmount: totalValue,
-                pricePerUnit: pricePerUnit,
-                link: item.link || item.product_link, // Fallback to product_link
-                currency: 'USD',
-                originalPrice: 0,
-                score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
-            };
-        });
+        return [];
 
     } catch (error) {
         console.error('Error fetching from SerpApi:', error);
         return [];
     }
+}
+
+// Helper to map Google Shopping results
+function mapGoogleResult(item: any): Product {
+    const { parseUnit, calculatePricePerUnit } = require('./unit-parser'); // Lazy load to avoid circular deps if any
+    const unitInfo = parseUnit(item.title);
+    const price = item.extracted_price || 0;
+
+    let pricePerUnit = 'N/A';
+    let unit: any = 'unknown';
+    let value = 0;
+    let totalValue = 0;
+
+    if (unitInfo) {
+        unit = unitInfo.unit;
+        value = unitInfo.value;
+        totalValue = unitInfo.totalValue;
+        pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
+    }
+
+    return {
+        id: item.product_id || String(Math.random()),
+        title: item.title,
+        price: price,
+        image: item.thumbnail,
+        source: item.source || 'Google Shopping',
+        rating: item.rating,
+        reviews: item.reviews,
+        unit: unit,
+        amount: value,
+        totalAmount: totalValue,
+        pricePerUnit: pricePerUnit,
+        link: item.link || item.product_link,
+        currency: 'USD',
+        originalPrice: 0,
+        score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
+    };
+}
+
+// Helper to map Amazon results
+function mapAmazonResult(item: any): Product {
+    const { parseUnit, calculatePricePerUnit } = require('./unit-parser');
+    const { getAmazonAffiliateLink } = require('./affiliate');
+
+    const unitInfo = parseUnit(item.title);
+    const price = item.price || item.extracted_price || 0; // Amazon result might have slightly different price field
+
+    let pricePerUnit = 'N/A';
+    let unit: any = 'unknown';
+    let value = 0;
+    let totalValue = 0;
+
+    if (unitInfo) {
+        unit = unitInfo.unit;
+        value = unitInfo.value;
+        totalValue = unitInfo.totalValue;
+        pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
+    }
+
+    // Generate Affiliate Link if ASIN exists
+    let link = item.link;
+    if (item.asin) {
+        link = getAmazonAffiliateLink(item.asin);
+    }
+
+    return {
+        id: item.asin || String(Math.random()),
+        title: item.title,
+        price: price,
+        image: item.thumbnail,
+        source: 'Amazon',
+        rating: item.rating,
+        reviews: item.reviews,
+        unit: unit,
+        amount: value,
+        totalAmount: totalValue,
+        pricePerUnit: pricePerUnit,
+        link: link,
+        currency: 'USD',
+        originalPrice: 0, // Could parse 'original_price' if available
+        score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
+    };
 }

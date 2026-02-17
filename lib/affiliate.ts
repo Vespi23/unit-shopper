@@ -47,3 +47,7 @@ export function getAffiliateLink(product: Product): string {
         return product.link;
     }
 }
+
+export function getAmazonAffiliateLink(asin: string): string {
+    return `https://www.amazon.com/dp/${asin}?tag=${AFFILIATE_CONFIG.amazon.tag}`;
+}
