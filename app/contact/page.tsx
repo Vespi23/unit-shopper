@@ -1,7 +1,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Mail, Send } from 'lucide-react';
+import { ChevronLeft, Send } from 'lucide-react';
 
 export default function ContactPage() {
     return (
@@ -23,25 +23,7 @@ export default function ContactPage() {
                     </p>
                 </div>
 
-                <div className="grid gap-8 md:grid-cols-[1fr_2fr]">
-                    {/* Sidebar / Info */}
-                    <div className="space-y-6">
-                        <div className="p-6 rounded-xl border border-border bg-card text-card-foreground shadow-sm">
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="p-2 rounded-full bg-primary/10 text-primary">
-                                    <Mail className="h-6 w-6" />
-                                </div>
-                                <h2 className="font-semibold text-xl">Email</h2>
-                            </div>
-                            <p className="text-muted-foreground mb-4 text-sm">
-                                Direct email inquiries are also welcome.
-                            </p>
-                            <a href="mailto:successinventor511@gmail.com" className="text-primary font-medium hover:underline break-all">
-                                successinventor511@gmail.com
-                            </a>
-                        </div>
-                    </div>
-
+                <div className="max-w-2xl mx-auto">
                     {/* Contact Form */}
                     <div className="p-6 rounded-xl border border-border bg-card text-card-foreground shadow-sm">
                         <h2 className="font-semibold text-xl mb-6">Send a Message</h2>
