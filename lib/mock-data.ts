@@ -1,6 +1,6 @@
 import { Product } from './types';
 
-export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score'>[] = [
+export const MOCK_PRODUCTS: Omit<Product, 'unitInfo' | 'pricePerUnit' | 'score' | 'originalPrice'>[] = [
     {
         id: 'amz-1',
         title: "Skippy Creamy Peanut Butter, 16.3 oz Jar",

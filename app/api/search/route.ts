@@ -58,7 +58,8 @@ export async function GET(request: Request) {
                     totalAmount: totalValue,
                     pricePerUnit: pricePerUnit,
                     // Score for sorting
-                    score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
+                    score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999),
+                    originalPrice: 0
                 };
             });
         }
