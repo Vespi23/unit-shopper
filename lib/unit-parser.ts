@@ -1,4 +1,4 @@
-export type UnitType = 'oz' | 'lb' | 'g' | 'kg' | 'l' | 'ml' | 'count' | 'fl oz' | 'loads' | 'rolls' | 'sheets' | 'unknown';
+export type UnitType = 'oz' | 'lb' | 'g' | 'kg' | 'mg' | 'l' | 'ml' | 'count' | 'fl oz' | 'gal' | 'qt' | 'pt' | 'loads' | 'rolls' | 'sheets' | 'sq ft' | 'unknown';
 
 export interface UnitInfo {
     value: number;
@@ -12,14 +12,19 @@ const UNIT_REGEX = {
     oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:oz|ounce|ounces)\b/i,
     fl_oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:fl\s?oz|fluid\s?ounce|fluid\s?ounces)\b/i,
     lb: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:lb|lbs|pound|pounds)\b/i,
-    g: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:g|gram|rams)\b/i,
+    g: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:g|gram|grams)\b/i,
     kg: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:kg|kilogram|kilograms)\b/i,
+    mg: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:mg|milligram|milligrams)\b/i,
     l: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:l|liter|liters)\b/i,
     ml: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:ml|milliliter|milliliters)\b/i,
+    gal: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:gal|gallon|gallons)\b/i,
+    qt: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:qt|quart|quarts)\b/i,
+    pt: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:pt|pint|pints)\b/i,
     count: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:count|ct|pack|pcs)\b/i,
     loads: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:load|loads)\b/i,
     rolls: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:roll|rolls)\b/i,
     sheets: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:sheet|sheets)\b/i,
+    sq_ft: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
 };
 
 const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack/i;
@@ -44,6 +49,15 @@ export function parseUnit(title: string): UnitInfo | null {
     if (UNIT_REGEX.fl_oz.test(lowerTitle)) {
         const match = lowerTitle.match(UNIT_REGEX.fl_oz);
         if (match) { value = parseFloat(match[1]); unit = 'fl oz'; }
+    } else if (UNIT_REGEX.gal.test(lowerTitle)) {
+        const match = lowerTitle.match(UNIT_REGEX.gal);
+        if (match) { value = parseFloat(match[1]); unit = 'gal'; }
+    } else if (UNIT_REGEX.qt.test(lowerTitle)) {
+        const match = lowerTitle.match(UNIT_REGEX.qt);
+        if (match) { value = parseFloat(match[1]); unit = 'qt'; }
+    } else if (UNIT_REGEX.pt.test(lowerTitle)) {
+        const match = lowerTitle.match(UNIT_REGEX.pt);
+        if (match) { value = parseFloat(match[1]); unit = 'pt'; }
     } else if (UNIT_REGEX.oz.test(lowerTitle)) {
         const match = lowerTitle.match(UNIT_REGEX.oz);
         if (match) { value = parseFloat(match[1]); unit = 'oz'; }
@@ -56,12 +70,18 @@ export function parseUnit(title: string): UnitInfo | null {
     } else if (UNIT_REGEX.l.test(lowerTitle)) {
         const match = lowerTitle.match(UNIT_REGEX.l);
         if (match) { value = parseFloat(match[1]); unit = 'l'; }
+    } else if (UNIT_REGEX.mg.test(lowerTitle)) {
+        const match = lowerTitle.match(UNIT_REGEX.mg);
+        if (match) { value = parseFloat(match[1]); unit = 'mg'; }
     } else if (UNIT_REGEX.g.test(lowerTitle)) {
         const match = lowerTitle.match(UNIT_REGEX.g);
         if (match) { value = parseFloat(match[1]); unit = 'g'; }
     } else if (UNIT_REGEX.kg.test(lowerTitle)) {
         const match = lowerTitle.match(UNIT_REGEX.kg);
         if (match) { value = parseFloat(match[1]); unit = 'kg'; }
+    } else if (UNIT_REGEX.sq_ft.test(lowerTitle)) {
+        const match = lowerTitle.match(UNIT_REGEX.sq_ft);
+        if (match) { value = parseFloat(match[1]); unit = 'sq ft'; }
     } else if (UNIT_REGEX.loads.test(lowerTitle)) {
         const match = lowerTitle.match(UNIT_REGEX.loads);
         if (match) { value = parseFloat(match[1]); unit = 'loads'; }
@@ -90,31 +110,13 @@ export function parseUnit(title: string): UnitInfo | null {
         if (match) {
             value = parseFloat(match[1]);
             unit = 'count';
-            // quantity remains as found by PACK_REGEX (e.g. "Pack of 2" -> 2).
-            // If "100 count", PACK_REGEX didn't match, so quantity=1.
-            // Total = 1 * 100 = 100 count. Correct.
         }
     }
 
     if (unit === 'unknown') return null;
 
-    // Normalize Logic (Optional, can be separate)
-    // For now, let's keep original unit but calculate total
-
-    // Special handling for 'count'
-    if (unit === 'count') {
-        // If we detected `quantity` from "100 count" string as 100, 
-        // and `value` from "100 count" as 100.
-        // We should fix this. 
-        // Heuristic: If we found a weight/volume, `quantity` applies to that.
-        // If NO weight/volume found, checking `count`:
-        // If "2 pack of 100 count", then Quantity=2, Value=100, Unit=count -> Total=200 count.
-    }
-
     let totalValue = value * (quantity || 1);
 
-    // Normalize formatting
-    // e.g. 16 oz
     return {
         value,
         unit,
@@ -125,25 +127,36 @@ export function parseUnit(title: string): UnitInfo | null {
 }
 
 export function normalizeUnit(info: UnitInfo): UnitInfo {
-    // Convert everything to a base unit for comparison? 
-    // oz/lb -> oz
-    // g/kg -> g (or kg)
-    // l/ml -> l (or ml)
-
     const copy = { ...info };
 
     if (copy.unit === 'lb') {
         copy.value *= 16;
         copy.unit = 'oz';
         copy.totalValue *= 16;
+    } else if (copy.unit === 'gal') {
+        copy.value *= 128;
+        copy.unit = 'fl oz';
+        copy.totalValue *= 128;
+    } else if (copy.unit === 'qt') {
+        copy.value *= 32;
+        copy.unit = 'fl oz';
+        copy.totalValue *= 32;
+    } else if (copy.unit === 'pt') {
+        copy.value *= 16;
+        copy.unit = 'fl oz';
+        copy.totalValue *= 16;
     } else if (copy.unit === 'fl oz') {
-        // Treat fl oz as oz for now (or keep separate)
-        // But many products mix them up (e.g. 16oz liquid)
-        copy.unit = 'oz';
+        copy.unit = 'oz'; // Normalizing fluid ounce to ounce for simplicity in UI if desired, or keep as fl oz.
+        // For consistent pricing, let's keep it simple: Everything fluid -> fl oz.
+        copy.unit = 'fl oz';
     } else if (copy.unit === 'kg') {
         copy.value *= 1000;
         copy.unit = 'g';
         copy.totalValue *= 1000;
+    } else if (copy.unit === 'mg') {
+        copy.value /= 1000;
+        copy.unit = 'g';
+        copy.totalValue /= 1000;
     } else if (copy.unit === 'l') {
         copy.value *= 1000;
         copy.unit = 'ml';
@@ -158,15 +171,13 @@ export function calculatePricePerUnit(price: number, totalValue: number, unit: s
     if (!totalValue || totalValue === 0) return 'N/A';
     const ppu = price / totalValue;
 
-    // Formatting: 
-    // if unit is 'count', "$0.50/ea"
-    // if unit is 'oz', "$0.50/oz"
-
     let unitLabel = unit;
     if (unit === 'count') unitLabel = 'ea';
     if (unit === 'loads') unitLabel = 'load';
     if (unit === 'rolls') unitLabel = 'roll';
     if (unit === 'sheets') unitLabel = 'sheet';
+    if (unit === 'sq ft') unitLabel = 'sq ft';
+    if (unit === 'fl oz') unitLabel = 'fl oz';
 
     return `$${ppu.toFixed(2)}/${unitLabel}`;
 }
