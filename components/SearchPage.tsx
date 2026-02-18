@@ -154,7 +154,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             "target": "https://www.budgetlynx.com/?q={search_term_string}",
                             "query-input": "required name=search_term_string"
                         }
-                    })
+                    }).replace(/</g, '\\u003c')
                 }}
             />
             {/* Hero Section */}

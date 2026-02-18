@@ -1,3 +1,4 @@
+import 'server-only';
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit } from './unit-parser';
 
