@@ -5,10 +5,30 @@ import { parseUnit, calculatePricePerUnit } from './unit-parser';
 const RAINFOREST_API_KEY = process.env.RAINFOREST_API_KEY;
 const BASE_URL = 'https://api.rainforestapi.com/request';
 
+// Simple in-memory cache to save API quota
+// Key: query + page, Value: { timestamp: number, data: Product[] }
+const CACHE_DURATION_MS = 1000 * 60 * 60 * 24; // 24 hours
+const searchCache = new Map<string, { timestamp: number, data: Product[] }>();
+
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
     if (!RAINFOREST_API_KEY) {
         console.warn('RAINFOREST_API_KEY is missing');
         return [];
+    }
+
+    // Security: Truncate query to prevent abuse
+    const MAX_QUERY_LENGTH = 100;
+    if (query.length > MAX_QUERY_LENGTH) {
+        console.warn(`Query truncated from ${query.length} to ${MAX_QUERY_LENGTH} chars`);
+        query = query.substring(0, MAX_QUERY_LENGTH);
+    }
+
+    // Check Cache
+    const cacheKey = `${query.toLowerCase().trim()}-${page}`;
+    const cached = searchCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
+        console.log(`[CACHE HIT] Serving results for: ${query} (Page ${page})`);
+        return cached.data;
     }
 
     const params = new URLSearchParams({
@@ -21,7 +41,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     });
 
     try {
-        console.log(`Fetching Rainforest API for: ${query}, page: ${page}`);
+        console.log(`[API CALL] Fetching Rainforest API for: ${query}, page: ${page}`);
         const response = await fetch(`${BASE_URL}?${params.toString()}`);
 
         if (!response.ok) {
@@ -35,11 +55,28 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             return [];
         }
 
-        const results = data.search_results || [];
-        return results.map((item: any) => mapRainforestResult(item));
+        const rawResults = data.search_results || [];
+        const results = rawResults.map((item: any) => mapRainforestResult(item));
+
+        // Save to Cache
+        if (results.length > 0) {
+            searchCache.set(cacheKey, {
+                timestamp: Date.now(),
+                data: results
+            });
+        }
+
+        return results;
 
     } catch (error) {
         console.error('Error fetching from Rainforest API:', error);
+        // Fallback to cache if available even if expired? 
+        // For now, just return empty or re-throw.
+        // If we have stale cache, maybe better to return that?
+        if (cached) {
+            console.log(`[CACHE FALLBACK] Serving stale results due to error for: ${query}`);
+            return cached.data;
+        }
         return [];
     }
 }

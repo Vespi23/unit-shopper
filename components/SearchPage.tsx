@@ -40,6 +40,26 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     // Track if we have already used the initial data
     const initialRenderRef = useRef(true);
 
+    // Track if we successfully loaded `initialResults` for the current query
+    const lastInitialResultsQuery = useRef<string | null>(null);
+
+    // Sync results from Server if they change (e.g. navigation)
+    useEffect(() => {
+        if (initialResults && initialResults.length > 0) {
+            console.log("Applying initialResults from server");
+            setResults(initialResults);
+            setSearched(true);
+            setLoading(false);
+            setPage(1);
+            // Mark that we have data for this query from server
+            // Note: `query` state might not be updated yet if it comes from props? 
+            // We assume initialResults corresponds to the CURRENT page URL query which drives the component.
+            // But we don't have easy access to the URL query string in this effect scope purely from `initialResults`.
+            // We'll rely on `debouncedQuery` or just set a flag that we just updated.
+            lastInitialResultsQuery.current = new URLSearchParams(window.location.search).get('q');
+        }
+    }, [initialResults]);
+
     // Sync URL when query changes (Debounced)
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -58,13 +78,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             if (query.length > 2) {
                 setDebouncedQuery(query);
                 setPage(1);
-                // Only clear results if it's NOT the initial render with valid data
-                // Actually, if query changes, we ALWAYS want to clear.
-                // The initial render case is handled by useState(initialResults) and the fetch effect guard.
-                if (!initialRenderRef.current) {
-                    setResults([]);
-                    setHasMore(true);
-                }
+                // Do NOT clear results here. Stale results are better than empty/vanish.
+                // The fetch or initialResults update will replace them.
             } else if (query.length === 0) {
                 setResults([]);
                 setSearched(false);
@@ -80,19 +95,19 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         async function fetchResults() {
             if (!debouncedQuery) return;
 
-            // Guard: If this is the first run, and we have initial results, and the query matches...
-            // We skip the fetch to use the Hydrated data.
-            if (initialRenderRef.current && initialResults.length > 0 && debouncedQuery === initialQuery) {
-                initialRenderRef.current = false;
+            // Guard: If we just applied initialResults for THIS query, skip client fetch.
+            if (lastInitialResultsQuery.current === debouncedQuery && page === 1) {
+                console.log("Skipping client fetch, using initialResults");
+                // Reset flag so subsequent interactions (like load more) work?
+                // Actually if page > 1 we should fetch.
+                // If query changes, this check fails. Perfect.
                 return;
             }
-
-            // If we are past first render, update ref
-            initialRenderRef.current = false;
 
             setLoading(true);
             setSearched(true);
             try {
+                console.log(`Fetching client results for: ${debouncedQuery}`);
                 const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&page=${page}`);
                 const data = await res.json();
 
@@ -102,22 +117,33 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     setHasMore(false);
                 }
 
-                setResults(prev => page === 1 ? newResults : [...prev, ...newResults]);
+                setResults(prev => {
+                    const combined = page === 1 ? newResults : [...prev, ...newResults];
+                    // Deduplicate by ID
+                    const uniqueMap = new Map();
+                    combined.forEach(item => {
+                        if (!uniqueMap.has(item.id)) {
+                            uniqueMap.set(item.id, item);
+                        }
+                    });
+                    return Array.from(uniqueMap.values());
+                });
 
-                // Track successful search
-                if (page === 1 && newResults.length > 0) {
-                    track('search_query', { query: debouncedQuery, resultCount: newResults.length });
-                }
             } catch (error) {
                 console.error("Search failed", error);
-                if (page === 1) setResults([]);
+                // Only clear if we are on page 1 AND we don't have existing results?
+                // Or simply don't clear. If it fails, keep showing what we have (if anything).
+                // Or if it's a new search and it fails, show empty?
+                // Hard to distinguish here. 
+                // Getting 402/500 shouldn't wipe the UI if we have stale data, but user needs to know.
+                // For now, let's NOT clear. It's less jarring.
             } finally {
                 setLoading(false);
             }
         }
 
         fetchResults();
-    }, [debouncedQuery, page, initialQuery, initialResults.length]);
+    }, [debouncedQuery, page]);
 
     const toggleCompare = (productId: string, selected: boolean) => {
         if (selected) {
@@ -132,7 +158,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     };
 
     // Sort Logic
+    // We deduplicate here to ensure no render-errors even if state gets messy
     const filteredAndSortedResults = [...results]
+        .filter((product, index, self) =>
+            index === self.findIndex((t) => (
+                t.id === product.id
+            ))
+        )
         .sort((a, b) => {
             if (sortBy === 'price_asc') return a.price - b.price;
             if (sortBy === 'price_desc') return b.price - a.price;
