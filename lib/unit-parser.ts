@@ -181,3 +181,43 @@ export function calculatePricePerUnit(price: number, totalValue: number, unit: s
 
     return `$${ppu.toFixed(2)}/${unitLabel}`;
 }
+
+export function convertValue(value: number, from: UnitType, to: UnitType): number | null {
+    if (from === to) return value;
+    if (value <= 0) return null;
+
+    // Weight
+    if (from === 'lb' && to === 'oz') return value * 16;
+    if (from === 'oz' && to === 'lb') return value / 16;
+    if (from === 'kg' && to === 'g') return value * 1000;
+    if (from === 'g' && to === 'kg') return value / 1000;
+    if (from === 'mg' && to === 'g') return value / 1000;
+    if (from === 'g' && to === 'mg') return value * 1000;
+    if (from === 'kg' && to === 'lb') return value * 2.20462;
+    if (from === 'lb' && to === 'kg') return value / 2.20462;
+    if (from === 'g' && to === 'oz') return value * 0.035274;
+    if (from === 'oz' && to === 'g') return value / 0.035274;
+    if (from === 'kg' && to === 'oz') return value * 35.274;
+    if (from === 'oz' && to === 'kg') return value / 35.274;
+
+    // Volume
+    if (from === 'gal' && to === 'fl oz') return value * 128;
+    if (from === 'fl oz' && to === 'gal') return value / 128;
+    if (from === 'qt' && to === 'fl oz') return value * 32;
+    if (from === 'fl oz' && to === 'qt') return value / 32;
+    if (from === 'pt' && to === 'fl oz') return value * 16;
+    if (from === 'fl oz' && to === 'pt') return value / 16;
+    if (from === 'l' && to === 'ml') return value * 1000;
+    if (from === 'ml' && to === 'l') return value / 1000;
+
+    // Volume Imperial <-> Metric (Approx)
+    if (from === 'l' && to === 'fl oz') return value * 33.814;
+    if (from === 'fl oz' && to === 'l') return value / 33.814;
+    if (from === 'ml' && to === 'fl oz') return value * 0.033814;
+    if (from === 'fl oz' && to === 'ml') return value / 0.033814;
+
+    // Direct Count Identity
+    if (from === 'count' && to === 'count') return value;
+
+    return null;
+}

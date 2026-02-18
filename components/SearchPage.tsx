@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { FeaturesSection } from '@/components/FeaturesSection';
 import { TrendingCategories } from '@/components/TrendingCategories';
+import { convertValue, calculatePricePerUnit, UnitType } from '@/lib/unit-parser';
 
 interface SearchPageProps {
     initialResults?: Product[];
@@ -28,6 +29,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
     const [results, setResults] = useState<Product[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
+    const [selectedUnit, setSelectedUnit] = useState<UnitType | 'auto'>('auto');
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(!!initialQuery);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -171,6 +173,25 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             return (a.score || 999999) - (b.score || 999999); // score_asc (Best Value)
         });
 
+    // Apply Unit Conversion for Display
+    const displayResults = filteredAndSortedResults.map(product => {
+        if (selectedUnit === 'auto' || !product.unitInfo) return product;
+
+        const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as UnitType, selectedUnit as UnitType);
+
+        if (convertedAmount !== null) {
+            return {
+                ...product,
+                pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit as string),
+                unitInfo: {
+                    ...product.unitInfo,
+                    formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}`
+                }
+            };
+        }
+        return product;
+    });
+
     return (
         <div className="flex flex-col items-center w-full pb-20">
             <script
@@ -248,21 +269,57 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             Found {results.length} results for <span className="text-foreground">"{debouncedQuery}"</span>
                         </div>
 
-                        {/* Sort Dropdown */}
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
-                            <div className="relative">
-                                <select
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value as any)}
-                                    className="appearance-none h-10 pl-4 pr-10 rounded-lg border border-input bg-card text-sm font-medium shadow-sm transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                                >
-                                    <option value="score_asc">Best Value (Lowest Unit Price)</option>
-                                    <option value="price_asc">Lowest Total Price</option>
-                                    <option value="price_desc">Highest Total Price</option>
-                                </select>
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        <div className="flex flex-wrap items-center gap-6">
+                            {/* Sort Dropdown */}
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
+                                <div className="relative">
+                                    <select
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value as any)}
+                                        className="appearance-none h-10 pl-4 pr-10 rounded-lg border border-input bg-card text-sm font-medium shadow-sm transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                                    >
+                                        <option value="score_asc">Best Value (Lowest Unit Price)</option>
+                                        <option value="price_asc">Lowest Total Price</option>
+                                        <option value="price_desc">Highest Total Price</option>
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Unit Selector */}
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Show Price:</span>
+                                <div className="relative">
+                                    <select
+                                        value={selectedUnit}
+                                        onChange={(e) => setSelectedUnit(e.target.value as any)}
+                                        className="appearance-none h-10 pl-4 pr-10 rounded-lg border border-input bg-card text-sm font-medium shadow-sm transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                                    >
+                                        <option value="auto">Auto (Default)</option>
+                                        <optgroup label="Weight">
+                                            <option value="oz">Per Ounce (oz)</option>
+                                            <option value="lb">Per Pound (lb)</option>
+                                            <option value="kg">Per Kilogram (kg)</option>
+                                            <option value="g">Per Gram (g)</option>
+                                        </optgroup>
+                                        <optgroup label="Volume">
+                                            <option value="fl oz">Per Fl Oz</option>
+                                            <option value="gal">Per Gallon</option>
+                                            <option value="l">Per Liter</option>
+                                            <option value="ml">Per Milliliter</option>
+                                        </optgroup>
+                                        <optgroup label="Count">
+                                            <option value="count">Per Count / Item</option>
+                                            <option value="sheets">Per Sheet</option>
+                                            <option value="loads">Per Load</option>
+                                        </optgroup>
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -285,7 +342,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         ))
                     ) : (
                         <>
-                            {filteredAndSortedResults.map((product) => (
+                            {displayResults.map((product) => (
                                 <ProductCard
                                     key={product.id}
                                     product={product}
