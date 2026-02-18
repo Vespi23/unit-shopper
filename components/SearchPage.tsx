@@ -219,13 +219,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 </div>
 
                 {/* Trending Categories (Only show if not searching) */}
-                {!searched && !query && (
+                {!searched && (
                     <TrendingCategories onSelect={(q) => setQuery(q)} />
                 )}
             </section>
 
             {/* Features Section (Only show if not searching) */}
-            {!searched && !query && (
+            {!searched && (
                 <FeaturesSection />
             )}
 
