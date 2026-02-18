@@ -35,6 +35,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
+    const [disabledUnits, setDisabledUnits] = useState<Set<string>>(new Set());
 
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
@@ -91,6 +92,10 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         }, 500);
         return () => clearTimeout(timer);
     }, [query, router, searchParams]);
+
+    useEffect(() => {
+        setDisabledUnits(new Set());
+    }, [debouncedQuery, selectedUnit]);
 
     // Fetch results
     useEffect(() => {
@@ -173,8 +178,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             return (a.score || 999999) - (b.score || 999999); // score_asc (Best Value)
         });
 
-    // Apply Unit Conversion for Display
-    const displayResults = filteredAndSortedResults.map(product => {
+    // Apply Unit Conversion
+    const convertedResults = filteredAndSortedResults.map(product => {
         if (selectedUnit === 'auto' || !product.unitInfo) return product;
 
         const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as UnitType, selectedUnit as UnitType);
@@ -190,6 +195,15 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             };
         }
         return product;
+    });
+
+    // Extract Available Units (from converted results)
+    const availableUnits = Array.from(new Set(convertedResults.map(p => p.unitInfo?.unit).filter(Boolean))) as string[];
+    availableUnits.sort(); // Sort alphabetically for consistency
+
+    // Filter by Disabled Units
+    const displayResults = convertedResults.filter(product => {
+        return !product.unitInfo?.unit || !disabledUnits.has(product.unitInfo.unit);
     });
 
     return (
@@ -322,6 +336,30 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Unit Filter Chips */}
+                            {availableUnits.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-8 -mt-4 items-center">
+                                    <span className="text-sm font-medium text-muted-foreground mr-2">Filter Units:</span>
+                                    {availableUnits.map(unit => (
+                                        <button
+                                            key={unit}
+                                            onClick={() => {
+                                                const next = new Set(disabledUnits);
+                                                if (next.has(unit)) next.delete(unit);
+                                                else next.add(unit);
+                                                setDisabledUnits(next);
+                                            }}
+                                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${!disabledUnits.has(unit)
+                                                    ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
+                                                    : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80 opacity-60'
+                                                }`}
+                                        >
+                                            {unit}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
