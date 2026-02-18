@@ -303,40 +303,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                 </div>
                             </div>
 
-                            {/* Unit Selector */}
-                            <div className="flex items-center gap-3">
-                                <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Show Price:</span>
-                                <div className="relative">
-                                    <select
-                                        value={selectedUnit}
-                                        onChange={(e) => setSelectedUnit(e.target.value as any)}
-                                        className="appearance-none h-10 pl-4 pr-10 rounded-lg border border-input bg-card text-sm font-medium shadow-sm transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                                    >
-                                        <option value="auto">Auto (Default)</option>
-                                        <optgroup label="Weight">
-                                            <option value="oz">Per Ounce (oz)</option>
-                                            <option value="lb">Per Pound (lb)</option>
-                                            <option value="kg">Per Kilogram (kg)</option>
-                                            <option value="g">Per Gram (g)</option>
-                                        </optgroup>
-                                        <optgroup label="Volume">
-                                            <option value="fl oz">Per Fl Oz</option>
-                                            <option value="gal">Per Gallon</option>
-                                            <option value="l">Per Liter</option>
-                                            <option value="ml">Per Milliliter</option>
-                                        </optgroup>
-                                        <optgroup label="Count">
-                                            <option value="count">Per Count / Item</option>
-                                            <option value="sheets">Per Sheet</option>
-                                            <option value="loads">Per Load</option>
-                                        </optgroup>
-                                    </select>
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                    </div>
-                                </div>
-                            </div>
-
                             {/* Unit Filter Chips */}
                             {availableUnits.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mb-8 -mt-4 items-center">
@@ -351,8 +317,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                                 setDisabledUnits(next);
                                             }}
                                             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${!disabledUnits.has(unit)
-                                                    ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
-                                                    : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80 opacity-60'
+                                                ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
+                                                : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80 opacity-60'
                                                 }`}
                                         >
                                             {unit}
