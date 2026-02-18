@@ -279,20 +279,27 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {loading ? (
+                    {loading && page === 1 ? (
                         Array.from({ length: 8 }).map((_, i) => (
                             <ProductCardSkeleton key={i} />
                         ))
                     ) : (
-                        filteredAndSortedResults.map((product) => (
-                            <ProductCard
-                                key={product.id}
-                                product={product}
-                                onClick={() => setSelectedProduct(product)}
-                                onSelect={(selected) => toggleCompare(product.id, selected)}
-                                isSelected={compareList.includes(product.id)}
-                            />
-                        ))
+                        <>
+                            {filteredAndSortedResults.map((product) => (
+                                <ProductCard
+                                    key={product.id}
+                                    product={product}
+                                    onClick={() => setSelectedProduct(product)}
+                                    onSelect={(selected) => toggleCompare(product.id, selected)}
+                                    isSelected={compareList.includes(product.id)}
+                                />
+                            ))}
+                            {loading && (
+                                Array.from({ length: 4 }).map((_, i) => (
+                                    <ProductCardSkeleton key={`skeleton-${i}`} />
+                                ))
+                            )}
+                        </>
                     )}
                 </div>
 
