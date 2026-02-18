@@ -24,9 +24,7 @@ export function Header() {
                         </span>
                     </Link>
                     <nav className="flex items-center gap-4 text-sm font-medium">
-                        <Link href="/" className="transition-colors hover:text-primary hidden sm:inline-block">
-                            Search
-                        </Link>
+
 
                         <Button
                             variant="outline"

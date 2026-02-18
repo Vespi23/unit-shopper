@@ -1,120 +1,61 @@
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit } from './unit-parser';
 
-const SERPAPI_KEY = process.env.SERPAPI_KEY;
-const BASE_URL = 'https://serpapi.com/search.json';
+const RAINFOREST_API_KEY = process.env.RAINFOREST_API_KEY;
+const BASE_URL = 'https://api.rainforestapi.com/request';
 
-interface SerpApiResult {
-    position: number;
-    title: string;
-    link: string;
-    product_link: string;
-    product_id: string;
-    serpapi_product_api: string;
-    source: string;
-    price: string;
-    extracted_price: number;
-    thumbnail: string;
-    delivery: string;
-}
-
-export async function searchProducts(query: string, engine: 'google_shopping' | 'amazon' = 'amazon'): Promise<Product[]> {
-    if (!SERPAPI_KEY) {
-        console.warn('SERPAPI_KEY is missing, returning empty array');
+export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
+    if (!RAINFOREST_API_KEY) {
+        console.warn('RAINFOREST_API_KEY is missing');
         return [];
     }
 
     const params = new URLSearchParams({
-        engine: engine,
-        q: query,
-        api_key: SERPAPI_KEY,
-        // Common params
-        hl: 'en',
-        gl: 'us',
-        num: '50',
-        no_cache: 'true'
+        api_key: RAINFOREST_API_KEY,
+        type: 'search',
+        amazon_domain: 'amazon.com',
+        search_term: query,
+        page: page.toString(),
+        sort_by: 'featured' // Default sort
     });
 
-    if (engine === 'google_shopping') {
-        params.append('google_domain', 'google.com');
-    }
-
     try {
+        console.log(`Fetching Rainforest API for: ${query}, page: ${page}`);
         const response = await fetch(`${BASE_URL}?${params.toString()}`);
 
         if (!response.ok) {
-            throw new Error(`SerpApi failed: ${response.status} ${response.statusText}`);
+            throw new Error(`Rainforest API failed: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
 
-        if (data.error) {
-            console.error('SerpApi Error:', data.error);
+        if (data.request_info && data.request_info.success === false) {
+            console.error('Rainforest API Error:', data.request_info.message);
             return [];
         }
 
-        let results: any[] = [];
-
-        if (engine === 'google_shopping') {
-            results = data.shopping_results || [];
-            return results.map(item => mapGoogleResult(item));
-        } else if (engine === 'amazon') {
-            results = data.organic_results || []; // Amazon uses 'organic_results'
-            return results.map(item => mapAmazonResult(item));
-        }
-
-        return [];
+        const results = data.search_results || [];
+        return results.map((item: any) => mapRainforestResult(item));
 
     } catch (error) {
-        console.error('Error fetching from SerpApi:', error);
+        console.error('Error fetching from Rainforest API:', error);
         return [];
     }
 }
 
-// Helper to map Google Shopping results
-function mapGoogleResult(item: any): Product {
-    const { parseUnit, calculatePricePerUnit } = require('./unit-parser'); // Lazy load to avoid circular deps if any
-    const unitInfo = parseUnit(item.title);
-    const price = item.extracted_price || 0;
-
-    let pricePerUnit = 'N/A';
-    let unit: any = 'unknown';
-    let value = 0;
-    let totalValue = 0;
-
-    if (unitInfo) {
-        unit = unitInfo.unit;
-        value = unitInfo.value;
-        totalValue = unitInfo.totalValue;
-        pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
-    }
-
-    return {
-        id: item.product_id || String(Math.random()),
-        title: item.title,
-        price: price,
-        image: item.thumbnail,
-        source: item.source || 'Google Shopping',
-        rating: item.rating,
-        reviews: item.reviews,
-        unit: unit,
-        amount: value,
-        totalAmount: totalValue,
-        pricePerUnit: pricePerUnit,
-        link: item.link || item.product_link,
-        currency: 'USD',
-        originalPrice: 0,
-        score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
-    };
-}
-
-// Helper to map Amazon results
-function mapAmazonResult(item: any): Product {
-    const { parseUnit, calculatePricePerUnit } = require('./unit-parser');
+// Helper to map Rainforest results
+function mapRainforestResult(item: any): Product {
     const { getAmazonAffiliateLink } = require('./affiliate');
 
     const unitInfo = parseUnit(item.title);
-    const price = item.price || item.extracted_price || 0; // Amazon result might have slightly different price field
+
+    // Extract price (Rainforest returns price object or straight value sometimes depending on endpoint, usually object)
+    let price = 0;
+    if (item.price && item.price.value) {
+        price = item.price.value;
+    } else if (item.prices && item.prices.length > 0) {
+        price = item.prices[0].value;
+    }
 
     let pricePerUnit = 'N/A';
     let unit: any = 'unknown';
@@ -128,7 +69,7 @@ function mapAmazonResult(item: any): Product {
         pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
     }
 
-    // Generate Affiliate Link if ASIN exists
+    // Generate Affiliate Link
     let link = item.link;
     if (item.asin) {
         link = getAmazonAffiliateLink(item.asin);
@@ -138,17 +79,18 @@ function mapAmazonResult(item: any): Product {
         id: item.asin || String(Math.random()),
         title: item.title,
         price: price,
-        image: item.thumbnail,
-        source: 'Amazon',
-        rating: item.rating,
-        reviews: item.reviews,
+        image: item.image || (item.images ? item.images[0] : ''),
+        source: 'Amazon', // Always Amazon now
+        rating: item.rating || 0,
+        reviews: item.ratings_total || 0,
         unit: unit,
         amount: value,
         totalAmount: totalValue,
         pricePerUnit: pricePerUnit,
         link: link,
         currency: 'USD',
-        originalPrice: 0, // Could parse 'original_price' if available
-        score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999)
+        originalPrice: 0,
+        score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999),
+        unitInfo: unitInfo || undefined
     };
 }

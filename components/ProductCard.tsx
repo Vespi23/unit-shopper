@@ -45,22 +45,13 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
         }
     };
 
-    const sourceMap: Record<string, { name: string, color: string }> = {
-        'amazon': { name: 'Amazon', color: 'bg-orange-500' },
-        'walmart': { name: 'Walmart', color: 'bg-blue-600' },
-        'target': { name: 'Target', color: 'bg-red-600' }
-    };
-
-    const sourceInput = product.source?.toLowerCase() || 'other';
-    const source = sourceMap[sourceInput] || { name: product.source || 'Other', color: 'bg-gray-600' };
-
     return (
         <div
-            className={`group relative flex flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer ${isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50'}`}
+            className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer ${isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border/50 hover:border-primary/30'}`}
             onClick={onClick}
         >
             {/* Selection Checkbox */}
-            <div className="absolute top-2 left-2 z-20" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-3 left-3 z-20" onClick={(e) => e.stopPropagation()}>
                 <input
                     type="checkbox"
                     checked={isSelected}
@@ -70,11 +61,11 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
             </div>
 
             {/* Shopping List Button */}
-            <div className="absolute top-2 right-2 z-20">
+            <div className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <Button
                     variant="secondary"
                     size="icon"
-                    className={`h-8 w-8 rounded-full shadow-sm transition-colors ${isAdded ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white/80 hover:bg-white text-muted-foreground'}`}
+                    className={`h-8 w-8 rounded-full shadow-md transition-colors ${isAdded ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white/90 hover:bg-white text-muted-foreground'}`}
                     onClick={toggleList}
                     title={isAdded ? "Remove from list" : "Add to list"}
                 >
@@ -83,51 +74,47 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
             </div>
 
             {/* Image Section */}
-            <div className="relative aspect-square w-full overflow-hidden bg-muted p-4">
+            <div className="relative aspect-square w-full overflow-hidden bg-white p-6">
                 <Image
                     src={product.image}
                     alt={product.title}
-                    width={200}
-                    height={200}
-                    className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105 mix-blend-multiply dark:mix-blend-normal"
+                    width={300}
+                    height={300}
+                    className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                 />
-                {/* Source Badge */}
-                <div className={`absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-xs font-medium text-white shadow-sm ${source.color}`}>
-                    {source.name}
+
+                {/* Unit Price Badge (Hero) */}
+                <div className="absolute bottom-3 right-3 bg-emerald-600 text-white dark:bg-emerald-500 shadow-lg shadow-black/20 px-3 py-1.5 rounded-full text-sm font-bold backdrop-blur-none border border-emerald-700/50 z-10 transition-transform group-hover:scale-110">
+                    {product.pricePerUnit}
                 </div>
             </div>
 
             {/* Content Section */}
-            <div className="flex flex-1 flex-col p-4">
-                <h3 className="line-clamp-2 text-sm font-medium leading-tight min-h-[2.5rem]" title={product.title}>
+            <div className="flex flex-1 flex-col p-5 bg-gradient-to-b from-transparent to-muted/20">
+                <div className="mb-2 flex items-center gap-1 text-xs text-yellow-500 font-medium">
+                    <Star className="h-3 w-3 fill-current" />
+                    <span>{product.rating}</span>
+                    <span className="text-muted-foreground font-normal">({product.reviews})</span>
+                </div>
+
+                <h3 className="line-clamp-2 text-sm font-semibold leading-tight min-h-[2.5rem] tracking-tight text-pretty" title={product.title}>
                     {product.title}
                 </h3>
 
                 <div className="mt-4 flex items-end justify-between">
                     <div className="flex flex-col">
-                        <span className="text-2xl font-bold tracking-tight text-primary">
-                            {product.pricePerUnit}
-                        </span>
-                        <span className="text-xs text-muted-foreground font-medium">
-                            Unit Price
-                        </span>
-                    </div>
-
-                    <div className="flex flex-col items-end">
-                        <span className="text-lg font-semibold">
-                            ${product.price.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                             Total
                         </span>
+                        <span className="text-lg font-bold text-foreground">
+                            ${product.price.toFixed(2)}
+                        </span>
                     </div>
-                </div>
 
-                {/* Detail Info */}
-                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{product.unitInfo?.formatted || 'N/A'}</span>
-                    <div className="flex items-center gap-1">
-                        <span>⭐ {product.rating}</span>
+                    <div className="text-right">
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                            {product.unitInfo?.formatted || 'N/A'}
+                        </span>
                     </div>
                 </div>
 
@@ -137,10 +124,9 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                     onClick={(e) => e.stopPropagation()}
                     target="_blank"
                     rel="nofollow noopener noreferrer"
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-secondary py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground group-hover:bg-primary group-hover:text-primary-foreground"
+                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary/10 py-2.5 text-sm font-bold text-primary transition-all hover:bg-primary hover:text-white group-hover:shadow-lg group-hover:shadow-primary/20"
                 >
-                    <ExternalLink className="h-4 w-4" />
-                    View Deal
+                    View Deal <ExternalLink className="h-4 w-4" />
                 </a>
             </div>
         </div>

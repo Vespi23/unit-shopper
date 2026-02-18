@@ -1,47 +1,50 @@
 
-// Mock of api-client logic (simplified)
-const SERPAPI_KEY = "9fb185dcb75de3dc9f95698ccb8f996291411a12624e67b4839129d0601ac0b1";
-const BASE_URL = 'https://serpapi.com/search.json';
-const query = 'Tide';
+// Test Rainforest API
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+
+const RAINFOREST_API_KEY = process.env.RAINFOREST_API_KEY;
+const BASE_URL = 'https://api.rainforestapi.com/request';
+const query = 'Tide Pods';
+
+import { parseUnit } from './lib/unit-parser';
 
 async function verify() {
-    console.log('Testing SERPAPI_KEY:', SERPAPI_KEY);
-    if (!SERPAPI_KEY) {
-        console.error('SERPAPI_KEY is missing');
+    console.log('Testing query:', query);
+
+    if (!RAINFOREST_API_KEY) {
+        console.error('RAINFOREST_API_KEY is missing');
         return;
     }
 
     const params = new URLSearchParams({
-        engine: 'google_shopping',
-        q: query,
-        api_key: SERPAPI_KEY,
-        google_domain: 'google.com',
-        gl: 'us',
-        hl: 'en',
-        num: '5'
+        api_key: RAINFOREST_API_KEY,
+        type: 'search',
+        amazon_domain: 'amazon.com',
+        search_term: query
     });
 
     const url = `${BASE_URL}?${params.toString()}`;
-    console.log('URL:', url);
 
     try {
         const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`SerpApi failed: ${response.status} ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`API failed: ${response.status}`);
 
         const data = await response.json();
-        if (data.error) {
-            console.error('SerpApi Error:', data.error);
-        } else {
-            console.log('Success! Results found:', data.shopping_results?.length || 0);
-            if (data.shopping_results && data.shopping_results.length > 0) {
-                console.log('First result:', JSON.stringify(data.shopping_results[0], null, 2));
-            }
-        }
+        const results = data.search_results || [];
+
+        console.log(`Found ${results.length} results.`);
+
+        results.slice(0, 5).forEach((item: any, index: number) => {
+            console.log(`\n--- Item ${index + 1} ---`);
+            console.log(JSON.stringify(item, null, 2));
+
+            const parsed = parseUnit(item.title);
+            console.log('Local Parsed Unit:', parsed ? JSON.stringify(parsed) : 'NULL (Failed to parse)');
+        });
 
     } catch (error) {
-        console.error('Error fetching from SerpApi:', error);
+        console.error(error);
     }
 }
 

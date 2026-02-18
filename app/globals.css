@@ -8,8 +8,8 @@
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  --primary: #4f46e5;
-  /* Indigo 600 */
+  --primary: #059669;
+  /* Emerald 600 - "Savings/Money" */
   --primary-foreground: #ffffff;
   --secondary: #e2e8f0;
   --secondary-foreground: #1e293b;
@@ -21,7 +21,7 @@
   --destructive-foreground: #f8fafc;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #4f46e5;
+  --ring: #059669;
   --radius: 0.75rem;
 }
 
@@ -34,9 +34,9 @@
     --card-foreground: #fafafa;
     --popover: #18181b;
     --popover-foreground: #fafafa;
-    --primary: #6366f1;
-    /* Indigo 500 */
-    --primary-foreground: #fafafa;
+    --primary: #10b981;
+    /* Emerald 500 */
+    --primary-foreground: #ffffff;
     --secondary: #27272a;
     --secondary-foreground: #fafafa;
     --muted: #27272a;
@@ -47,7 +47,7 @@
     --destructive-foreground: #fafafa;
     --border: #27272a;
     --input: #27272a;
-    --ring: #6366f1;
+    --ring: #10b981;
   }
 }
 

@@ -67,7 +67,7 @@ export function ShoppingListDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
                                         </div>
                                     </div>
                                     {item.pricePerUnit && item.pricePerUnit !== 'N/A' && (
-                                        <div className="text-xs text-green-600 font-medium mt-1">
+                                        <div className="text-xs text-primary font-medium mt-1">
                                             {item.pricePerUnit}
                                         </div>
                                     )}
@@ -93,7 +93,7 @@ export function ShoppingListDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
                             <span className="font-bold text-lg">${totalCost.toFixed(2)}</span>
                         </div>
                         {totalSavings > 0 && (
-                            <div className="flex justify-between text-xs text-green-600 font-medium">
+                            <div className="flex justify-between text-xs text-primary font-medium">
                                 <span>Est. Savings:</span>
                                 <span>-${totalSavings.toFixed(2)}</span>
                             </div>

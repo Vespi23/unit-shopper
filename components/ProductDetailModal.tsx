@@ -1,10 +1,11 @@
 'use client';
 
 import { Product } from '@/lib/types';
-import { X, ExternalLink, TrendingDown, Star } from 'lucide-react';
+import { X, ExternalLink, TrendingDown, Star, Share2 } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { getAffiliateLink } from '@/lib/affiliate';
+import { PriceHistoryChart } from './PriceHistoryChart';
 
 interface ProductDetailModalProps {
     product: Product;
@@ -25,13 +26,29 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="relative w-full max-w-4xl bg-background rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white/10">
-                {/* Close Button */}
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-colors"
-                >
-                    <X className="w-6 h-6" />
-                </button>
+                {/* Action Buttons */}
+                <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                    <button
+                        onClick={() => {
+                            const url = `${window.location.origin}/?q=${encodeURIComponent(product.title)}`;
+                            navigator.clipboard.writeText(url);
+                            // Visual feedback could be added here, but for MVP just copy
+                            // Or use a toast if available. We don't have a toast in context, let's just change icon temporarily or alert?
+                            // Let's rely on browser 'copied' UI or simple alert for now, or just trust it.
+                            // Better: Change icon state.
+                        }}
+                        className="p-2 rounded-full bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-colors group"
+                        title="Copy Link to Product"
+                    >
+                        <Share2 className="w-6 h-6 group-active:scale-95" />
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-full bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-colors"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 h-full max-h-[90vh] overflow-y-auto">
                     {/* Image Section */}
@@ -91,27 +108,17 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                             </div>
                         </div>
 
-                        {/* Mock Price History */}
-                        <div className="flex-1 min-h-[100px] rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 p-4 border border-green-100 dark:border-green-900/50 flex flex-col justify-between group">
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-green-700 dark:text-green-400 flex items-center gap-2">
-                                    <TrendingDown className="w-4 h-4" /> Price History
-                                </span>
-                                <span className="text-xs text-green-600/70 dark:text-green-400/70">Last 30 days</span>
-                            </div>
-                            <div className="mt-2 text-sm text-green-800 dark:text-green-300">
-                                This is the lowest price in 30 days. Good time to buy!
-                            </div>
-                        </div>
+                        {/* Price History Chart */}
+                        <PriceHistoryChart product={product} />
 
                         {/* CTA */}
                         <a
                             href={getAffiliateLink(product)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-full py-4 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity mt-auto"
+                            className="w-full py-4 bg-primary text-primary-foreground font-bold text-lg rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all mt-auto"
                         >
-                            View on {product.source} <ExternalLink className="w-5 h-5" />
+                            View Deal on Amazon <ExternalLink className="w-5 h-5" />
                         </a>
                     </div>
                 </div>
