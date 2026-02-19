@@ -1,0 +1,45 @@
+
+Title: Bounty Quick-Size Paper Towels, 8 Family Rolls = 20 Regular Rolls
+Price: $22.18
+Parsed: {"value":8,"unit":"rolls","quantity":1,"totalValue":8,"formatted":"8 rolls"}
+PPU: $2.77/roll
+
+Title: Tide PODS Laundry Detergent Soap Pods, Spring Meadow, 112 count
+Price: $27.24
+Parsed: {"value":112,"unit":"count","quantity":1,"totalValue":112,"formatted":"112 count"}
+PPU: $0.24/ea
+
+Title: Dove Beauty Bar Gentle Skin Cleanser Moisturizing for Gentle Soft Skin Care Original Washes Away Bacteria 3.75 oz, 14 Bars
+Price: $16.99
+Parsed: {"value":3.75,"unit":"oz","quantity":14,"totalValue":52.5,"formatted":"52.5 oz"}
+PPU: $0.32/oz
+
+Title: Cottonelle Ultra Clean Toilet Paper, 24 Family Mega Rolls (24 = 132 regular rolls)
+Price: $26.68
+Parsed: {"value":24,"unit":"rolls","quantity":1,"totalValue":24,"formatted":"24 rolls"}
+PPU: $1.11/roll
+
+Title: Mott's Applesauce, 4 Ounce Cup, 36 Count
+Price: $10.99
+Parsed: {"value":36,"unit":"count","quantity":1,"totalValue":36,"formatted":"36 count"}
+PPU: $0.31/ea
+
+Title: Jack Link's Beef Jerky, Original, 0.625 Oz, 20 Count
+Price: $17.98
+Parsed: {"value":0.625,"unit":"oz","quantity":20,"totalValue":12.5,"formatted":"12.5 oz"}
+PPU: $1.44/oz
+
+Title: Kirkland Signature Extra Fancy Unsalted Mixed Nuts, 2.5 Pound
+Price: $17.99
+Parsed: {"value":2.5,"unit":"lb","quantity":1,"totalValue":2.5,"formatted":"2.5 lb"}
+PPU: $7.20/lb
+
+Title: Frito-Lay Fiesta Favorites Mix, Variety Pack (40 Count)
+Price: $19.99
+Parsed: {"value":40,"unit":"count","quantity":1,"totalValue":40,"formatted":"40 count"}
+PPU: $0.50/ea
+
+Title: Amazon Basics 2-Ply Paper Towels, Flex-Sheets, 150 Sheets per Roll, 12 Rolls
+Price: $18.23
+Parsed: {"value":150,"unit":"rolls","quantity":1,"totalValue":150,"formatted":"150 rolls"}
+PPU: $0.12/roll
