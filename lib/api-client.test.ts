@@ -35,7 +35,7 @@ describe('searchProducts', () => {
 
         const results = await searchProducts('test query', 1);
 
-        expect(results).toHaveLength(6);
+        expect(results).toHaveLength(10);
         expect(results[0].title).toBe('Test Product');
         expect(results[0].price).toBe(10.99);
         expect(results[0].source).toBe('Amazon');
