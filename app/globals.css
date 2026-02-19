@@ -23,6 +23,10 @@
   --input: #e2e8f0;
   --ring: #059669;
   --radius: 0.75rem;
+
+  /* Font Mappings */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {

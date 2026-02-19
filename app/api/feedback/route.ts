@@ -16,8 +16,39 @@ type FeedbackData = {
 // Path to the feedback file
 const FEEDBACK_FILE_PATH = path.join(process.cwd(), 'data', 'feedback.json');
 
+// Simple in-memory rate limiter
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 3;
+const ipRequestMap = new Map<string, number[]>();
+
+function isRateLimited(ip: string): boolean {
+    const now = Date.now();
+    const requestTimestamps = ipRequestMap.get(ip) || [];
+
+    // Filter out old timestamps
+    const recentRequests = requestTimestamps.filter(timestamp => now - timestamp < RATE_LIMIT_WINDOW);
+
+    if (recentRequests.length >= MAX_REQUESTS_PER_WINDOW) {
+        return true;
+    }
+
+    recentRequests.push(now);
+    ipRequestMap.set(ip, recentRequests);
+    return false;
+}
+
 export async function POST(request: Request) {
     try {
+        // Get IP for rate limiting
+        const ip = request.headers.get('x-forwarded-for') || 'unknown';
+
+        if (isRateLimited(ip)) {
+            return NextResponse.json(
+                { error: 'Too many requests. Please try again later.' },
+                { status: 429 }
+            );
+        }
+
         const body = await request.json();
         const { name, email, type, message, rating } = body;
 
@@ -29,11 +60,26 @@ export async function POST(request: Request) {
             );
         }
 
+        // Input Sanitization & Validation
+        if (message.length > 2000) {
+            return NextResponse.json(
+                { error: 'Message is too long (max 2000 characters).' },
+                { status: 400 }
+            );
+        }
+
+        if (name.length > 100) {
+            return NextResponse.json(
+                { error: 'Name is too long (max 100 characters).' },
+                { status: 400 }
+            );
+        }
+
         const newFeedback: FeedbackData = {
-            name,
-            email: email || '',
+            name: name.slice(0, 100), // Enforce limit
+            email: (email || '').slice(0, 100),
             type,
-            message,
+            message: message.slice(0, 2000), // Enforce limit, simple sanitization could be added here if needed
             rating,
             timestamp: new Date().toISOString(),
         };

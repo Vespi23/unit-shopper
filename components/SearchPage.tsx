@@ -307,7 +307,18 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 )}
 
                 {/* Unit Filter Chips */}
-                {results.length > 0 && !loading && availableUnits.length > 0 && (
+                {loading && (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-8 -mt-4 p-4 bg-muted/30 rounded-2xl border border-border/40 animate-pulse">
+                        <div className="h-4 w-24 bg-muted-foreground/20 rounded"></div>
+                        <div className="flex gap-2">
+                            <div className="h-8 w-20 bg-muted-foreground/20 rounded-full"></div>
+                            <div className="h-8 w-24 bg-muted-foreground/20 rounded-full"></div>
+                            <div className="h-8 w-16 bg-muted-foreground/20 rounded-full"></div>
+                        </div>
+                    </div>
+                )}
+
+                {!loading && results.length > 0 && availableUnits.length > 0 && (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-8 -mt-4 p-4 bg-muted/30 rounded-2xl border border-border/40">
                         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground min-w-fit">
                             <Filter className="w-4 h-4" />
