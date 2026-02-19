@@ -24,38 +24,47 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     // Check Cache
-    const cacheKey = `${query.toLowerCase().trim()}-${page}`;
+    const cacheKey = `${query.toLowerCase().trim()}-multi-page`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
-        console.log(`[CACHE HIT] Serving results for: ${query} (Page ${page})`);
+        console.log(`[CACHE HIT] Serving results for: ${query} (Multi-page)`);
         return cached.data;
     }
 
-    const params = new URLSearchParams({
-        api_key: RAINFOREST_API_KEY,
-        type: 'search',
-        amazon_domain: 'amazon.com',
-        search_term: query,
-        page: page.toString(),
-        refinements: 'p_72/1248903011' // Ensures 4+ stars natively from Amazon
-    });
-
     try {
-        console.log(`[API CALL] Fetching Rainforest API for: ${query}, page: ${page}`);
-        const response = await fetch(`${BASE_URL}?${params.toString()}`);
+        console.log(`[API CALL] Fetching Rainforest API for: ${query} (Pages 1-3)`);
 
-        if (!response.ok) {
-            throw new Error(`Rainforest API failed: ${response.status} ${response.statusText}`);
-        }
+        // Fetch pages 1, 2, and 3 concurrently to expand the pool size
+        const pagesToFetch = [1, 2, 3];
+        const fetchPromises = pagesToFetch.map(async (pageNum) => {
+            const params = new URLSearchParams({
+                api_key: RAINFOREST_API_KEY,
+                type: 'search',
+                amazon_domain: 'amazon.com',
+                search_term: query,
+                page: pageNum.toString(),
+                refinements: 'p_72/1248903011' // Ensures 4+ stars natively from Amazon
+            });
 
-        const data = await response.json();
+            const response = await fetch(`${BASE_URL}?${params.toString()}`);
+            if (!response.ok) {
+                console.error(`Rainforest API failed on page ${pageNum}: ${response.status} ${response.statusText}`);
+                return [];
+            }
+            const data = await response.json();
+            if (data.request_info && data.request_info.success === false) {
+                console.error(`Rainforest API Error on page ${pageNum}:`, data.request_info.message);
+                return [];
+            }
+            return data.search_results || [];
+        });
 
-        if (data.request_info && data.request_info.success === false) {
-            console.error('Rainforest API Error:', data.request_info.message);
-            return [];
-        }
+        // Wait for all pages to resolve
+        const rawResultsArrays = await Promise.all(fetchPromises);
 
-        const rawResults = data.search_results || [];
+        // Flatten the array of arrays
+        const rawResults = rawResultsArrays.flat();
+
         const results = rawResults
             .map((item: any) => mapRainforestResult(item))
             .filter((product: Product) => product.rating !== undefined && product.rating >= 4);
@@ -72,9 +81,6 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
 
     } catch (error) {
         console.error('Error fetching from Rainforest API:', error);
-        // Fallback to cache if available even if expired? 
-        // For now, just return empty or re-throw.
-        // If we have stale cache, maybe better to return that?
         if (cached) {
             console.log(`[CACHE FALLBACK] Serving stale results due to error for: ${query}`);
             return cached.data;

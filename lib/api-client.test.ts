@@ -28,21 +28,21 @@ describe('searchProducts', () => {
             ]
         };
 
-        globalFetch.mockResolvedValueOnce({
+        globalFetch.mockResolvedValue({
             ok: true,
             json: async () => mockResponse
         });
 
         const results = await searchProducts('test query', 1);
 
-        expect(results).toHaveLength(1);
+        expect(results).toHaveLength(3);
         expect(results[0].title).toBe('Test Product');
         expect(results[0].price).toBe(10.99);
         expect(results[0].source).toBe('Amazon');
     });
 
     it('should handle API errors gracefully', async () => {
-        globalFetch.mockResolvedValueOnce({
+        globalFetch.mockResolvedValue({
             ok: false,
             status: 500,
             statusText: 'Internal Server Error'
