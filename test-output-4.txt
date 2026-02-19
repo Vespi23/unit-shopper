@@ -1,0 +1,30 @@
+
+Title: Amazon Aware 100% Bamboo 3-Ply Toilet Paper, Unscented, 24 Rolls, FSC Certified
+Price: $31.94
+Parsed: {"value":24,"unit":"rolls","quantity":1,"totalValue":24,"formatted":"24 rolls"}
+PPU: $1.33/roll
+
+Title: Amazon Aware 100% Bamboo 3-Ply Toilet Paper, Unscented, 24 Rolls, Pack of 24
+Price: $31.94
+Parsed: {"value":24,"unit":"rolls","quantity":1,"totalValue":24,"formatted":"24 rolls"}
+PPU: $1.33/roll
+
+Title: Amazon Aware 100% Bamboo 3-Ply Toilet Paper, Unscented, 24 Rolls, 24 Count
+Price: $31.94
+Parsed: {"value":24,"unit":"rolls","quantity":1,"totalValue":24,"formatted":"24 rolls"}
+PPU: $1.33/roll
+
+Title: Bounty Paper Towels, 2 Double Rolls, Pack of 2
+Price: $5.99
+Parsed: {"value":2,"unit":"rolls","quantity":1,"totalValue":2,"formatted":"2 rolls"}
+PPU: $3.00/roll
+
+Title: Sparkle Paper Towels, 6 Rolls, Pack of 4
+Price: $25.99
+Parsed: {"value":6,"unit":"rolls","quantity":4,"totalValue":24,"formatted":"24 rolls"}
+PPU: $1.08/roll
+
+Title: 12 Pack, 12 oz cans of Soda
+Price: $12.99
+Parsed: {"value":12,"unit":"oz","quantity":12,"totalValue":144,"formatted":"144 oz"}
+PPU: $0.09/oz
