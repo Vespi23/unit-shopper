@@ -33,9 +33,12 @@ import { useShoppingList } from './ShoppingListContext';
 import { Button } from './ui/button';
 import { Heart, Plus, Check } from 'lucide-react';
 
+import { useABTest } from '@/hooks/useABTest';
+
 export function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
     const { addToList, removeFromList, isInList } = useShoppingList();
     const isAdded = isInList(product.id);
+    const { variant, trackConversion, isReady } = useABTest('cta_color');
 
     const toggleList = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -44,6 +47,33 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
         } else {
             addToList(product);
         }
+    };
+
+    const handleViewDeal = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Link handles navigation, but we track first?
+        // Actually for <a> tag, user navigates away. We track, but it might race.
+        // Usually safer to use onClick.
+        trackConversion('CTA Clicked', { productId: product.id, title: product.title });
+    };
+
+    // Experiment Styles
+    const getCtaStyle = () => {
+        const base = "mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all group-hover:shadow-lg";
+
+        if (!isReady) return `${base} bg-primary/10 text-primary hover:bg-primary hover:text-white`; // Loading/Default
+
+        if (variant === 'variant_b') {
+            // Variant B: "Destructive" Red for Urgency
+            return `${base} bg-red-100 text-red-600 hover:bg-red-600 hover:text-white hover:shadow-red-900/20`;
+        }
+
+        // Control: Standard Primary Blue/Theme
+        return `${base} bg-primary/10 text-primary hover:bg-primary hover:text-white group-hover:shadow-primary/20`;
+    };
+
+    const getCtaText = () => {
+        if (variant === 'variant_b') return "Get it Now";
+        return "View Deal";
     };
 
     return (
@@ -122,12 +152,12 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                 {/* Action Button */}
                 <a
                     href={getAffiliateLink(product)}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={handleViewDeal}
                     target="_blank"
                     rel="nofollow noopener noreferrer"
-                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary/10 py-2.5 text-sm font-bold text-primary transition-all hover:bg-primary hover:text-white group-hover:shadow-lg group-hover:shadow-primary/20"
+                    className={getCtaStyle()}
                 >
-                    View Deal <ExternalLink className="h-4 w-4" />
+                    {getCtaText()} <ExternalLink className="h-4 w-4" />
                 </a>
             </div>
 
