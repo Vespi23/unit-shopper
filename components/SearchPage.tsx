@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, Filter, X } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
@@ -283,7 +283,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             Found {results.length} results for <span className="text-foreground">"{debouncedQuery}"</span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-6">
+                        <div className="flex flex-wrap items-center gap-4">
                             {/* Sort Dropdown */}
                             <div className="flex items-center gap-3">
                                 <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
@@ -291,40 +291,60 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                     <select
                                         value={sortBy}
                                         onChange={(e) => setSortBy(e.target.value as any)}
-                                        className="appearance-none h-10 pl-4 pr-10 rounded-lg border border-input bg-card text-sm font-medium shadow-sm transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                                        className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
                                     >
-                                        <option value="score_asc">Best Value (Lowest Unit Price)</option>
-                                        <option value="price_asc">Lowest Total Price</option>
-                                        <option value="price_desc">Highest Total Price</option>
+                                        <option value="score_asc">Best Value</option>
+                                        <option value="price_asc">Lowest Price</option>
+                                        <option value="price_desc">Highest Price</option>
                                     </select>
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
                                         <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                )}
 
-                            {/* Unit Filter Chips */}
-                            {availableUnits.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-8 -mt-4 items-center">
-                                    <span className="text-sm font-medium text-muted-foreground mr-2">Filter Units:</span>
-                                    {availableUnits.map(unit => (
-                                        <button
-                                            key={unit}
-                                            onClick={() => {
-                                                const next = new Set(disabledUnits);
-                                                if (next.has(unit)) next.delete(unit);
-                                                else next.add(unit);
-                                                setDisabledUnits(next);
-                                            }}
-                                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${!disabledUnits.has(unit)
-                                                ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
-                                                : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80 opacity-60'
-                                                }`}
-                                        >
-                                            {unit}
-                                        </button>
-                                    ))}
-                                </div>
+                {/* Unit Filter Chips */}
+                {results.length > 0 && !loading && availableUnits.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-8 -mt-4 p-4 bg-muted/30 rounded-2xl border border-border/40">
+                        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground min-w-fit">
+                            <Filter className="w-4 h-4" />
+                            <span>Filter Units:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {availableUnits.map(unit => {
+                                const isActive = !disabledUnits.has(unit);
+                                return (
+                                    <button
+                                        key={unit}
+                                        onClick={() => {
+                                            const next = new Set(disabledUnits);
+                                            if (next.has(unit)) next.delete(unit);
+                                            else next.add(unit);
+                                            setDisabledUnits(next);
+                                        }}
+                                        className={`
+                                            group relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border select-none
+                                            ${isActive
+                                                ? 'bg-primary text-primary-foreground border-primary shadow-sm hover:bg-primary/90'
+                                                : 'bg-background text-muted-foreground border-border hover:border-border/80 hover:bg-accent'
+                                            }
+                                        `}
+                                    >
+                                        {unit}
+                                        {isActive && <X className="w-3 h-3 opacity-50 group-hover:opacity-100" />}
+                                    </button>
+                                );
+                            })}
+                            {disabledUnits.size > 0 && (
+                                <button
+                                    onClick={() => setDisabledUnits(new Set())}
+                                    className="text-xs font-medium text-muted-foreground hover:text-foreground underline underline-offset-4 ml-2 transition-colors"
+                                >
+                                    Reset
+                                </button>
                             )}
                         </div>
                     </div>
