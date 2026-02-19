@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ShoppingListProvider } from '@/components/ShoppingListContext';
 import { CookieConsent } from '@/components/CookieConsent';
+import { FeedbackPrompt } from '@/components/FeedbackPrompt';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -67,6 +68,7 @@ export default function RootLayout({
           <Analytics />
           <SpeedInsights />
           <CookieConsent />
+          <FeedbackPrompt />
         </ShoppingListProvider>
       </body>
     </html>

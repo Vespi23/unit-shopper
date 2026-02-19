@@ -1,16 +1,16 @@
-
 'use client';
 
-import { useState } from 'react';
-import { X, Send, Loader2, MessageSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Send, Loader2, MessageSquare, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface FeedbackModalProps {
     isOpen: boolean;
     onClose: () => void;
+    initialRating?: number;
 }
 
-export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
+export function FeedbackModal({ isOpen, onClose, initialRating }: FeedbackModalProps) {
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
@@ -19,8 +19,15 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         name: '',
         email: '',
         type: 'general',
-        message: ''
+        message: '',
+        rating: 0,
     });
+
+    useEffect(() => {
+        if (isOpen && initialRating) {
+            setFormData(prev => ({ ...prev, rating: initialRating }));
+        }
+    }, [isOpen, initialRating]);
 
     if (!isOpen) return null;
 
@@ -41,7 +48,7 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             setSuccess(true);
             setTimeout(() => {
                 setSuccess(false);
-                setFormData({ name: '', email: '', type: 'general', message: '' });
+                setFormData({ name: '', email: '', type: 'general', message: '', rating: 0 });
                 onClose();
             }, 2000);
         } catch (err) {
@@ -78,6 +85,25 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                            {/* Rating Section */}
+                            <div className="flex flex-col items-center justify-center mb-2">
+                                <label className="text-sm font-medium mb-2 text-muted-foreground">How would you rate your experience?</label>
+                                <div className="flex gap-2">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                        <button
+                                            key={star}
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, rating: star })}
+                                            className="focus:outline-none transition-transform hover:scale-110 active:scale-95"
+                                        >
+                                            <Star
+                                                className={`w-8 h-8 ${star <= formData.rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`}
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="text-sm font-medium mb-1 block">Name</label>
                                 <input

@@ -9,6 +9,7 @@ type FeedbackData = {
     email?: string;
     type: 'bug' | 'feature' | 'general';
     message: string;
+    rating?: number;
     timestamp: string;
 };
 
@@ -18,7 +19,7 @@ const FEEDBACK_FILE_PATH = path.join(process.cwd(), 'data', 'feedback.json');
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, email, type, message } = body;
+        const { name, email, type, message, rating } = body;
 
         // Basic validation
         if (!name || !message || !type) {
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
             email: email || '',
             type,
             message,
+            rating,
             timestamp: new Date().toISOString(),
         };
 
