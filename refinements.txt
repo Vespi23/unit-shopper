@@ -1,0 +1,754 @@
+{
+  "prime": [
+    {
+      "name": "Free Shipping by Amazon",
+      "value": "p_76/1249149011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_76%3A1249149011&dc&qid=1771543522&rnid=1249147011&ref=sr_nr_p_76_1&ds=v1%3ABxS5KyhQnlnkUfe1zNY6KOwmOq1BpRY4P609X6hYDS0",
+      "refinement_display_name": "Prime"
+    }
+  ],
+  "reviews": [
+    {
+      "name": "4 Stars",
+      "value": "p_72/1248903011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_72%3A1248903011&dc&qid=1771543522&rnid=1248901011&ref=sr_nr_p_72_1&ds=v1%3ATrvuePPyGsFK8KfgfmGyREp0TBtpePzFQC453oqI6OA",
+      "refinement_display_name": "Reviews"
+    }
+  ],
+  "brand": [
+    {
+      "name": "Charmin",
+      "value": "p_123/232427",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A232427&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_1&ds=v1%3A9Fw85oZEFAZnKpuuBt79UNdb5BCdgBj1Q8Rxpkob%2F2w",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Scott",
+      "value": "p_123/236974",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A236974&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_2&ds=v1%3AVOYXClx4HeSYZ6X973%2B4L6YqaMTK%2BUPYnyPT5swQYnE",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Cottonelle",
+      "value": "p_123/237748",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A237748&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_3&ds=v1%3AjRzqPZ%2B4IZqs9NlgafljotTS%2BVNo3YINOx3XSY4%2Bk7E",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Angel Soft",
+      "value": "p_123/260953",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A260953&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_4&ds=v1%3ATPCyBWjwHXvwYObyzPJ4F27SZ2ooHHV4SfcBeyZGYzw",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Quilted Northern",
+      "value": "p_123/260949",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A260949&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_5&ds=v1%3AAsI2P4tYOtURBIbecBPvcSL4vioou4Y2G4huCK25wMs",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Seventh Generation",
+      "value": "p_123/545818",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A545818&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_6&ds=v1%3AfTFiTbwQHLqpS0Nz60Sl%2BbGx4x3fEoU%2BhNGiNKMvmpk",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Presto!",
+      "value": "p_123/456547",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A456547&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_7&ds=v1%3A1Qfyl8efEZViV3IwBXPGyq2zfOm795r4zxFnNrBwPL0",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Georgia-Pacific",
+      "value": "p_123/378229",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A378229&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_8&ds=v1%3AMKgUuO%2BVkPLo53fETXEiREoLV0twUOc5AyYQ%2ByBsszA",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Caboo",
+      "value": "p_123/183359",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A183359&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_9&ds=v1%3AMxx%2BtM5MhD6%2B0uCZCIz7kbIblDeij92g7dafu1tOMZA",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Kleenex",
+      "value": "p_123/236969",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A236969&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_10&ds=v1%3A4cfhflzk3OBVM77g2Z9QJmpS0pnA1UocCZPRBAyodt0",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Who Gives A Crap",
+      "value": "p_123/463336",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A463336&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_11&ds=v1%3AzgM9PC0sdkM38Nasr84GLmrRJrdn%2FxZfbtZKBKcfkcY",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Renova",
+      "value": "p_123/794487",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A794487&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_12&ds=v1%3ADfLaBlFPf%2BcyFJ9ilX0ETPFtYA9OxtFqfbFlZ2XmNQE",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Natural Value",
+      "value": "p_123/544166",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A544166&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_13&ds=v1%3A0QwTLCuNvGbwp7bgSG%2BLuC9ec5iLf200ZgScB8%2FyYqU",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "KIRKLAND",
+      "value": "p_123/195599",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A195599&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_14&ds=v1%3AKs9UkwBwlEuTenF4QNR9sWJWc%2BFZvKtQjGxN5J9YExE",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Tork",
+      "value": "p_123/262211",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A262211&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_15&ds=v1%3AMizLVb8hN%2FwVGidhFcnmWORLD7ZQkrnY%2Fl8iXjcB5kc",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "MEMBER´S MARK",
+      "value": "p_123/359135",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A359135&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_16&ds=v1%3AXr4tSg4rXFgLIksHc8xFj5zfeA31CkSqMTcikIRQ%2Fbk",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Genuine Joe",
+      "value": "p_123/321165",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A321165&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_17&ds=v1%3AJy064JClWyVu29q6bYs9dbW6t4t9fEZilsRn07%2FZhow",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Boardwalk",
+      "value": "p_123/358791",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A358791&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_18&ds=v1%3AwK2ZQ19glGgWMYCIGDyrJsMSmBqzbyuall3g5cjKTEw",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "AmazonCommercial",
+      "value": "p_123/611103",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A611103&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_19&ds=v1%3ASSxAzKNctZHEJ0%2F9ybQSlytJXglZDG5avInuwlqpV2U",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "GEN",
+      "value": "p_123/1445728",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A1445728&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_20&ds=v1%3APzJiHtbxjGvgESxbKOGO21Qr%2FaMAei70ehSbOzNG%2B1E",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "COASTWIDE",
+      "value": "p_123/493497",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A493497&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_21&ds=v1%3AR2oj0YzlBl2qhox%2B3FJKUghbwg7%2F7sRILTAbvdU3vtw",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Thetford",
+      "value": "p_123/239156",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A239156&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_22&ds=v1%3A%2F3YvjLvTyvUxo9skNg2nYozFdEybAhZataNhYfLiTsk",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Windsoft",
+      "value": "p_123/370696",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A370696&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_23&ds=v1%3Aed1ZworJ%2FVeuMwXwU0P1qk64nL5aYHfciTlK1WST%2FNE",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Andrex",
+      "value": "p_123/367515",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A367515&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_24&ds=v1%3A8eetxpLtZ8sTsZ%2B70F1122KQmi7FPdnRVuQeZmq%2BhPA",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "McKesson",
+      "value": "p_123/359177",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A359177&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_25&ds=v1%3AgZYysQWm3wN%2Ba5Ah1iUvWu%2FJcY%2BuTLvTr9fAvl%2Fgtt8",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Fairly Odd Novelties",
+      "value": "p_123/26848",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A26848&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_26&ds=v1%3AxWmRDNoFJLoLoVf41JKdGrBJusoccCnBINUwRuIYQdY",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Morcon",
+      "value": "p_123/1093238",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A1093238&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_27&ds=v1%3AVNqn9hIQqx4zbqSVaaY7JFq9mFZ%2Fy6WOR4abB4txH40",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Tempo",
+      "value": "p_123/461236",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A461236&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_28&ds=v1%3A7yGNLaYhe85HQs6dxLWFS%2FoN1oaLhsrWfNGhdsCyFJo",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Grove Co.",
+      "value": "p_123/1135385",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A1135385&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_29&ds=v1%3A4i5Kl3jBDiyEy6eEGcm%2FWyjZzE4%2FPl6ST%2BoQqAUydvA",
+      "refinement_display_name": "Brand"
+    },
+    {
+      "name": "Cashmere",
+      "value": "p_123/400154",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A400154&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_30&ds=v1%3AMVsjr1Bt92POOUs47dr2LpQ6OzvpNRpqD3F2GvG6mMQ",
+      "refinement_display_name": "Brand"
+    }
+  ],
+  "eligible_for_free_shipping": [
+    {
+      "name": "Free Shipping by Amazon",
+      "value": "p_76/1249149011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_76%3A1249149011&dc&qid=1771543522&rnid=1249147011&ref=sr_nr_p_76_1&ds=v1%3ABxS5KyhQnlnkUfe1zNY6KOwmOq1BpRY4P609X6hYDS0",
+      "refinement_display_name": "Eligible for Free Shipping"
+    }
+  ],
+  "customer_reviews": [
+    {
+      "name": "4 Stars",
+      "value": "p_72/1248903011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_72%3A1248903011&dc&qid=1771543522&rnid=1248901011&ref=sr_nr_p_72_1&ds=v1%3ATrvuePPyGsFK8KfgfmGyREp0TBtpePzFQC453oqI6OA",
+      "refinement_display_name": "Customer Reviews"
+    }
+  ],
+  "brands": [
+    {
+      "name": "Charmin",
+      "value": "p_123/232427",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A232427&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_1&ds=v1%3A9Fw85oZEFAZnKpuuBt79UNdb5BCdgBj1Q8Rxpkob%2F2w",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Scott",
+      "value": "p_123/236974",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A236974&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_2&ds=v1%3AVOYXClx4HeSYZ6X973%2B4L6YqaMTK%2BUPYnyPT5swQYnE",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Cottonelle",
+      "value": "p_123/237748",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A237748&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_3&ds=v1%3AjRzqPZ%2B4IZqs9NlgafljotTS%2BVNo3YINOx3XSY4%2Bk7E",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Angel Soft",
+      "value": "p_123/260953",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A260953&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_4&ds=v1%3ATPCyBWjwHXvwYObyzPJ4F27SZ2ooHHV4SfcBeyZGYzw",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Quilted Northern",
+      "value": "p_123/260949",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A260949&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_5&ds=v1%3AAsI2P4tYOtURBIbecBPvcSL4vioou4Y2G4huCK25wMs",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Seventh Generation",
+      "value": "p_123/545818",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A545818&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_6&ds=v1%3AfTFiTbwQHLqpS0Nz60Sl%2BbGx4x3fEoU%2BhNGiNKMvmpk",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Presto!",
+      "value": "p_123/456547",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A456547&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_7&ds=v1%3A1Qfyl8efEZViV3IwBXPGyq2zfOm795r4zxFnNrBwPL0",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Georgia-Pacific",
+      "value": "p_123/378229",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A378229&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_8&ds=v1%3AMKgUuO%2BVkPLo53fETXEiREoLV0twUOc5AyYQ%2ByBsszA",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Caboo",
+      "value": "p_123/183359",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A183359&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_9&ds=v1%3AMxx%2BtM5MhD6%2B0uCZCIz7kbIblDeij92g7dafu1tOMZA",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Kleenex",
+      "value": "p_123/236969",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A236969&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_10&ds=v1%3A4cfhflzk3OBVM77g2Z9QJmpS0pnA1UocCZPRBAyodt0",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Who Gives A Crap",
+      "value": "p_123/463336",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A463336&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_11&ds=v1%3AzgM9PC0sdkM38Nasr84GLmrRJrdn%2FxZfbtZKBKcfkcY",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Renova",
+      "value": "p_123/794487",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A794487&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_12&ds=v1%3ADfLaBlFPf%2BcyFJ9ilX0ETPFtYA9OxtFqfbFlZ2XmNQE",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Natural Value",
+      "value": "p_123/544166",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A544166&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_13&ds=v1%3A0QwTLCuNvGbwp7bgSG%2BLuC9ec5iLf200ZgScB8%2FyYqU",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "KIRKLAND",
+      "value": "p_123/195599",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A195599&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_14&ds=v1%3AKs9UkwBwlEuTenF4QNR9sWJWc%2BFZvKtQjGxN5J9YExE",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Tork",
+      "value": "p_123/262211",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A262211&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_15&ds=v1%3AMizLVb8hN%2FwVGidhFcnmWORLD7ZQkrnY%2Fl8iXjcB5kc",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "MEMBER´S MARK",
+      "value": "p_123/359135",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A359135&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_16&ds=v1%3AXr4tSg4rXFgLIksHc8xFj5zfeA31CkSqMTcikIRQ%2Fbk",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Genuine Joe",
+      "value": "p_123/321165",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A321165&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_17&ds=v1%3AJy064JClWyVu29q6bYs9dbW6t4t9fEZilsRn07%2FZhow",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Boardwalk",
+      "value": "p_123/358791",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A358791&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_18&ds=v1%3AwK2ZQ19glGgWMYCIGDyrJsMSmBqzbyuall3g5cjKTEw",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "AmazonCommercial",
+      "value": "p_123/611103",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A611103&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_19&ds=v1%3ASSxAzKNctZHEJ0%2F9ybQSlytJXglZDG5avInuwlqpV2U",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "GEN",
+      "value": "p_123/1445728",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A1445728&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_20&ds=v1%3APzJiHtbxjGvgESxbKOGO21Qr%2FaMAei70ehSbOzNG%2B1E",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "COASTWIDE",
+      "value": "p_123/493497",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A493497&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_21&ds=v1%3AR2oj0YzlBl2qhox%2B3FJKUghbwg7%2F7sRILTAbvdU3vtw",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Thetford",
+      "value": "p_123/239156",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A239156&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_22&ds=v1%3A%2F3YvjLvTyvUxo9skNg2nYozFdEybAhZataNhYfLiTsk",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Windsoft",
+      "value": "p_123/370696",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A370696&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_23&ds=v1%3Aed1ZworJ%2FVeuMwXwU0P1qk64nL5aYHfciTlK1WST%2FNE",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Andrex",
+      "value": "p_123/367515",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A367515&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_24&ds=v1%3A8eetxpLtZ8sTsZ%2B70F1122KQmi7FPdnRVuQeZmq%2BhPA",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "McKesson",
+      "value": "p_123/359177",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A359177&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_25&ds=v1%3AgZYysQWm3wN%2Ba5Ah1iUvWu%2FJcY%2BuTLvTr9fAvl%2Fgtt8",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Fairly Odd Novelties",
+      "value": "p_123/26848",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A26848&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_26&ds=v1%3AxWmRDNoFJLoLoVf41JKdGrBJusoccCnBINUwRuIYQdY",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Morcon",
+      "value": "p_123/1093238",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A1093238&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_27&ds=v1%3AVNqn9hIQqx4zbqSVaaY7JFq9mFZ%2Fy6WOR4abB4txH40",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Tempo",
+      "value": "p_123/461236",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A461236&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_28&ds=v1%3A7yGNLaYhe85HQs6dxLWFS%2FoN1oaLhsrWfNGhdsCyFJo",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Grove Co.",
+      "value": "p_123/1135385",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A1135385&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_29&ds=v1%3A4i5Kl3jBDiyEy6eEGcm%2FWyjZzE4%2FPl6ST%2BoQqAUydvA",
+      "refinement_display_name": "Brands"
+    },
+    {
+      "name": "Cashmere",
+      "value": "p_123/400154",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_123%3A400154&dc&qid=1771543522&rnid=85457740011&ref=sr_nr_p_123_30&ds=v1%3AMVsjr1Bt92POOUs47dr2LpQ6OzvpNRpqD3F2GvG6mMQ",
+      "refinement_display_name": "Brands"
+    }
+  ],
+  "ply": [
+    {
+      "name": "1-Ply",
+      "value": "p_n_g-1003246027111/23883947011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246027111%3A23883947011&dc&qid=1771543522&rnid=23883922011&ref=sr_nr_p_n_g-1003246027111_1&ds=v1%3AzgVw6HunrWJHqE6nFTlWg4OGE5XWKE3HjUHn4VlX20A",
+      "refinement_display_name": "Ply"
+    },
+    {
+      "name": "2-Ply",
+      "value": "p_n_g-1003246027111/23883945011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246027111%3A23883945011&dc&qid=1771543522&rnid=23883922011&ref=sr_nr_p_n_g-1003246027111_2&ds=v1%3AK5TJZvMwFKlWhJFm0ZIAaMe9iYJbBr8wFhMGn7P8P9M",
+      "refinement_display_name": "Ply"
+    },
+    {
+      "name": "3-Ply",
+      "value": "p_n_g-1003246027111/23883944011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246027111%3A23883944011&dc&qid=1771543522&rnid=23883922011&ref=sr_nr_p_n_g-1003246027111_3&ds=v1%3AfzunnFz7Vkxim3RqOUajs8%2BdNEydll2sIbVDa8Bv8jw",
+      "refinement_display_name": "Ply"
+    },
+    {
+      "name": "4-Ply",
+      "value": "p_n_g-1003246027111/23883950011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246027111%3A23883950011&dc&qid=1771543522&rnid=23883922011&ref=sr_nr_p_n_g-1003246027111_4&ds=v1%3ALDEhrouTJ3pM4rEkJ4Y9054Gu4QmWtAiTBR0fy0sp40",
+      "refinement_display_name": "Ply"
+    },
+    {
+      "name": "5-Ply",
+      "value": "p_n_g-1003246027111/23883948011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246027111%3A23883948011&dc&qid=1771543522&rnid=23883922011&ref=sr_nr_p_n_g-1003246027111_5&ds=v1%3AoRa0gtrCd%2BNK4Se431Ua59wyYfp6QKdVV5hM4%2FayNvs",
+      "refinement_display_name": "Ply"
+    }
+  ],
+  "deals_discounts": [
+    {
+      "name": "All Discounts",
+      "value": "p_n_deal_type/23566065011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_deal_type%3A23566065011&dc&qid=1771543522&rnid=23566063011&ref=sr_nr_p_n_deal_type_1&ds=v1%3Ab08A7YM0sL07%2B5iR32Z0LAqIalSTLqss7sbO1wspmBA",
+      "refinement_display_name": "Deals & Discounts"
+    },
+    {
+      "name": "Today's Deals",
+      "value": "p_n_deal_type/23566064011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_deal_type%3A23566064011&dc&qid=1771543522&rnid=23566063011&ref=sr_nr_p_n_deal_type_2&ds=v1%3Aii7DCaaU8kiPtnRO0JMvuwJNZ%2FrM3rU%2F36GXPwXtjAY",
+      "refinement_display_name": "Deals & Discounts"
+    }
+  ],
+  "subscribe_save": [
+    {
+      "name": "Subscribe & Save Eligible",
+      "value": "p_n_is_sns_available/2617006011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_is_sns_available%3A2617006011&dc&qid=1771543522&rnid=2617005011&ref=sr_nr_p_n_is_sns_available_1&ds=v1%3AYv2Xqss3cnTRWu6W3mfEpvG1e93n3Gfaqx0GRsPm5Js",
+      "refinement_display_name": "Subscribe & Save"
+    }
+  ],
+  "scent": [
+    {
+      "name": "Unscented",
+      "value": "p_n_g-1003123752111/72948628011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003123752111%3A72948628011&dc&qid=1771543522&rnid=23720472011&ref=sr_nr_p_n_g-1003123752111_1&ds=v1%3ANV3G5nL3pE5Y8zM58zRT%2BKo4XTsHs79SywrBI4E1eGo",
+      "refinement_display_name": "Scent"
+    },
+    {
+      "name": "Fresh Linen",
+      "value": "p_n_g-1003123752111/23720494011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003123752111%3A23720494011&dc&qid=1771543522&rnid=23720472011&ref=sr_nr_p_n_g-1003123752111_2&ds=v1%3AgLVf8q77b6LzsyRVsGxNeraRX82DEQNoeMlzbqJfKLc",
+      "refinement_display_name": "Scent"
+    }
+  ],
+  "from_our_brands": [
+    {
+      "name": "Amazon Brands",
+      "value": "p_n_g-1001321510111/24677333011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1001321510111%3A24677333011&dc&qid=1771543522&rnid=21180941011&ref=sr_nr_p_n_g-1001321510111_1&ds=v1%3ATWZyctwFTdcCTz11J3lcCc0Ayd8pSAYYJ1OGjvF0Xmc",
+      "refinement_display_name": "From Our Brands"
+    }
+  ],
+  "top_brands": [
+    {
+      "name": "Top Brands",
+      "value": "p_n_g-101014971069111/119653281011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-101014971069111%3A119653281011&dc&qid=1771543522&rnid=119653280011&ref=sr_nr_p_n_g-101014971069111_1&ds=v1%3APwkkCy4j5rObyXVv4I0FFnh4OFYezh7ZsOFd0CYKMEA",
+      "refinement_display_name": "Top Brands"
+    }
+  ],
+  "special_features": [
+    {
+      "name": "Absorbent",
+      "value": "p_n_g-1003230047111/23865166011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A23865166011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_1&ds=v1%3AcgHjvbExfQKam5SWgs1xL2M5UTkqbyJsp7XkYW34PFk",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Septic Safe",
+      "value": "p_n_g-1003230047111/23865164011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A23865164011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_2&ds=v1%3AfXID15iKcC%2BxVJszvAFx1dfpIbbbFajKslHphrwLhCU",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Ultra Soft",
+      "value": "p_n_g-1003230047111/43549714011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A43549714011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_3&ds=v1%3AqOydr%2BXcCaPLM3y3HJgzyTNaJ2thFvwWlfKMD8RwM5U",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Bulk",
+      "value": "p_n_g-1003230047111/43549713011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A43549713011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_4&ds=v1%3AEEKEy67tU03RCEEoS7G0oJjhCr2Kw4y%2Bk73izZ4m2J4",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Clog Free",
+      "value": "p_n_g-1003230047111/23865167011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A23865167011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_5&ds=v1%3AnBaKKpmWrzXoxnP0J6dXQ4KV3DiVsosP0o0bjRaZprI",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Coreless",
+      "value": "p_n_g-1003230047111/23865162011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A23865162011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_6&ds=v1%3A%2FvgkQ9lSO4lamjh8q%2B6imO9Xpmz1DruHNoeaCluYxC4",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Embossed",
+      "value": "p_n_g-1003230047111/23865171011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A23865171011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_7&ds=v1%3APOkblDBh3oqei0%2BLquCA8QOtFm7ryOV3Pw8eQs0DXok",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Flushable",
+      "value": "p_n_g-1003230047111/23865163011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A23865163011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_8&ds=v1%3AQxWTg8cpIlmxxJ656BzpGPrTIKeIDQ7dVBmO8krF3Ec",
+      "refinement_display_name": "Special Features"
+    },
+    {
+      "name": "Perforated",
+      "value": "p_n_g-1003230047111/23865165011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003230047111%3A23865165011&dc&qid=1771543522&rnid=23865091011&ref=sr_nr_p_n_g-1003230047111_9&ds=v1%3AIxMIXBhNvbwSNG%2B4wAZvpIEN%2FNDeBsJ3oAW2NocS6FM",
+      "refinement_display_name": "Special Features"
+    }
+  ],
+  "sheet_count": [
+    {
+      "name": "Up to 499 Sheets",
+      "value": "p_n_feature_seven_browse-bin/23534489011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_seven_browse-bin%3A23534489011&dc&qid=1771543522&rnid=23534206011&ref=sr_nr_p_n_feature_seven_browse-bin_1&ds=v1%3ArY73YNCYZz7ZzrlMLZfNi5TaR3V5YkqRF5YAqaVQcJY",
+      "refinement_display_name": "Sheet Count"
+    },
+    {
+      "name": "500 to 999 Sheets",
+      "value": "p_n_feature_seven_browse-bin/23534488011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_seven_browse-bin%3A23534488011&dc&qid=1771543522&rnid=23534206011&ref=sr_nr_p_n_feature_seven_browse-bin_2&ds=v1%3AqizArW2j2l3oGlimhEFf28GFnex%2BcLF1V4fxrAaXTEI",
+      "refinement_display_name": "Sheet Count"
+    },
+    {
+      "name": "1,000 to 1,499 Sheets",
+      "value": "p_n_feature_seven_browse-bin/23534487011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_seven_browse-bin%3A23534487011&dc&qid=1771543522&rnid=23534206011&ref=sr_nr_p_n_feature_seven_browse-bin_3&ds=v1%3AvOoPNEQkFIYueJVgANA%2BxI5eAaue8cD9IWjRcZgPL0g",
+      "refinement_display_name": "Sheet Count"
+    },
+    {
+      "name": "1,500 to 1,999 Sheets",
+      "value": "p_n_feature_seven_browse-bin/23534490011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_seven_browse-bin%3A23534490011&dc&qid=1771543522&rnid=23534206011&ref=sr_nr_p_n_feature_seven_browse-bin_4&ds=v1%3AcePDXCUFy%2F69q0kISZYLNaB%2FP5Ezkon4WyfpzoWO0Ig",
+      "refinement_display_name": "Sheet Count"
+    },
+    {
+      "name": "2,000 Sheets & Above",
+      "value": "p_n_feature_seven_browse-bin/23534491011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_seven_browse-bin%3A23534491011&dc&qid=1771543522&rnid=23534206011&ref=sr_nr_p_n_feature_seven_browse-bin_5&ds=v1%3AGqTLmNG8XHn0dCU%2FDeGuzLd7386mg%2FuLkrXU4jkhQoM",
+      "refinement_display_name": "Sheet Count"
+    }
+  ],
+  "seller": [
+    {
+      "name": "OfficeWorld Store",
+      "value": "p_6/A23VBXMR4PFWK7",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_6%3AA23VBXMR4PFWK7&dc&qid=1771543522&rnid=331556011&ref=sr_nr_p_6_1&ds=v1%3A2X9U43TP%2Bal5ZrcgQX4%2F6U283ZiTkV%2FzhgEvpdfJ2WY",
+      "refinement_display_name": "Seller"
+    },
+    {
+      "name": "Sermersheim Holdings LLC",
+      "value": "p_6/A23JEJMRSNZE7A",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_6%3AA23JEJMRSNZE7A&dc&qid=1771543522&rnid=331556011&ref=sr_nr_p_6_2&ds=v1%3AwsvEXdU8diat5tIen7z03ckKM%2FGL2SJDRupS%2B66dex8",
+      "refinement_display_name": "Seller"
+    },
+    {
+      "name": "Amazon.com",
+      "value": "p_6/ATVPDKIKX0DER",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_6%3AATVPDKIKX0DER&dc&qid=1771543522&rnid=331556011&ref=sr_nr_p_6_3&ds=v1%3AQ3XZemD6hefZ1HezH9QlsXbTJx%2FeTLf9nLGn0d6SP3w",
+      "refinement_display_name": "Seller"
+    },
+    {
+      "name": "PNWB Office Products",
+      "value": "p_6/A3SO7LILCZEWPP",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_6%3AA3SO7LILCZEWPP&dc&qid=1771543522&rnid=331556011&ref=sr_nr_p_6_4&ds=v1%3ArI8O7ynn7dDp%2FYNkFvp5et5UOIqC13izLlzwdS6yof8",
+      "refinement_display_name": "Seller"
+    },
+    {
+      "name": "BirkenStar",
+      "value": "p_6/ASSKFE9KVAV03",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_6%3AASSKFE9KVAV03&dc&qid=1771543522&rnid=331556011&ref=sr_nr_p_6_5&ds=v1%3AqDFmyNo6QIA5A4UBMaZoacL7hswQkiNIcV8VYKG9CiM",
+      "refinement_display_name": "Seller"
+    },
+    {
+      "name": "My Two Crowns",
+      "value": "p_6/A2I5QD0ZGO10X0",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_6%3AA2I5QD0ZGO10X0&dc&qid=1771543522&rnid=331556011&ref=sr_nr_p_6_6&ds=v1%3AY6By7OHc7hu1J6uniRnbyU6goB3NHQ7jOqLams%2BbcuE",
+      "refinement_display_name": "Seller"
+    },
+    {
+      "name": "Carroll Ventures Shop",
+      "value": "p_6/A2UH1M9MV35N6C",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_6%3AA2UH1M9MV35N6C&dc&qid=1771543522&rnid=331556011&ref=sr_nr_p_6_7&ds=v1%3AEWpKoeoZaU1sz%2ByryqnRFv0DqmFO6UZlzmFK9vPq1Kk",
+      "refinement_display_name": "Seller"
+    }
+  ],
+  "uses": [
+    {
+      "name": "Camping",
+      "value": "p_n_g-1003246045111/23883943011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246045111%3A23883943011&dc&qid=1771543522&rnid=23883921011&ref=sr_nr_p_n_g-1003246045111_1&ds=v1%3AXB1ND3wAUXApg1lcVfi%2FH0ovZH8I6Z9OckjX6m78Ees",
+      "refinement_display_name": "Uses"
+    },
+    {
+      "name": "Commercial",
+      "value": "p_n_g-1003246045111/23883940011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246045111%3A23883940011&dc&qid=1771543522&rnid=23883921011&ref=sr_nr_p_n_g-1003246045111_2&ds=v1%3Af8ZsvfMea0a66F232kIGRL%2BRnhu0Nkk0wiTacRKq8wY",
+      "refinement_display_name": "Uses"
+    },
+    {
+      "name": "Home",
+      "value": "p_n_g-1003246045111/23883941011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246045111%3A23883941011&dc&qid=1771543522&rnid=23883921011&ref=sr_nr_p_n_g-1003246045111_3&ds=v1%3AxEEWmIuGWm9DoALERFYm6SjOHN0%2BIsonxXYxnTFP%2BTA",
+      "refinement_display_name": "Uses"
+    },
+    {
+      "name": "Marine",
+      "value": "p_n_g-1003246045111/23883942011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246045111%3A23883942011&dc&qid=1771543522&rnid=23883921011&ref=sr_nr_p_n_g-1003246045111_4&ds=v1%3AX3z07C0%2BlbYfk0wdz4ZijmkiazwJnT%2BYzeJ7AzEFc9Q",
+      "refinement_display_name": "Uses"
+    },
+    {
+      "name": "RV",
+      "value": "p_n_g-1003246045111/23883939011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003246045111%3A23883939011&dc&qid=1771543522&rnid=23883921011&ref=sr_nr_p_n_g-1003246045111_5&ds=v1%3Aw3rbZ3h2g07YLbTCAKq8f2ZjJey%2BMPuwSGc3szcJTHk",
+      "refinement_display_name": "Uses"
+    }
+  ],
+  "material_free": [
+    {
+      "name": "Tree Free",
+      "value": "p_n_feature_three_browse-bin/23501601011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501601011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_1&ds=v1%3AzrXAf5901kLIgbL7DEYnzagg6rzkvPJ%2FOLzOpO6ZfGs",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "Bleach Free",
+      "value": "p_n_feature_three_browse-bin/23501597011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501597011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_2&ds=v1%3AOVMoV66z6zQ%2B0JAp8olhNVf1HaMKOC67gcKpWdE5ddM",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "Dye Free",
+      "value": "p_n_feature_three_browse-bin/23501599011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501599011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_3&ds=v1%3Ata1W8LEhqW1ZPrcAl6p5cnnwM6aSmChcoKYqkZSOELw",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "BPA Free",
+      "value": "p_n_feature_three_browse-bin/23501603011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501603011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_4&ds=v1%3AGavux%2FCGsPyzA%2FoTMiDf%2Fwc2xwGq64Pb31IjQ6ljHnM",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "Chlorine Free",
+      "value": "p_n_feature_three_browse-bin/23501604011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501604011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_5&ds=v1%3A1lLmSRrnAnYleoBKvvSDIYiZiCo9NBwMkGuV4YfB75M",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "Formaldehyde Free",
+      "value": "p_n_feature_three_browse-bin/23501600011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501600011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_6&ds=v1%3AxEri%2FrYJ6zCQLK8rIGRgJpOTy%2F7vcgvmNbjDAuhCIaI",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "Latex Free",
+      "value": "p_n_feature_three_browse-bin/23501596011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501596011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_7&ds=v1%3AIOAwkYc8ouNb6XuA9wZzS9GS4%2FNLbYHTyM0yjXb4TqQ",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "Paraben Free",
+      "value": "p_n_feature_three_browse-bin/23501602011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501602011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_8&ds=v1%3AE7l%2FXjNwaelWM9CC%2B79ZcnS3B1wRaqLAdJTtl92NuEQ",
+      "refinement_display_name": "Material Free"
+    },
+    {
+      "name": "Plastic Free",
+      "value": "p_n_feature_three_browse-bin/23501598011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_feature_three_browse-bin%3A23501598011&dc&qid=1771543522&rnid=23501583011&ref=sr_nr_p_n_feature_three_browse-bin_9&ds=v1%3AenTiTyyOg4%2BXC4R3o9syMq6bQq8KtNv61RAN8KYwBS8",
+      "refinement_display_name": "Material Free"
+    }
+  ],
+  "sustainability_features": [
+    {
+      "name": "Any Feature",
+      "value": "p_n_cpf_labels/121136630011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_cpf_labels%3A121136630011&dc&qid=1771543522&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_1&ds=v1%3AglGZbbB5618%2BqHnFC%2F8emCtxEZaVrPnWsT8eS4TfLKc",
+      "refinement_display_name": "Sustainability Features"
+    },
+    {
+      "name": "Forestry Practices",
+      "value": "p_n_cpf_labels/116845687011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_cpf_labels%3A116845687011&dc&qid=1771543522&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_2&ds=v1%3AMQPfuwsMnvLeu07wbY4EYcBfvL4Kg6h14gvRIi%2F2d8k",
+      "refinement_display_name": "Sustainability Features"
+    },
+    {
+      "name": "Manufacturing Practices",
+      "value": "p_n_cpf_labels/116845690011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_cpf_labels%3A116845690011&dc&qid=1771543522&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_3&ds=v1%3A1j9SULwS8vhF2KFD3ErULpRwI6VeCRs%2BVd1dyq3zMLs",
+      "refinement_display_name": "Sustainability Features"
+    },
+    {
+      "name": "Safer Chemicals",
+      "value": "p_n_cpf_labels/116845683011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_cpf_labels%3A116845683011&dc&qid=1771543522&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_4&ds=v1%3A1CdzBK4dL3vwqm4D%2BEPoAAkBi2UUuWM4%2FxqTofiDocY",
+      "refinement_display_name": "Sustainability Features"
+    }
+  ],
+  "material": [
+    {
+      "name": "Paper",
+      "value": "p_n_g-1003348489111/23982334011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003348489111%3A23982334011&dc&qid=1771543522&rnid=23982323011&ref=sr_nr_p_n_g-1003348489111_1&ds=v1%3AF5SKigoPD30MdoUDo5RtWG0WuZudKwwMD0ZJ0MAscJk",
+      "refinement_display_name": "Material"
+    },
+    {
+      "name": "Wood Pulp",
+      "value": "p_n_g-1003348489111/23982331011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003348489111%3A23982331011&dc&qid=1771543522&rnid=23982323011&ref=sr_nr_p_n_g-1003348489111_2&ds=v1%3AUYj1sIB0HyWXRUOGY1Im0V63rdzrQWuZbArDCnvuP%2FY",
+      "refinement_display_name": "Material"
+    },
+    {
+      "name": "Bamboo",
+      "value": "p_n_g-1003348489111/23982332011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003348489111%3A23982332011&dc&qid=1771543522&rnid=23982323011&ref=sr_nr_p_n_g-1003348489111_3&ds=v1%3A8HBbh%2B2h7J5g1UQ%2Bm1m1nYDI2WkO8p1QnsbxNUI1OgI",
+      "refinement_display_name": "Material"
+    },
+    {
+      "name": "Cotton",
+      "value": "p_n_g-1003348489111/23982333011",
+      "link": "https://www.amazon.com/s?k=toilet+paper&rh=p_n_g-1003348489111%3A23982333011&dc&qid=1771543522&rnid=23982323011&ref=sr_nr_p_n_g-1003348489111_4&ds=v1%3ArsYEFVlb9Pg5jzRCcwupRSvhu23yWXwO0vP%2B4Olcdqw",
+      "refinement_display_name": "Material"
+    }
+  ]
+}

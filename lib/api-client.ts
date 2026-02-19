@@ -36,8 +36,8 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         type: 'search',
         amazon_domain: 'amazon.com',
         search_term: query,
-        page: page.toString()
-        // Removed sort_by: 'featured' to diversify results and not only pull featured
+        page: page.toString(),
+        refinements: 'p_72/1248903011' // Ensures 4+ stars natively from Amazon
     });
 
     try {
