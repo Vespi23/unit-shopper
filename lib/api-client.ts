@@ -36,8 +36,8 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         type: 'search',
         amazon_domain: 'amazon.com',
         search_term: query,
-        page: page.toString(),
-        sort_by: 'featured' // Default sort
+        page: page.toString()
+        // Removed sort_by: 'featured' to diversify results and not only pull featured
     });
 
     try {
@@ -56,7 +56,9 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         }
 
         const rawResults = data.search_results || [];
-        const results = rawResults.map((item: any) => mapRainforestResult(item));
+        const results = rawResults
+            .map((item: any) => mapRainforestResult(item))
+            .filter((product: Product) => product.rating !== undefined && product.rating >= 4);
 
         // Save to Cache
         if (results.length > 0) {
