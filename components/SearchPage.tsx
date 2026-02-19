@@ -234,6 +234,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             placeholder="Search for peanut butter, laundry detergent..."
                             className="flex-1 bg-transparent border-none outline-none text-xl placeholder:text-muted-foreground/40 h-12 ring-0 focus:ring-0"
                             autoFocus
+                            aria-label="Search products"
                         />
                         {loading && <Loader2 className="h-6 w-6 animate-spin text-primary mr-4" />}
                     </div>
@@ -272,12 +273,14 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         <div className="flex flex-wrap items-center gap-4">
                             {/* Sort Dropdown */}
                             <div className="flex items-center gap-3">
-                                <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
+                                <label htmlFor="sort-select" className="text-sm font-medium text-muted-foreground">Sort by:</label>
                                 <div className="relative">
                                     <select
+                                        id="sort-select"
                                         value={sortBy}
                                         onChange={(e) => setSortBy(e.target.value as any)}
                                         className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                                        aria-label="Sort products"
                                     >
                                         <option value="score_asc">Best Value</option>
                                         <option value="price_asc">Lowest Price</option>

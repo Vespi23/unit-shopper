@@ -2,24 +2,19 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProductCard } from './ProductCard';
 import { Product } from '@/lib/types';
-import userEvent from '@testing-library/user-event';
-
-// Mock the useShoppingList hook
-const mockAddToList = vi.fn();
-const mockRemoveFromList = vi.fn();
-const mockIsInList = vi.fn();
-
-vi.mock('./ShoppingListContext', () => ({
-    useShoppingList: () => ({
-        addToList: mockAddToList,
-        removeFromList: mockRemoveFromList,
-        isInList: mockIsInList,
-    }),
-}));
 
 // Mock Next.js Image component
 vi.mock('next/image', () => ({
     default: (props: any) => <img {...props} />,
+}));
+
+// Mock useABTest hook
+vi.mock('@/hooks/useABTest', () => ({
+    useABTest: () => ({
+        variant: 'control',
+        trackConversion: vi.fn(),
+        isReady: true,
+    }),
 }));
 
 const mockProduct: Product = {
@@ -68,21 +63,5 @@ describe('ProductCard', () => {
         const checkbox = screen.getByRole('checkbox');
         fireEvent.click(checkbox);
         expect(onSelect).toHaveBeenCalledWith(true);
-    });
-
-    it('toggles shopping list when button is clicked', async () => {
-        mockIsInList.mockReturnValue(false);
-        render(
-            <ProductCard
-                product={mockProduct}
-                onClick={() => { }}
-                onSelect={() => { }}
-                isSelected={false}
-            />
-        );
-
-        const addButton = screen.getByTitle('Add to list');
-        fireEvent.click(addButton);
-        expect(mockAddToList).toHaveBeenCalledWith(mockProduct);
     });
 });

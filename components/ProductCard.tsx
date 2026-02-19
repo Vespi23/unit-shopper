@@ -29,25 +29,12 @@ export function ProductCardSkeleton() {
     );
 }
 
-import { useShoppingList } from './ShoppingListContext';
-import { Button } from './ui/button';
-import { Heart, Plus, Check } from 'lucide-react';
-
 import { useABTest } from '@/hooks/useABTest';
 
-export function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
-    const { addToList, removeFromList, isInList } = useShoppingList();
-    const isAdded = isInList(product.id);
-    const { variant, trackConversion, isReady } = useABTest('cta_color');
+import { memo } from 'react';
 
-    const toggleList = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (isAdded) {
-            removeFromList(product.id);
-        } else {
-            addToList(product);
-        }
-    };
+export const ProductCard = memo(function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
+    const { variant, trackConversion, isReady } = useABTest('cta_color');
 
     const handleViewDeal = (e: React.MouseEvent) => {
         e.stopPropagation(); // Link handles navigation, but we track first?
@@ -80,6 +67,15 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
         <div
             className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer ${isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border/50 hover:border-primary/30'}`}
             onClick={onClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClick();
+                }
+            }}
+            aria-label={`View details for ${product.title}`}
         >
             {/* Selection Checkbox */}
             <div className="absolute top-3 left-3 z-20" onClick={(e) => e.stopPropagation()}>
@@ -88,20 +84,8 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                     checked={isSelected}
                     onChange={(e) => onSelect(e.target.checked)}
                     className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-transform hover:scale-110 shadow-sm"
+                    aria-label={`Select ${product.title} for comparison`}
                 />
-            </div>
-
-            {/* Shopping List Button */}
-            <div className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <Button
-                    variant="secondary"
-                    size="icon"
-                    className={`h-8 w-8 rounded-full shadow-md transition-colors ${isAdded ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white/90 hover:bg-white text-muted-foreground'}`}
-                    onClick={toggleList}
-                    title={isAdded ? "Remove from list" : "Add to list"}
-                >
-                    {isAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                </Button>
             </div>
 
             {/* Image Section */}
@@ -111,6 +95,7 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                     alt={product.title}
                     width={300}
                     height={300}
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                 />
 
@@ -168,4 +153,4 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
             />
         </div>
     );
-}
+});

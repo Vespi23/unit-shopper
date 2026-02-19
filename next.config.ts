@@ -79,6 +79,7 @@ const nextConfig: NextConfig = {
         hostname: 'i5.walmartimages.com',
       }
     ],
+    formats: ['image/avif', 'image/webp'],
   },
 };
 

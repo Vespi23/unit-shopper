@@ -1,15 +1,5 @@
-import { Search } from 'lucide-react';
-
-const CATEGORIES = [
-    { name: 'Toilet Paper', query: 'Toilet Paper', icon: '🧻' },
-    { name: 'Paper Towels', query: 'Paper Towels', icon: '🧻' },
-    { name: 'Coffee', query: 'Coffee Beans', icon: '☕' },
-    { name: 'Laundry Detergent', query: 'Laundry Detergent', icon: '🧺' },
-    { name: 'Protein Powder', query: 'Whey Protein', icon: '💪' },
-    { name: 'Batteries', query: 'AA Batteries', icon: '🔋' },
-    { name: 'Diapers', query: 'Diapers size 4', icon: '👶' },
-    { name: 'Trash Bags', query: 'Kitchen Trash Bags', icon: '🗑️' },
-];
+import Link from 'next/link';
+import { TRENDING_CATEGORIES } from '@/lib/categories';
 
 interface TrendingCategoriesProps {
     onSelect: (query: string) => void;
@@ -22,15 +12,16 @@ export function TrendingCategories({ onSelect }: TrendingCategoriesProps) {
                 Trending Categories
             </h3>
             <div className="flex flex-wrap justify-center gap-3">
-                {CATEGORIES.map((cat) => (
-                    <button
+                {TRENDING_CATEGORIES.map((cat) => (
+                    <Link
                         key={cat.name}
+                        href={`/?q=${encodeURIComponent(cat.query)}`}
                         onClick={() => onSelect(cat.query)}
                         className="flex items-center gap-2 px-4 py-2 bg-background border border-border/50 rounded-full shadow-sm hover:shadow-md hover:border-emerald-500/50 hover:text-emerald-600 transition-all text-sm font-medium"
                     >
                         <span>{cat.icon}</span>
                         {cat.name}
-                    </button>
+                    </Link>
                 ))}
             </div>
         </section>

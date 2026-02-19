@@ -5,10 +5,11 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { ShoppingListProvider } from '@/components/ShoppingListContext';
+
 import { CookieConsent } from '@/components/CookieConsent';
 import { FeedbackPrompt } from '@/components/FeedbackPrompt';
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -59,7 +60,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
-        <ShoppingListProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
           <Header />
           <div className="flex-grow">
             {children}
@@ -71,7 +77,7 @@ export default function RootLayout({
           <CookieConsent />
           <FeedbackPrompt />
           <Toaster />
-        </ShoppingListProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

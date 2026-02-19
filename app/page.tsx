@@ -20,6 +20,9 @@ export async function generateMetadata(
     return {
       title: `${decoded} Unit Price & Deals - BudgetLynx`,
       description: `Find the best unit price for ${decoded}. We compare sizes to find the true best deal on Amazon.`,
+      openGraph: {
+        images: [`/api/og?title=${encodeURIComponent(decoded)}`],
+      },
     };
   }
 
@@ -33,7 +36,23 @@ export async function generateMetadata(
 function generateStructuredData(products: Product[], query: string) {
   if (products.length === 0) return null;
 
-  const schema = {
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [{
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://www.budgetlynx.com"
+    }, {
+      "@type": "ListItem",
+      "position": 2,
+      "name": query,
+      "item": `https://www.budgetlynx.com/?q=${encodeURIComponent(query)}`
+    }]
+  };
+
+  const productListSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
     "name": `Best Unit Prices for "${query}"`,
@@ -59,7 +78,7 @@ function generateStructuredData(products: Product[], query: string) {
     }))
   };
 
-  return schema;
+  return [breadcrumbSchema, productListSchema];
 }
 
 export default async function Home(props: Props) {
@@ -67,7 +86,7 @@ export default async function Home(props: Props) {
   const query = typeof searchParams.q === 'string' ? searchParams.q : '';
 
   let initialResults: Product[] = [];
-  let jsonLd = null;
+  let jsonLd: any[] | null = null;
 
   // SSR Search
   if (query) {
@@ -81,12 +100,13 @@ export default async function Home(props: Props) {
 
   return (
     <>
-      {jsonLd && (
+      {jsonLd && Array.isArray(jsonLd) && jsonLd.map((schema, index) => (
         <script
+          key={index}
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, '\\u003c') }}
         />
-      )}
+      ))}
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-background">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
