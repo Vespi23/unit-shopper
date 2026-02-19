@@ -1,17 +1,1 @@
-[
-  {
-    "name": "Test User",
-    "email": "",
-    "type": "general",
-    "message": "This is a test feedback from node script",
-    "timestamp": "2026-02-19T00:08:11.696Z"
-  },
-  {
-    "name": "Rating Test",
-    "email": "",
-    "type": "general",
-    "message": "Testing rating",
-    "rating": 5,
-    "timestamp": "2026-02-19T00:14:15.292Z"
-  }
-]
+[]
