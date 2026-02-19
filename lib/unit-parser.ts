@@ -9,92 +9,112 @@ export interface UnitInfo {
 }
 
 const UNIT_REGEX = {
-    oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:oz|ounce|ounces)\b/i,
-    fl_oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:fl\s?oz|fluid\s?ounce|fluid\s?ounces)\b/i,
-    lb: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:lb|lbs|pound|pounds)\b/i,
-    g: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:g|gram|grams)\b/i,
-    kg: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:kg|kilogram|kilograms)\b/i,
-    mg: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:mg|milligram|milligrams)\b/i,
-    l: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:l|liter|liters)\b/i,
-    ml: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:ml|milliliter|milliliters)\b/i,
-    gal: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:gal|gallon|gallons)\b/i,
-    qt: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:qt|quart|quarts)\b/i,
-    pt: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:pt|pint|pints)\b/i,
-    count: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:count|ct|pack|pcs)\b/i,
-    loads: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:load|loads)\b/i,
-    rolls: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:roll|rolls)\b/i,
-    sheets: /(\d+)\s?(?:[a-zA-Z]+\s+)?(?:sheet|sheets)\b/i,
-    sq_ft: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z]+\s+)?(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
+    oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:oz|ounce|ounces)\b/i,
+    fl_oz: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:fl\s?oz|fluid\s?ounce|fluid\s?ounces)\b/i,
+    lb: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:lb|lbs|pound|pounds)\b/i,
+    g: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:g|gram|grams)\b/i,
+    kg: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:kg|kilogram|kilograms)\b/i,
+    mg: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:mg|milligram|milligrams)\b/i,
+    l: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:l|liter|liters)\b/i,
+    ml: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:ml|milliliter|milliliters)\b/i,
+    gal: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:gal|gallon|gallons)\b/i,
+    qt: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:qt|quart|quarts)\b/i,
+    pt: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:pt|pint|pints)\b/i,
+    count: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:count|ct|pack|pcs)\b/i,
+    loads: /(\d+)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:load|loads)\b/i,
+    rolls: /(\d+)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:roll|rolls)\b/i,
+    sheets: /(\d+)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:sheet|sheets)\b/i,
+    sq_ft: /(\d+(?:\.\d+)?)\s?(?:[a-zA-Z\.]+\s+){0,3}(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
 };
 
 const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack/i;
 const COUNT_AS_QUANTITY_REGEX = /(\d+)\s?(?:count|ct|pcs)/i;
+const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
 export function parseUnit(title: string): UnitInfo | null {
     const lowerTitle = title.toLowerCase();
 
-    // 1. Detect Standard Quantity (Pack of X, X Pack)
+    // 1. Detect Standard Quantity (Pack of X, X Pack, Nx)
     let quantity = 1;
     const packMatch = lowerTitle.match(PACK_REGEX);
     if (packMatch) {
         const q = packMatch[1] || packMatch[2];
         if (q) quantity = parseInt(q, 10);
+    } else {
+        // Try multiplier (e.g., 2x, 3x)
+        const multMatch = lowerTitle.match(MULTIPLIER_REGEX);
+        if (multMatch) {
+            quantity = parseInt(multMatch[1], 10);
+        }
     }
 
     // 2. Detect Unit & Value
     let value = 0;
     let unit: UnitType = 'unknown';
 
-    // Check weight/volume units first
-    if (UNIT_REGEX.fl_oz.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.fl_oz);
-        if (match) { value = parseFloat(match[1]); unit = 'fl oz'; }
-    } else if (UNIT_REGEX.gal.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.gal);
-        if (match) { value = parseFloat(match[1]); unit = 'gal'; }
-    } else if (UNIT_REGEX.qt.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.qt);
-        if (match) { value = parseFloat(match[1]); unit = 'qt'; }
-    } else if (UNIT_REGEX.pt.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.pt);
-        if (match) { value = parseFloat(match[1]); unit = 'pt'; }
-    } else if (UNIT_REGEX.oz.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.oz);
-        if (match) { value = parseFloat(match[1]); unit = 'oz'; }
-    } else if (UNIT_REGEX.lb.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.lb);
-        if (match) { value = parseFloat(match[1]); unit = 'lb'; }
-    } else if (UNIT_REGEX.ml.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.ml);
-        if (match) { value = parseFloat(match[1]); unit = 'ml'; }
-    } else if (UNIT_REGEX.l.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.l);
-        if (match) { value = parseFloat(match[1]); unit = 'l'; }
-    } else if (UNIT_REGEX.mg.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.mg);
-        if (match) { value = parseFloat(match[1]); unit = 'mg'; }
-    } else if (UNIT_REGEX.g.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.g);
-        if (match) { value = parseFloat(match[1]); unit = 'g'; }
-    } else if (UNIT_REGEX.kg.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.kg);
-        if (match) { value = parseFloat(match[1]); unit = 'kg'; }
-    } else if (UNIT_REGEX.sq_ft.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.sq_ft);
-        if (match) { value = parseFloat(match[1]); unit = 'sq ft'; }
-    } else if (UNIT_REGEX.loads.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.loads);
-        if (match) { value = parseFloat(match[1]); unit = 'loads'; }
-    } else if (UNIT_REGEX.rolls.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.rolls);
-        if (match) { value = parseFloat(match[1]); unit = 'rolls'; }
-    } else if (UNIT_REGEX.sheets.test(lowerTitle)) {
-        const match = lowerTitle.match(UNIT_REGEX.sheets);
-        if (match) { value = parseFloat(match[1]); unit = 'sheets'; }
+    // Heuristic: For certain items (bags, wipes, etc.), "Count" is the preferred unit 
+    // even if dimensions (like gallons) are present.
+    const isCountableItem = /trash|bag|plate|cup|wipe|diaper|tissue|napkin|swiffer/i.test(lowerTitle);
+    if (isCountableItem) {
+        const countMatch = lowerTitle.match(UNIT_REGEX.count);
+        if (countMatch) {
+            value = parseFloat(countMatch[1]);
+            unit = 'count';
+        }
+    }
+
+    // If we didn't force a count unit, check weight/volume units
+    if (unit === 'unknown') {
+        if (UNIT_REGEX.fl_oz.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.fl_oz);
+            if (match) { value = parseFloat(match[1]); unit = 'fl oz'; }
+        } else if (UNIT_REGEX.gal.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.gal);
+            if (match) { value = parseFloat(match[1]); unit = 'gal'; }
+        } else if (UNIT_REGEX.qt.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.qt);
+            if (match) { value = parseFloat(match[1]); unit = 'qt'; }
+        } else if (UNIT_REGEX.pt.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.pt);
+            if (match) { value = parseFloat(match[1]); unit = 'pt'; }
+        } else if (UNIT_REGEX.oz.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.oz);
+            if (match) { value = parseFloat(match[1]); unit = 'oz'; }
+        } else if (UNIT_REGEX.lb.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.lb);
+            if (match) { value = parseFloat(match[1]); unit = 'lb'; }
+        } else if (UNIT_REGEX.ml.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.ml);
+            if (match) { value = parseFloat(match[1]); unit = 'ml'; }
+        } else if (UNIT_REGEX.l.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.l);
+            if (match) { value = parseFloat(match[1]); unit = 'l'; }
+        } else if (UNIT_REGEX.mg.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.mg);
+            if (match) { value = parseFloat(match[1]); unit = 'mg'; }
+        } else if (UNIT_REGEX.g.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.g);
+            if (match) { value = parseFloat(match[1]); unit = 'g'; }
+        } else if (UNIT_REGEX.kg.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.kg);
+            if (match) { value = parseFloat(match[1]); unit = 'kg'; }
+        } else if (UNIT_REGEX.sq_ft.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.sq_ft);
+            if (match) { value = parseFloat(match[1]); unit = 'sq ft'; }
+        } else if (UNIT_REGEX.loads.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.loads);
+            if (match) { value = parseFloat(match[1]); unit = 'loads'; }
+        } else if (UNIT_REGEX.rolls.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.rolls);
+            if (match) { value = parseFloat(match[1]); unit = 'rolls'; }
+        } else if (UNIT_REGEX.sheets.test(lowerTitle)) {
+            const match = lowerTitle.match(UNIT_REGEX.sheets);
+            if (match) { value = parseFloat(match[1]); unit = 'sheets'; }
+        }
     }
 
     // 3. Handle 'count' behavior
-    if (unit !== 'unknown') {
+    if (unit !== 'unknown' && unit !== 'count') {
         // If we found a real unit (e.g. oz), then "count" usually means "quantity"
         // e.g. "20 count 1 oz bags" -> 20 * 1 oz = 20 oz
         if (quantity === 1) { // Only look for count-quantity if we haven't found a pack-quantity

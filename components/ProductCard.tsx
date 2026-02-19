@@ -4,6 +4,7 @@ import { Product } from '@/lib/types';
 import { ExternalLink, ShoppingCart, Star } from 'lucide-react';
 import Image from 'next/image';
 import { getAffiliateLink } from '@/lib/affiliate';
+import { generateProductSchema } from '@/lib/schema';
 
 interface ProductCardProps {
     product: Product;
@@ -84,8 +85,8 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                 />
 
                 {/* Unit Price Badge (Hero) */}
-                <div className="absolute bottom-3 right-3 bg-emerald-600 text-white dark:bg-emerald-500 shadow-lg shadow-black/20 px-3 py-1.5 rounded-full text-sm font-bold backdrop-blur-none border border-emerald-700/50 z-10 transition-transform group-hover:scale-110">
-                    {product.pricePerUnit}
+                <div className="absolute bottom-3 right-3 bg-emerald-600 text-white dark:bg-emerald-500 shadow-xl shadow-emerald-900/20 px-4 py-2 rounded-2xl text-sm font-extrabold backdrop-blur-md border border-emerald-400/30 z-10 transition-all duration-300 group-hover:scale-110 group-hover:shadow-emerald-900/40 flex items-center gap-1.5">
+                    <span className="drop-shadow-md">{product.pricePerUnit}</span>
                 </div>
             </div>
 
@@ -129,6 +130,12 @@ export function ProductCard({ product, onClick, onSelect, isSelected }: ProductC
                     View Deal <ExternalLink className="h-4 w-4" />
                 </a>
             </div>
+
+            {/* Structured Data (JSON-LD) */}
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(generateProductSchema(product)) }}
+            />
         </div>
     );
 }

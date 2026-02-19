@@ -8,6 +8,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ShoppingListProvider } from '@/components/ShoppingListContext';
 import { CookieConsent } from '@/components/CookieConsent';
 import { FeedbackPrompt } from '@/components/FeedbackPrompt';
+import { Toaster } from "@/components/ui/toaster";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -69,6 +70,7 @@ export default function RootLayout({
           <SpeedInsights />
           <CookieConsent />
           <FeedbackPrompt />
+          <Toaster />
         </ShoppingListProvider>
       </body>
     </html>

@@ -5,7 +5,9 @@ import { X, ExternalLink, TrendingDown, Star, Share2 } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { getAffiliateLink } from '@/lib/affiliate';
+import { generateProductSchema } from '@/lib/schema';
 import { PriceHistoryChart } from './PriceHistoryChart';
+import { useToast } from "@/components/ui/use-toast";
 
 interface ProductDetailModalProps {
     product: Product;
@@ -13,6 +15,7 @@ interface ProductDetailModalProps {
 }
 
 export function ProductDetailModal({ product, onClose }: ProductDetailModalProps) {
+    const { toast } = useToast();
     // Prevent scrolling when modal is open
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -32,10 +35,10 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                         onClick={() => {
                             const url = `${window.location.origin}/?q=${encodeURIComponent(product.title)}`;
                             navigator.clipboard.writeText(url);
-                            // Visual feedback could be added here, but for MVP just copy
-                            // Or use a toast if available. We don't have a toast in context, let's just change icon temporarily or alert?
-                            // Let's rely on browser 'copied' UI or simple alert for now, or just trust it.
-                            // Better: Change icon state.
+                            toast({
+                                title: "Link Copied!",
+                                description: "Product link copied to clipboard.",
+                            });
                         }}
                         className="p-2 rounded-full bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-colors group"
                         title="Copy Link to Product"
@@ -123,6 +126,12 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* Structured Data (JSON-LD) */}
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(generateProductSchema(product)) }}
+            />
+        </div >
     );
 }
