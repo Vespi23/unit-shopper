@@ -81,9 +81,10 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 }
 
+import { getAmazonAffiliateLink } from './affiliate';
+
 // Helper to map Rainforest results
 function mapRainforestResult(item: any): Product {
-    const { getAmazonAffiliateLink } = require('./affiliate');
 
     const unitInfo = parseUnit(item.title);
 
