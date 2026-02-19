@@ -42,9 +42,44 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
     }
 
+    const cacheKey = `search:${query.toLowerCase()}:${page}`;
+
+    // Try Cache
+    if (redis.isOpen || process.env.REDIS_URL || process.env.KV_URL) {
+        try {
+            const cached = await redis.get(cacheKey);
+            if (cached) {
+                console.log(`Cache HIT for: ${query}, page: ${page}`);
+                // Ensure we return JSON object, redis stores string
+                // Depending on how we store it. We should store as stringified JSON.
+                // But redis.get returns string | null usually. 
+                // Let's assume we store as string.
+                // Wait, if vercel KV, it might return object if we used json.set? 
+                // But standard redis is string. Let's parse.
+                // Actually, let's keep it simple: store string, parse.
+                return NextResponse.json(typeof cached === 'string' ? JSON.parse(cached) : cached);
+            }
+        } catch (error) {
+            console.error('Redis cache read error:', error);
+        }
+    }
+
     try {
-        console.log(`Searching for: ${query}, page: ${page} (IP: ${ip})`);
+        console.log(`Cache MISS. Searching for: ${query}, page: ${page} (IP: ${ip})`);
         const results = await searchProducts(query, page);
+
+        // Store in Cache (Background)
+        if (results && results.length > 0 && (redis.isOpen || process.env.REDIS_URL || process.env.KV_URL)) {
+            // TTL: 24 hours (86400 seconds)
+            // Dont await this to speed up response? Vercel serverless might kill it. 
+            // Safer to await or use waitUntil if available (Next.js has after() in experimental/newer, but let's await for safety)
+            try {
+                await redis.setEx(cacheKey, 86400, JSON.stringify(results));
+            } catch (err) {
+                console.error("Redis cache write error", err);
+            }
+        }
+
         return NextResponse.json(results);
     } catch (error) {
         console.error('Search error:', error);

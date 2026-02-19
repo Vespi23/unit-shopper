@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
 import { Search, Loader2, Filter, X } from 'lucide-react';
@@ -36,7 +36,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
     const [disabledUnits, setDisabledUnits] = useState<Set<string>>(new Set());
-
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
 
@@ -54,11 +53,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             setSearched(true);
             setLoading(false);
             setPage(1);
-            // Mark that we have data for this query from server
-            // Note: `query` state might not be updated yet if it comes from props? 
-            // We assume initialResults corresponds to the CURRENT page URL query which drives the component.
-            // But we don't have easy access to the URL query string in this effect scope purely from `initialResults`.
-            // We'll rely on `debouncedQuery` or just set a flag that we just updated.
             lastInitialResultsQuery.current = new URLSearchParams(window.location.search).get('q');
         }
     }, [initialResults]);
@@ -66,7 +60,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     // Sync URL when query changes (Debounced)
     useEffect(() => {
         const timer = setTimeout(() => {
-            // Update URL
             if (query !== searchParams.get('q')) {
                 const params = new URLSearchParams(searchParams.toString());
                 if (query) {
@@ -77,12 +70,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 router.push(`/?${params.toString()}`, { scroll: false });
             }
 
-            // Update Internal State
             if (query.length > 2) {
                 setDebouncedQuery(query);
                 setPage(1);
-                // Do NOT clear results here. Stale results are better than empty/vanish.
-                // The fetch or initialResults update will replace them.
             } else if (query.length === 0) {
                 setResults([]);
                 setSearched(false);
@@ -102,12 +92,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         async function fetchResults() {
             if (!debouncedQuery) return;
 
-            // Guard: If we just applied initialResults for THIS query, skip client fetch.
             if (lastInitialResultsQuery.current === debouncedQuery && page === 1) {
                 console.log("Skipping client fetch, using initialResults");
-                // Reset flag so subsequent interactions (like load more) work?
-                // Actually if page > 1 we should fetch.
-                // If query changes, this check fails. Perfect.
                 return;
             }
 
@@ -126,7 +112,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
                 setResults(prev => {
                     const combined = page === 1 ? newResults : [...prev, ...newResults];
-                    // Deduplicate by ID
                     const uniqueMap = new Map();
                     combined.forEach(item => {
                         if (!uniqueMap.has(item.id)) {
@@ -138,12 +123,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
             } catch (error) {
                 console.error("Search failed", error);
-                // Only clear if we are on page 1 AND we don't have existing results?
-                // Or simply don't clear. If it fails, keep showing what we have (if anything).
-                // Or if it's a new search and it fails, show empty?
-                // Hard to distinguish here. 
-                // Getting 402/500 shouldn't wipe the UI if we have stale data, but user needs to know.
-                // For now, let's NOT clear. It's less jarring.
             } finally {
                 setLoading(false);
             }
@@ -164,47 +143,54 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         }
     };
 
-    // Sort Logic
-    // We deduplicate here to ensure no render-errors even if state gets messy
-    const filteredAndSortedResults = [...results]
-        .filter((product, index, self) =>
-            index === self.findIndex((t) => (
-                t.id === product.id
-            ))
-        )
-        .sort((a, b) => {
-            if (sortBy === 'price_asc') return a.price - b.price;
-            if (sortBy === 'price_desc') return b.price - a.price;
-            return (a.score || 999999) - (b.score || 999999); // score_asc (Best Value)
+    // Sort Logic (Memoized)
+    const filteredAndSortedResults = useMemo(() => {
+        return [...results]
+            .filter((product, index, self) =>
+                index === self.findIndex((t) => (
+                    t.id === product.id
+                ))
+            )
+            .sort((a, b) => {
+                if (sortBy === 'price_asc') return a.price - b.price;
+                if (sortBy === 'price_desc') return b.price - a.price;
+                return (a.score || 999999) - (b.score || 999999);
+            });
+    }, [results, sortBy]);
+
+    // Apply Unit Conversion (Memoized)
+    const convertedResults = useMemo(() => {
+        return filteredAndSortedResults.map(product => {
+            if (selectedUnit === 'auto' || !product.unitInfo) return product;
+
+            const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as UnitType, selectedUnit as UnitType);
+
+            if (convertedAmount !== null) {
+                return {
+                    ...product,
+                    pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit as string),
+                    unitInfo: {
+                        ...product.unitInfo,
+                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}`
+                    }
+                };
+            }
+            return product;
         });
+    }, [filteredAndSortedResults, selectedUnit]);
 
-    // Apply Unit Conversion
-    const convertedResults = filteredAndSortedResults.map(product => {
-        if (selectedUnit === 'auto' || !product.unitInfo) return product;
+    // Extract Available Units (Memoized)
+    const availableUnits = useMemo(() => {
+        const units = Array.from(new Set(convertedResults.map(p => p.unitInfo?.unit).filter(Boolean))) as string[];
+        return units.sort();
+    }, [convertedResults]);
 
-        const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as UnitType, selectedUnit as UnitType);
-
-        if (convertedAmount !== null) {
-            return {
-                ...product,
-                pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit as string),
-                unitInfo: {
-                    ...product.unitInfo,
-                    formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}`
-                }
-            };
-        }
-        return product;
-    });
-
-    // Extract Available Units (from converted results)
-    const availableUnits = Array.from(new Set(convertedResults.map(p => p.unitInfo?.unit).filter(Boolean))) as string[];
-    availableUnits.sort(); // Sort alphabetically for consistency
-
-    // Filter by Disabled Units
-    const displayResults = convertedResults.filter(product => {
-        return !product.unitInfo?.unit || !disabledUnits.has(product.unitInfo.unit);
-    });
+    // Filter by Disabled Units (Memoized)
+    const displayResults = useMemo(() => {
+        return convertedResults.filter(product => {
+            return !product.unitInfo?.unit || !disabledUnits.has(product.unitInfo.unit);
+        });
+    }, [convertedResults, disabledUnits]);
 
     return (
         <div className="flex flex-col items-center w-full pb-20">
