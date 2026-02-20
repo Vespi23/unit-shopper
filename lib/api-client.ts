@@ -10,12 +10,12 @@ const BASE_URL = 'https://api.rainforestapi.com/request';
 const CACHE_DURATION_MS = 1000 * 60 * 60 * 24; // 24 hours
 const searchCache = new Map<string, { timestamp: number, data: Product[] }>();
 
-// Map of base queries to regex patterns of accessories that commonly pollute the search
-const QUERY_EXCLUSIONS: Record<string, RegExp> = {
-    'toilet paper': /seat|cover|holder|dispenser/i,
-    'paper towel': /holder|dispenser|rack/i,
-    'paper towels': /holder|dispenser|rack/i
-};
+// Map of base queries that receive severe accessory bloat and require exact-phrase quotation
+const EXACT_MATCH_QUERIES = new Set([
+    'toilet paper',
+    'paper towel',
+    'paper towels'
+]);
 
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
     if (!RAINFOREST_API_KEY) {
@@ -41,6 +41,12 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     try {
         console.log(`[API CALL] Fetching Rainforest API for: ${query} (Pages 1-7)`);
 
+        let apiSearchTerm = query;
+        if (EXACT_MATCH_QUERIES.has(query.toLowerCase().trim())) {
+            apiSearchTerm = `"${apiSearchTerm}"`;
+            console.log(`[API EXACT MATCH] Wrapping query in double quotes: ${apiSearchTerm}`);
+        }
+
         // Fetch pages 1-7 concurrently. Rainforest strictly caps generic API searches after page 7.
         const pagesToFetch = Array.from({ length: 7 }, (_, i) => i + 1);
         const fetchPromises = pagesToFetch.map(async (pageNum) => {
@@ -48,7 +54,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                 api_key: RAINFOREST_API_KEY,
                 type: 'search',
                 amazon_domain: 'amazon.com',
-                search_term: query,
+                search_term: apiSearchTerm,
                 page: pageNum.toString(),
                 refinements: 'p_72/1248903011' // Ensures 4+ stars natively from Amazon
             });
@@ -72,24 +78,15 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         // Flatten the array of arrays
         const rawResults = rawResultsArrays.flat();
 
-        // Implement Query Purification Filter
-        const normalizedQuery = query.toLowerCase().trim();
-        const exclusionRegex = QUERY_EXCLUSIONS[normalizedQuery];
-
         const mappedResults = rawResults.map((item: any) => mapRainforestResult(item));
 
         const results = mappedResults.filter((product: Product) => {
             if (product.rating === undefined || product.rating < 4) return false;
             if (product.price === 0) return false;
-
-            // Strip out accessories targeting the core product category
-            if (exclusionRegex && exclusionRegex.test(product.title)) {
-                return false;
-            }
             return true;
         });
 
-        console.log(`[API STATS] Fetched ${rawResults.length} raw -> ${mappedResults.length} mapped -> ${results.length} filtered (4+ stars, purified)`);
+        console.log(`[API STATS] Fetched ${rawResults.length} raw -> ${mappedResults.length} mapped -> ${results.length} filtered (4+ stars)`);
 
         // Save to Cache
         if (results.length > 0) {
