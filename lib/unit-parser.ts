@@ -169,6 +169,21 @@ export function normalizeUnit(info: UnitInfo): UnitInfo {
         copy.unit = 'ml';
         copy.totalValue *= 1000;
     }
+    // Heuristic Normalizations for Abstract Units
+    // (To align algorithmic rank to realistic product density)
+    else if (copy.unit === 'sheets') {
+        copy.value /= 300; // 300 sheets ~= 1 roll
+        copy.unit = 'rolls';
+        copy.totalValue /= 300;
+    } else if (copy.unit === 'sq ft') {
+        copy.value /= 40; // 40 sq ft ~= 1 roll
+        copy.unit = 'rolls';
+        copy.totalValue /= 40;
+    } else if (copy.unit === 'loads') {
+        copy.value *= 1.5; // 1 load ~= 1.5 fl oz
+        copy.unit = 'fl oz';
+        copy.totalValue *= 1.5;
+    }
 
     copy.formatted = `${parseFloat(copy.totalValue.toFixed(2))} ${copy.unit}`;
     return copy;

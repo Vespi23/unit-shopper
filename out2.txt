@@ -1,0 +1,37 @@
+[dotenv@17.3.1] injecting env (3) from .env.development.local -- tip: ΓÜí∩╕Å secrets for agents: https://dotenvx.com/as2
+Starting fetch for pages 1-7 (Toilet Paper)...
+
+=== UNIT: rolls (192 items) ===
+- [Total: 640] [Score: 0.0499] Quilted Northern Ultra Soft & Strong Toilet Paper, 32 Mega = 128 Regular Rolls, 5X Stronger, White, 2-Ply, Premium Toilet Tissue
+- [Total: 640] [Score: 0.0499] Quilted Northern Ultra Soft & Strong Toilet Paper, 32 Mega = 128 Regular Rolls, 5X Stronger, White, 2-Ply, Premium Toilet Tissue
+- [Total: 640] [Score: 0.0499] Quilted Northern Ultra Soft & Strong Toilet Paper, 32 Mega = 128 Regular Rolls, 5X Stronger, White, 2-Ply, Premium Toilet Tissue
+- [Total: 640] [Score: 0.0499] Quilted Northern Ultra Soft & Strong Toilet Paper, 32 Mega = 128 Regular Rolls, 5X Stronger, White, 2-Ply, Premium Toilet Tissue
+- [Total: 640] [Score: 0.0499] Quilted Northern Ultra Soft & Strong Toilet Paper, 32 Mega = 128 Regular Rolls, 5X Stronger, White, 2-Ply, Premium Toilet Tissue
+- [Total: 384] [Score: 0.1094] GEN Standard Bath Tissue, White Toilet Paper, 2-Ply, 4 x 3, 400 Sheets/Roll, Individually Wrapped, Commercial Case of 96 Rolls, Fits Standard-Roll Dispensers, Strong and Reliable
+
+=== UNIT: count (30 items) ===
+- [Total: 16000] [Score: 0.0021] Reli. Toilet Seat Covers (2000 Pcs, 8 Packs of 250) | Disposable Toilet Seat Cover - Flushable - 14x16" (Half-Fold) | Paper Liners for Restroom, Bathroom, Travel, Camping, Kids Potty Training
+- [Total: 6250] [Score: 0.0037] Reli. Toilet Seat Covers (1250 Pcs, 5 Packs of 250) | Disposable Toilet Seat Cover - Flushable - 14x16" (Half-Fold) | Paper Liners for Restroom, Bathroom, Travel, Camping, Kids Potty Training
+- [Total: 336] [Score: 0.0357] Amazon Basics Flushable Adult Toilet Wipes, Fragrance Free, 42 Count (Pack of 8) (Total 336 wipes) (Previously Solimo)
+- [Total: 336] [Score: 0.1107] Amazon Basics 2 Ply Toilet Paper 30 rolls, Flushable Adult Toilet Wipes, 336 ct (Shipped Separately)
+- [Total: 50] [Score: 0.1682] Toilet Seat Cover Paper Flushable (50 Pack) - XL for Adults and Kids Potty Training, 100% Biodegradable Travel Supplies Essentials for Public Restrooms, Airplane, Camping, Festivals
+- [Total: 320] [Score: 0.2298] Seventh Generation Bath Tissue 4 Roll 320 Sheet, 320 Ct
+
+=== UNIT: sheets (39 items) ===
+- [Total: 39600] [Score: 0.0019] Tork Coreless High-Capacity Toilet Paper Roll White T7, Universal, 2-ply, 36 x 1100 sheets, 472882
+- [Total: 39600] [Score: 0.0019] Tork Coreless High-Capacity Toilet Paper Roll White T7, Universal, 2-ply, 36 x 1100 sheets, 472882
+- [Total: 39600] [Score: 0.0019] Tork Coreless High-Capacity Toilet Paper Roll White T7, Universal, 2-ply, 36 x 1100 sheets, 472882
+- [Total: 39600] [Score: 0.0019] Tork Coreless High-Capacity Toilet Paper Roll White T7, Universal, 2-ply, 36 x 1100 sheets, 472882
+- [Total: 36000] [Score: 0.0020] Tork High-Capacity Toilet Paper Roll White T26, Advanced, 2-Ply, 36 x 1000 sheets, 110292A
+- [Total: 36000] [Score: 0.0020] Tork High-Capacity Toilet Paper Roll White T26, Advanced, 2-Ply, 36 x 1000 sheets, 110292A
+
+=== UNIT: unknown (93 items) ===
+- [Total: 0] [Score: 999999.0000] Charmin Ultra soft Jumbo Rolls Septic Safe white
+- [Total: 0] [Score: 999999.0000] Boardwalk B6144 2-Ply Septic Safe Toilet Tissue - White (96/Carton)
+- [Total: 0] [Score: 999999.0000] AmazonCommercial 2-Ply White Jumbo Roll Toilet Paper, 9 in, Septic Safe, Compatible with Universal Dispensers, FSC Certified, 1000 Feet Per Roll (Pack of 12)
+- [Total: 0] [Score: 999999.0000] Tork Jumbo Toilet Paper Roll White T22, Universal, 2-ply, 12 x 1000', TJ0922A
+- [Total: 0] [Score: 999999.0000] Tork Multifold Hand Towel White H2, Universal, 100% Recycled Fibers, 16 x 250 Towels, MB540A
+- [Total: 0] [Score: 999999.0000] Seventh Generation Bathroom Tissue, 4" x 4", White 12 per Pack
+
+=== UNIT: sq ft (1 items) ===
+- [Total: 799.1999999999999] [Score: 0.0475] Grove Co. Bamboo Toilet Paper Tree Free & Septic Safe Bath Tissue, Ultra Soft, Durable, & Absorbent 3 Ply Sheets (1 Roll = 44.4 sq ft) Bulk Toilet Paper (Pack of 18 Rolls)

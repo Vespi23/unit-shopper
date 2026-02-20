@@ -8,7 +8,10 @@ const tests = [
     { title: "Sparkle Paper Towels, 6 Rolls, Pack of 4", price: 25.99 },
     { title: "12 Pack, 12 oz cans of Soda", price: 12.99 },
     { title: "Tide Laundry Detergent, 1 Gallon Heavy Duty", price: 14.99 },
-    { title: "Tide Laundry Detergent, 100 Fl Oz Heavy Duty", price: 12.99 }
+    { title: "Tide Laundry Detergent, 100 Fl Oz Heavy Duty", price: 12.99 },
+    { title: "Quilted Northern Toilet Paper, 1000 Sheets per Box", price: 9.99 },
+    { title: "Tide Pods, 72 Loads of Detergent", price: 19.99 },
+    { title: "Scott Toilet Paper, 80 sq ft bulk pack", price: 6.99 }
 ];
 
 for (const t of tests) {
