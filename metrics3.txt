@@ -1,0 +1,22 @@
+[dotenv@17.3.1] injecting env (3) from .env.development.local -- tip: ΓÜÖ∩╕Å  load multiple .env files with { path: ['.env.local', '.env'] }
+Starting fetch for pages 1-20...
+Page 11 returned 0 items.
+Page 19 returned 0 items.
+Page 13 returned 0 items.
+Page 17 returned 0 items.
+Page 12 returned 0 items.
+Page 20 returned 0 items.
+Page 15 returned 0 items.
+Page 9 returned 0 items.
+Page 10 returned 0 items.
+Page 3 returned 48 items.
+Page 18 returned 0 items.
+Page 1 returned 48 items.
+Page 2 returned 48 items.
+Page 14 returned 0 items.
+Page 6 returned 48 items.
+Page 7 returned 40 items.
+Page 8 returned 0 items.
+Page 4 returned 70 items.
+Page 5 returned 53 items.
+Page 16 returned 0 items.

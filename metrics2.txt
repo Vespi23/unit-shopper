@@ -1,0 +1,8 @@
+[dotenv@17.3.1] injecting env (3) from .env.development.local -- tip: ≡ƒ¢í∩╕Å auth for agents: https://vestauth.com
+Starting fetch for pages 1-20 to test generic map & filter...
+
+========= METRICS =========
+Raw Items Fetched: 377
+Unique ASINs: 274
+Duplicates: 103
+Missing ASIN: 0

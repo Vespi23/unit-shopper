@@ -1,0 +1,9 @@
+[dotenv@17.3.1] injecting env (3) from .env.development.local -- tip: ≡ƒñû agentic secret storage: https://dotenvx.com/as2
+Starting fetch for pages 1-20 to test generic map & filter...
+
+========= METRICS =========
+Raw Items Fetched: 367
+Missing Rating Field (Filtered): 0
+Rating < 4 (Filtered): 5
+Rating >= 4 (Kept): 362
+Final Kept Fraction: 98.6%
