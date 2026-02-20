@@ -83,10 +83,10 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                     handleCardClick();
                 }
             }}
-            aria-label={`View details for ${product.title}`}
+            aria-label={product.title}
         >
             {/* Selection Checkbox */}
-            <div className="absolute top-3 left-3 z-20" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-1 left-1 z-20 p-2" onClick={(e) => e.stopPropagation()}>
                 <input
                     type="checkbox"
                     checked={isSelected}
@@ -115,7 +115,7 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
 
             {/* Content Section */}
             <div className="flex flex-1 flex-col p-5 bg-gradient-to-b from-transparent to-muted/20">
-                <div className="mb-2 flex items-center gap-1 text-xs text-yellow-500 font-medium">
+                <div className="mb-2 flex items-center gap-1 text-xs text-amber-500 font-medium">
                     <Star className="h-3 w-3 fill-current" />
                     <span>{product.rating}</span>
                     <span className="text-muted-foreground font-normal">({product.reviews})</span>

@@ -239,7 +239,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Search for peanut butter, laundry detergent..."
-                            className="flex-1 bg-transparent border-none outline-none text-xl placeholder:text-muted-foreground/40 h-12 ring-0 focus:ring-0"
+                            className="flex-1 bg-transparent border-none outline-none text-xl placeholder:text-muted-foreground/70 h-12 ring-0 focus:ring-0"
                             autoFocus
                             aria-label="Search products"
                         />
@@ -265,7 +265,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
                             <Search className="h-8 w-8 text-muted-foreground" />
                         </div>
-                        <h3 className="text-lg font-semibold">No results found</h3>
+                        <h2 className="text-lg font-semibold">No results found</h2>
                         <p className="text-muted-foreground">Try searching for generic terms like "Coffee" or "Paper Towels".</p>
                     </div>
                 )}
@@ -287,7 +287,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                         value={sortBy}
                                         onChange={(e) => setSortBy(e.target.value as any)}
                                         className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                                        aria-label="Sort products"
                                     >
                                         <option value="score_asc">Best Value</option>
                                         <option value="price_asc">Lowest Price</option>
@@ -333,7 +332,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                             setDisabledUnits(next);
                                         }}
                                         className={`
-                                            group relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border select-none
+                                            group relative inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all duration-200 border select-none
                                             ${isActive
                                                 ? 'bg-primary text-primary-foreground border-primary shadow-sm hover:bg-primary/90'
                                                 : 'bg-background text-muted-foreground border-border hover:border-border/80 hover:bg-accent'
@@ -366,6 +365,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
+                <h2 className="sr-only">Search Results</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     {loading && page === 1 ? (
                         Array.from({ length: 8 }).map((_, i) => (
