@@ -62,6 +62,6 @@ describe('ProductCard', () => {
 
         const checkbox = screen.getByRole('checkbox');
         fireEvent.click(checkbox);
-        expect(onSelect).toHaveBeenCalledWith(true);
+        expect(onSelect).toHaveBeenCalledWith('123', true);
     });
 });

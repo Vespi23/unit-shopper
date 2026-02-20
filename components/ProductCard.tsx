@@ -8,8 +8,8 @@ import { generateProductSchema } from '@/lib/schema';
 
 interface ProductCardProps {
     product: Product;
-    onClick: () => void;
-    onSelect: (selected: boolean) => void;
+    onClick: (product: Product) => void;
+    onSelect: (productId: string, selected: boolean) => void;
     isSelected: boolean;
 }
 
@@ -31,10 +31,18 @@ export function ProductCardSkeleton() {
 
 import { useABTest } from '@/hooks/useABTest';
 
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 
 export const ProductCard = memo(function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
     const { variant, trackConversion, isReady } = useABTest('cta_color');
+
+    const handleCardClick = useCallback(() => {
+        onClick(product);
+    }, [onClick, product]);
+
+    const handleCheckboxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onSelect(product.id, e.target.checked);
+    }, [onSelect, product.id]);
 
     const handleViewDeal = (e: React.MouseEvent) => {
         e.stopPropagation(); // Link handles navigation, but we track first?
@@ -66,13 +74,13 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
     return (
         <div
             className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer ${isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border/50 hover:border-primary/30'}`}
-            onClick={onClick}
+            onClick={handleCardClick}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onClick();
+                    handleCardClick();
                 }
             }}
             aria-label={`View details for ${product.title}`}
@@ -82,7 +90,7 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                 <input
                     type="checkbox"
                     checked={isSelected}
-                    onChange={(e) => onSelect(e.target.checked)}
+                    onChange={handleCheckboxChange}
                     className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-transform hover:scale-110 shadow-sm"
                     aria-label={`Select ${product.title} for comparison`}
                 />

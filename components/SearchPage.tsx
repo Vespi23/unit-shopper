@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
 import { Search, Loader2, Filter, X } from 'lucide-react';
@@ -131,17 +131,24 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         fetchResults();
     }, [debouncedQuery, page]);
 
-    const toggleCompare = (productId: string, selected: boolean) => {
-        if (selected) {
-            if (compareList.length < 4) {
-                setCompareList([...compareList, productId]);
+    const toggleCompare = useCallback((productId: string, selected: boolean) => {
+        setCompareList(prev => {
+            if (selected) {
+                if (prev.length < 4) {
+                    return [...prev, productId];
+                } else {
+                    alert("You can compare up to 4 products.");
+                    return prev;
+                }
             } else {
-                alert("You can compare up to 4 products.");
+                return prev.filter(id => id !== productId);
             }
-        } else {
-            setCompareList(compareList.filter(id => id !== productId));
-        }
-    };
+        });
+    }, []);
+
+    const handleProductClick = useCallback((product: Product) => {
+        setSelectedProduct(product);
+    }, []);
 
     // Sort Logic (Memoized)
     const filteredAndSortedResults = useMemo(() => {
@@ -370,8 +377,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                 <ProductCard
                                     key={product.id}
                                     product={product}
-                                    onClick={() => setSelectedProduct(product)}
-                                    onSelect={(selected) => toggleCompare(product.id, selected)}
+                                    onClick={handleProductClick}
+                                    onSelect={toggleCompare}
                                     isSelected={compareList.includes(product.id)}
                                 />
                             ))}
