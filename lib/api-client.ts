@@ -10,6 +10,13 @@ const BASE_URL = 'https://api.rainforestapi.com/request';
 const CACHE_DURATION_MS = 1000 * 60 * 60 * 24; // 24 hours
 const searchCache = new Map<string, { timestamp: number, data: Product[] }>();
 
+// Map of base queries to regex patterns of accessories that commonly pollute the search
+const QUERY_EXCLUSIONS: Record<string, RegExp> = {
+    'toilet paper': /seat|cover|holder|dispenser/i,
+    'paper towel': /holder|dispenser|rack/i,
+    'paper towels': /holder|dispenser|rack/i
+};
+
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
     if (!RAINFOREST_API_KEY) {
         console.warn('RAINFOREST_API_KEY is missing');
@@ -65,11 +72,24 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         // Flatten the array of arrays
         const rawResults = rawResultsArrays.flat();
 
+        // Implement Query Purification Filter
+        const normalizedQuery = query.toLowerCase().trim();
+        const exclusionRegex = QUERY_EXCLUSIONS[normalizedQuery];
+
         const mappedResults = rawResults.map((item: any) => mapRainforestResult(item));
 
-        const results = mappedResults.filter((product: Product) => product.rating !== undefined && product.rating >= 4);
+        const results = mappedResults.filter((product: Product) => {
+            if (product.rating === undefined || product.rating < 4) return false;
+            if (product.price === 0) return false;
 
-        console.log(`[API STATS] Fetched ${rawResults.length} raw -> ${mappedResults.length} mapped -> ${results.length} filtered (4+ stars)`);
+            // Strip out accessories targeting the core product category
+            if (exclusionRegex && exclusionRegex.test(product.title)) {
+                return false;
+            }
+            return true;
+        });
+
+        console.log(`[API STATS] Fetched ${rawResults.length} raw -> ${mappedResults.length} mapped -> ${results.length} filtered (4+ stars, purified)`);
 
         // Save to Cache
         if (results.length > 0) {
