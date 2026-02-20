@@ -32,10 +32,10 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     try {
-        console.log(`[API CALL] Fetching Rainforest API for: ${query} (Pages 1-20)`);
+        console.log(`[API CALL] Fetching Rainforest API for: ${query} (Pages 1-50)`);
 
-        // Fetch pages 1-20 concurrently to expand the pool size to ~400 results
-        const pagesToFetch = Array.from({ length: 20 }, (_, i) => i + 1);
+        // Fetch pages 1-50 concurrently to expand the pool size to ~1000 results
+        const pagesToFetch = Array.from({ length: 50 }, (_, i) => i + 1);
         const fetchPromises = pagesToFetch.map(async (pageNum) => {
             const params = new URLSearchParams({
                 api_key: RAINFOREST_API_KEY,
