@@ -1,6 +1,6 @@
 import 'server-only';
 import { Product } from './types';
-import { parseUnit, calculatePricePerUnit } from './unit-parser';
+import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
 
 const RAINFOREST_API_KEY = process.env.RAINFOREST_API_KEY;
 const BASE_URL = 'https://api.rainforestapi.com/request';
@@ -124,6 +124,20 @@ function mapRainforestResult(item: any): Product {
         link = getAmazonAffiliateLink(item.asin);
     }
 
+    // Calculate an internal normalized score to guarantee equivalent math for sorting
+    // (e.g. so Gallons compare accurately against Fl Oz)
+    let score = 999999;
+    if (unitInfo && price > 0) {
+        const normalized = normalizeUnit(unitInfo);
+        if (normalized.totalValue > 0) {
+            score = price / normalized.totalValue;
+        }
+    } else if (price > 0 && totalValue > 0) {
+        score = price / totalValue;
+    } else if (price > 0) {
+        score = price;
+    }
+
     return {
         id: item.asin || String(Math.random()),
         title: item.title,
@@ -139,7 +153,7 @@ function mapRainforestResult(item: any): Product {
         link: link,
         currency: 'USD',
         originalPrice: 0,
-        score: (totalValue > 0 && price > 0) ? (price / totalValue) : (price > 0 ? price : 999999),
+        score: score,
         unitInfo: unitInfo || undefined
     };
 }
