@@ -11,8 +11,8 @@ async function debugLocalSearch() {
 
     // Check distribution of ratings
     const counts = {
-        rating4plus: results.filter(p => p.rating >= 4).length,
-        ratingLow: results.filter(p => p.rating < 4).length
+        rating4plus: results.filter(p => (p.rating || 0) >= 4).length,
+        ratingLow: results.filter(p => (p.rating || 0) < 4).length
     };
     console.log("Stats in final filtered pool:", counts);
 }
