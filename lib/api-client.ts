@@ -32,19 +32,17 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     try {
-        console.log(`[API CALL] Fetching Rainforest API for: ${query} (Pages 1-7)`);
+        console.log(`[API CALL] Fetching Rainforest API for: ${query} (Pages 1-20)`);
 
-        // Fetch pages 1-7 concurrently to expand the pool size to ~430 results.
-        // Rainforest/Amazon APIs aggressively truncate searches with refinement filters passed past page 7.
-        const pagesToFetch = Array.from({ length: 7 }, (_, i) => i + 1);
+        // Fetch pages 1-20 concurrently to expand the pool size to ~1000 results.
+        const pagesToFetch = Array.from({ length: 20 }, (_, i) => i + 1);
         const fetchPromises = pagesToFetch.map(async (pageNum) => {
             const params = new URLSearchParams({
                 api_key: RAINFOREST_API_KEY,
                 type: 'search',
                 amazon_domain: 'amazon.com',
                 search_term: query,
-                page: pageNum.toString(),
-                refinements: 'p_72/1248903011' // Ensures 4+ stars natively from Amazon
+                page: pageNum.toString()
             });
 
             const response = await fetch(`${BASE_URL}?${params.toString()}`);
