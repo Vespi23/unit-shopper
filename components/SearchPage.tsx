@@ -186,7 +186,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         return filteredAndSortedResults.map(product => {
             if (selectedUnit === 'auto' || !product.unitInfo) return product;
 
-            const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as UnitType, selectedUnit as UnitType);
+            const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
 
             if (convertedAmount !== null) {
                 return {
@@ -194,11 +194,20 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit as string),
                     unitInfo: {
                         ...product.unitInfo,
-                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}`
+                        formatted: `${Number.isInteger(convertedAmount) ? convertedAmount : convertedAmount.toFixed(2)} ${selectedUnit}`
                     }
                 };
             }
-            return product;
+
+            // Visual feedback for incompatible unit selections (e.g., trying to parse Count as Gallons)
+            return {
+                ...product,
+                pricePerUnit: 'N/A',
+                unitInfo: {
+                    ...product.unitInfo,
+                    formatted: `Incompatible w/ ${selectedUnit}`
+                }
+            };
         });
     }, [filteredAndSortedResults, selectedUnit]);
 
