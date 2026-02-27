@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
-import { Search, Loader2, Filter, X } from 'lucide-react';
+import { Search, Loader2, Filter, X, Info } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
@@ -320,7 +320,24 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             {/* Convert Unit Dropdown */}
                             {availableUnits.length > 0 && (
                                 <div className="flex items-center gap-3">
-                                    <label htmlFor="unit-select" className="text-sm font-medium text-muted-foreground mr-1">Units:</label>
+                                    <div className="flex items-center mr-1">
+                                        <label htmlFor="unit-select" className="text-sm font-medium text-muted-foreground mr-1.5 flex items-center">Units:</label>
+                                        <div className="relative group/tooltip flex items-center">
+                                            <Info className="w-3.5 h-3.5 text-muted-foreground/50 hover:text-primary transition-colors cursor-help" />
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-60 p-3 bg-popover text-popover-foreground text-xs rounded-xl shadow-xl border border-border opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50 pointer-events-none text-left">
+                                                <p className="font-semibold mb-1.5 text-foreground">Unit Equivalents</p>
+                                                <p className="text-muted-foreground leading-relaxed mb-2">
+                                                    We use industry standard densities to allow price comparisons across brands:
+                                                </p>
+                                                <ul className="space-y-1 text-muted-foreground font-mono bg-muted/50 p-2 rounded-lg mix-blend-multiply dark:mix-blend-screen">
+                                                    <li>• 1 Load ≈ 1.5 fl oz</li>
+                                                    <li>• 1 Roll ≈ 40 sq ft</li>
+                                                    <li>• 1 Roll ≈ 300 sheets</li>
+                                                </ul>
+                                                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-popover border-b border-r border-border rotate-45"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="relative">
                                         <select
                                             id="unit-select"
