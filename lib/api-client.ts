@@ -85,10 +85,11 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             }
         };
 
-        // Fetch Pages 1-7 concurrently since we know the exact-match quote prevents the category redirect
-        console.log(`[API CALL] Fetching Pages 1-7 concurrently for exact match...`);
+        // Fetch Pages 1-3 concurrently. We reduce from 7 to 3 to stay safely under
+        // the Decodo Free Tier concurrency limits (usually max 5) preventing 429 ratelimits.
+        console.log(`[API CALL] Fetching Pages 1-3 concurrently to prevent proxy 429s...`);
         const pagePromises = [];
-        for (let p = 1; p <= 7; p++) {
+        for (let p = 1; p <= 3; p++) {
             pagePromises.push(fetchPage(p, baseUrl));
         }
 

@@ -47,13 +47,19 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
     // Sync results from Server if they change (e.g. navigation)
     useEffect(() => {
-        if (initialResults && initialResults.length > 0) {
+        if (initialResults) {
+            // Do not apply empty results to clear the screen if there is no query (brand new home page load)
+            const activeQuery = new URLSearchParams(window.location.search).get('q');
+            if (initialResults.length === 0 && !activeQuery) {
+                return;
+            }
+
             console.log("Applying initialResults from server");
             setResults(initialResults);
             setSearched(true);
             setLoading(false);
             setPage(1);
-            lastInitialResultsQuery.current = new URLSearchParams(window.location.search).get('q');
+            lastInitialResultsQuery.current = activeQuery;
         }
     }, [initialResults]);
 

@@ -83,7 +83,8 @@ function generateStructuredData(products: Product[], query: string) {
 
 export default async function Home(props: Props) {
   const searchParams = await props.searchParams;
-  const query = typeof searchParams.q === 'string' ? searchParams.q : '';
+  const rawQuery = typeof searchParams.q === 'string' ? searchParams.q : '';
+  const query = rawQuery.replace(/\+/g, ' ');
 
   let initialResults: Product[] = [];
   let jsonLd: any[] | null = null;
