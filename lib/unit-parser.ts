@@ -9,7 +9,7 @@ export interface UnitInfo {
 }
 
 const UNIT_REGEX = {
-    fl_oz: /(\d+(?:\.\d+)?)\s?(?:fl\s?oz|fluid\s?ounce|fluid\s?ounces)\b/i,
+    fl_oz: /(\d+(?:\.\d+)?)\s?(?:fl\.?\s?oz\.?|fluid\s?ounces?|fl\.?\s?ounces?)\b/i,
     oz: /(\d+(?:\.\d+)?)\s?(?:oz|ounce|ounces)\b/i,
     lb: /(\d+(?:\.\d+)?)\s?(?:lb|lbs|pound|pounds)\b/i,
     g: /(\d+(?:\.\d+)?)\s?(?:g|gram|grams)\b/i,
@@ -27,7 +27,7 @@ const UNIT_REGEX = {
     count: /(\d+(?:\.\d+)?)\s?(?:count|ct|pack|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?)\b/i,
 };
 
-const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack/i;
+const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((\d+)\s?(?:cans?|boxes?|bottles?|pouches?|packs?|count|rolls?)\)/i;
 const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)\s?(?:count|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
@@ -38,7 +38,7 @@ export function parseUnit(title: string): UnitInfo | null {
     let quantity = 1;
     const packMatch = lowerTitle.match(PACK_REGEX);
     if (packMatch) {
-        const q = packMatch[1] || packMatch[2];
+        const q = packMatch[1] || packMatch[2] || packMatch[3];
         if (q) quantity = parseInt(q, 10);
     } else {
         // Try multiplier (e.g., 2x, 3x)
@@ -52,43 +52,52 @@ export function parseUnit(title: string): UnitInfo | null {
     let value = 0;
     let unit: UnitType = 'unknown';
 
-    // Heuristic: For certain items, "Count" is the preferred unit 
-    // even if dimensions (like gallons) are present.
-    const isCountableItem = /trash\s?bag|garbage\s?bag|paper\s?plate|wipe|diaper|tissue|napkin|swiffer|pods?|k-cup/i.test(lowerTitle);
-    if (isCountableItem) {
-        const countMatch = lowerTitle.match(UNIT_REGEX.count);
-        if (countMatch) {
-            value = parseFloat(countMatch[1]);
-            unit = 'count';
+    // Heuristic: Mixed weight handling like "1 lb 4 oz" or "1.5 lbs 6 oz"
+    const mixedWeightMatch = lowerTitle.match(/(\d+(?:\.\d+)?)\s?lbs?\s?(\d+(?:\.\d+)?)\s?oz/i);
+    if (mixedWeightMatch) {
+        const lbs = parseFloat(mixedWeightMatch[1]);
+        const ozs = parseFloat(mixedWeightMatch[2]);
+        value = (lbs * 16) + ozs;
+        unit = 'oz';
+    } else {
+        // Heuristic: For certain items, "Count" is the preferred unit 
+        // even if dimensions (like gallons) are present.
+        const isCountableItem = /trash\s?bag|garbage\s?bag|paper\s?plate|wipe|diaper|tissue|napkin|swiffer|pods?|k-cup/i.test(lowerTitle);
+        if (isCountableItem) {
+            const countMatch = lowerTitle.match(UNIT_REGEX.count);
+            if (countMatch) {
+                value = parseFloat(countMatch[1]);
+                unit = 'count';
+            }
         }
-    }
 
-    // If we didn't force a count unit, check weight/volume units
-    if (unit === 'unknown') {
-        const unitOrder: { key: keyof typeof UNIT_REGEX, type: UnitType }[] = [
-            { key: 'fl_oz', type: 'fl oz' },
-            { key: 'gal', type: 'gal' },
-            { key: 'qt', type: 'qt' },
-            { key: 'pt', type: 'pt' },
-            { key: 'oz', type: 'oz' },
-            { key: 'lb', type: 'lb' },
-            { key: 'ml', type: 'ml' },
-            { key: 'l', type: 'l' },
-            { key: 'mg', type: 'mg' },
-            { key: 'kg', type: 'kg' },
-            { key: 'g', type: 'g' },
-            { key: 'sq_ft', type: 'sq ft' },
-            { key: 'loads', type: 'loads' },
-            { key: 'rolls', type: 'rolls' },
-            { key: 'sheets', type: 'sheets' }
-        ];
+        // If we didn't force a count unit, check weight/volume units
+        if (unit === 'unknown') {
+            const unitOrder: { key: keyof typeof UNIT_REGEX, type: UnitType }[] = [
+                { key: 'fl_oz', type: 'fl oz' },
+                { key: 'gal', type: 'gal' },
+                { key: 'qt', type: 'qt' },
+                { key: 'pt', type: 'pt' },
+                { key: 'oz', type: 'oz' },
+                { key: 'lb', type: 'lb' },
+                { key: 'ml', type: 'ml' },
+                { key: 'l', type: 'l' },
+                { key: 'mg', type: 'mg' },
+                { key: 'kg', type: 'kg' },
+                { key: 'g', type: 'g' },
+                { key: 'sq_ft', type: 'sq ft' },
+                { key: 'loads', type: 'loads' },
+                { key: 'rolls', type: 'rolls' },
+                { key: 'sheets', type: 'sheets' }
+            ];
 
-        for (const u of unitOrder) {
-            const match = lowerTitle.match(UNIT_REGEX[u.key]);
-            if (match) {
-                value = parseFloat(match[1]);
-                unit = u.type;
-                break;
+            for (const u of unitOrder) {
+                const match = lowerTitle.match(UNIT_REGEX[u.key]);
+                if (match) {
+                    value = parseFloat(match[1]);
+                    unit = u.type;
+                    break;
+                }
             }
         }
     }
