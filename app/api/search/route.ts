@@ -44,7 +44,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
     }
 
-    const cacheKey = `search:v2:${query.toLowerCase()}:${page}`;
+    const cacheKey = `search:v3:${query.toLowerCase()}:${page}`;
 
     // Try Cache
     if (redis.isOpen || process.env.REDIS_URL || process.env.KV_URL) {
