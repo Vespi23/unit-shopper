@@ -1,9 +1,8 @@
 import 'server-only';
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
-
-const RAINFOREST_API_KEY = process.env.RAINFOREST_API_KEY;
-const BASE_URL = 'https://api.rainforestapi.com/request';
+import * as cheerio from 'cheerio';
+import { getAmazonAffiliateLink } from './affiliate';
 
 // Simple in-memory cache to save API quota
 // Key: query + page, Value: { timestamp: number, data: Product[] }
@@ -18,10 +17,6 @@ const EXACT_MATCH_QUERIES = new Set([
 ]);
 
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
-    if (!RAINFOREST_API_KEY) {
-        console.warn('RAINFOREST_API_KEY is missing');
-        return [];
-    }
 
     // Security: Truncate query to prevent abuse
     const MAX_QUERY_LENGTH = 100;
@@ -31,7 +26,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     // Check Cache
-    const cacheKey = `${query.toLowerCase().trim()}-multi-v2`;
+    const cacheKey = `${query.toLowerCase().trim()}-multi-v3-decodo`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
         console.log(`[CACHE HIT] Serving results for: ${query} (Multi-page)`);
@@ -39,7 +34,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     try {
-        console.log(`[API CALL] Fetching Rainforest API for: ${query} (Pages 1-7)`);
+        console.log(`[API CALL] Fetching Decodo Web Scraping API for: ${query} (Pages 1-7)`);
 
         let apiSearchTerm = query;
         if (EXACT_MATCH_QUERIES.has(query.toLowerCase().trim())) {
@@ -47,59 +42,90 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             console.log(`[API EXACT MATCH] Wrapping query in double quotes: ${apiSearchTerm}`);
         }
 
-        // Fetch pages 1-7 concurrently. Rainforest strictly caps generic API searches after page 7.
-        const pagesToFetch = Array.from({ length: 7 }, (_, i) => i + 1);
-        const fetchPromises = pagesToFetch.map(async (pageNum) => {
-            const params = new URLSearchParams({
-                api_key: RAINFOREST_API_KEY,
-                type: 'search',
-                amazon_domain: 'amazon.com',
-                search_term: apiSearchTerm,
-                page: pageNum.toString(),
-                refinements: 'p_72/1248903011' // Ensures 4+ stars natively from Amazon
-            });
+        const encodedSearchTerm = encodeURIComponent(apiSearchTerm);
+        // Using "k" for keyword search param on Amazon
+        const baseUrl = `https://www.amazon.com/s?k=${encodedSearchTerm}`;
 
-            const response = await fetch(`${BASE_URL}?${params.toString()}`);
-            if (!response.ok) {
-                console.error(`Rainforest API failed on page ${pageNum}: ${response.status} ${response.statusText}`);
-                return [];
+        // Fetch up to 7 pages concurrently using Decodo API
+        const pagePromises = [];
+        for (let p = 1; p <= 7; p++) {
+            const amazonUrl = p === 1 ? baseUrl : `${baseUrl}&page=${p}`;
+            const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
+
+            // Decodo returns raw HTML by default if not instructed otherwise
+            pagePromises.push(
+                fetch(decodoUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        url: amazonUrl
+                    })
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error(`Decodo API failed with status ${res.status}`);
+                        return res.json();
+                    })
+                    .then(json => {
+                        // Decodo v2 JSON response encapsulates the HTML inside a 'results' array
+                        if (json && json.results && json.results.length > 0 && json.results[0].content) {
+                            return json.results[0].content;
+                        }
+                        if (json && json.content) return json.content;
+                        if (json && json.body) return json.body;
+                        return json; // Fallback
+                    })
+                    .catch(err => {
+                        console.error(`Page ${p} fetch error:`, err);
+                        return null; // Return null so Promise.all doesn't fail the whole batch
+                    })
+            );
+        }
+
+        const htmlResults = await Promise.all(pagePromises);
+        let allProducts: Product[] = [];
+
+        htmlResults.forEach((html, index) => {
+            if (html) {
+                console.log(`[DEBUG] Page ${index + 1} HTML snippet:`, typeof html === 'string' ? html.substring(0, 200) : 'Not a string');
+                const parsedProducts = parseAmazonHTML(html as string);
+                allProducts = [...allProducts, ...parsedProducts];
+                console.log(`Page ${index + 1}: Found ${parsedProducts.length} products`);
             }
-            const data = await response.json();
-            if (data.request_info && data.request_info.success === false) {
-                console.error(`Rainforest API Error on page ${pageNum}:`, data.request_info.message);
-                return [];
-            }
-            return data.search_results || [];
         });
 
-        // Wait for all pages to resolve
-        const rawResultsArrays = await Promise.all(fetchPromises);
+        // Ensure unique results by ASIN (id is ASIN)
+        const uniqueProductsMap = new Map<string, Product>();
+        allProducts.forEach(product => {
+            if (!uniqueProductsMap.has(product.id)) {
+                uniqueProductsMap.set(product.id, product);
+            }
+        });
+        const uniqueProducts = Array.from(uniqueProductsMap.values());
 
-        // Flatten the array of arrays
-        const rawResults = rawResultsArrays.flat();
-
-        const mappedResults = rawResults.map((item: any) => mapRainforestResult(item));
-
-        const results = mappedResults.filter((product: Product) => {
+        const filteredResults = uniqueProducts.filter((product: Product) => {
             if (product.rating === undefined || product.rating < 4) return false;
             if (product.price === 0) return false;
             return true;
         });
 
-        console.log(`[API STATS] Fetched ${rawResults.length} raw -> ${mappedResults.length} mapped -> ${results.length} filtered (4+ stars)`);
+        console.log(`[API STATS] Decodo fetched -> ${allProducts.length} raw parsed -> ${filteredResults.length} filtered (4+ stars)`);
 
         // Save to Cache
-        if (results.length > 0) {
+        if (filteredResults.length > 0) {
             searchCache.set(cacheKey, {
                 timestamp: Date.now(),
-                data: results
+                data: filteredResults
             });
         }
 
-        return results;
+        return filteredResults;
 
     } catch (error) {
-        console.error('Error fetching from Rainforest API:', error);
+        console.error('Error fetching from Decodo Scraper API:', error);
         if (cached) {
             console.log(`[CACHE FALLBACK] Serving stale results due to error for: ${query}`);
             return cached.data;
@@ -108,69 +134,112 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 }
 
-import { getAmazonAffiliateLink } from './affiliate';
 
-// Helper to map Rainforest results
-function mapRainforestResult(item: any): Product {
+function parseAmazonHTML(html: string): Product[] {
+    const $ = cheerio.load(html);
+    const products: Product[] = [];
 
-    const unitInfo = parseUnit(item.title);
+    // Select all search result items (ignoring some sponsored blocks that don't match the general grid)
+    $('div[data-component-type="s-search-result"]').each((i, element) => {
+        const item = $(element);
 
-    // Extract price (Rainforest returns price object or straight value sometimes depending on endpoint, usually object)
-    let price = 0;
-    if (item.price && item.price.value) {
-        price = item.price.value;
-    } else if (item.prices && item.prices.length > 0) {
-        price = item.prices[0].value;
-    }
+        // ASIN
+        const asin = item.attr('data-asin') || String(Math.random());
 
-    let pricePerUnit = 'N/A';
-    let unit: any = 'unknown';
-    let value = 0;
-    let totalValue = 0;
+        // Title
+        let title = item.find('h2 a span').text().trim();
+        if (!title) title = item.find('h2 span').text().trim();
+        if (!title) title = item.find('span.a-text-normal').text().trim();
 
-    if (unitInfo) {
-        unit = unitInfo.unit;
-        value = unitInfo.value;
-        totalValue = unitInfo.totalValue;
-        pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
-    }
+        if (!title) return; // Skip if no title
 
-    // Generate Affiliate Link
-    let link = item.link;
-    if (item.asin) {
-        link = getAmazonAffiliateLink(item.asin);
-    }
-
-    // Calculate an internal normalized score to guarantee equivalent math for sorting
-    // (e.g. so Gallons compare accurately against Fl Oz)
-    let score = 999999;
-    if (unitInfo && price > 0) {
-        const normalized = normalizeUnit(unitInfo);
-        if (normalized.totalValue > 0) {
-            score = price / normalized.totalValue;
+        // Price
+        let price = 0;
+        const priceElement = item.find('.a-price span.a-offscreen').first();
+        if (priceElement.length > 0) {
+            const priceText = priceElement.text();
+            // Remove $ and commas
+            const cleanedPriceText = priceText.replace(/[\$,]/g, '').trim();
+            const parsedPrice = parseFloat(cleanedPriceText);
+            if (!isNaN(parsedPrice)) {
+                price = parsedPrice;
+            }
         }
-    } else if (price > 0 && totalValue > 0) {
-        score = price / totalValue;
-    } else if (price > 0) {
-        score = price;
-    }
 
-    return {
-        id: item.asin || String(Math.random()),
-        title: item.title,
-        price: price,
-        image: item.image || (item.images ? item.images[0] : ''),
-        source: 'Amazon', // Always Amazon now
-        rating: item.rating || 0,
-        reviews: item.ratings_total || 0,
-        unit: unit,
-        amount: value,
-        totalAmount: totalValue,
-        pricePerUnit: pricePerUnit,
-        link: link,
-        currency: 'USD',
-        originalPrice: 0,
-        score: score,
-        unitInfo: unitInfo || undefined
-    };
+        // Image
+        const imageElement = item.find('img.s-image').first();
+        const image = imageElement.attr('src') || '';
+
+        // Rating
+        let rating = 0;
+        const ratingElement = item.find('i[data-cy="reviews-ratings-slot"] span.a-icon-alt, span[aria-label*="out of 5 stars"]').first();
+        if (ratingElement.length > 0) {
+            const ratingText = ratingElement.text() || ratingElement.attr('aria-label') || '';
+            const ratingMatch = ratingText.match(/([0-9.]+) out of 5/);
+            if (ratingMatch && ratingMatch[1]) {
+                rating = parseFloat(ratingMatch[1]);
+            }
+        }
+
+        // Reviews Total
+        let reviews = 0;
+        const reviewsElement = item.find('span.a-size-base.s-underline-text').first();
+        if (reviewsElement.length > 0) {
+            const parseNum = parseInt(reviewsElement.text().replace(/[,()]/g, ''), 10);
+            if (!isNaN(parseNum)) {
+                reviews = parseNum;
+            }
+        }
+
+        // Affiliate Link Processing
+        const link = getAmazonAffiliateLink(asin);
+
+        // Unit Calculation Map
+        const unitInfo = parseUnit(title);
+
+        let pricePerUnit = 'N/A';
+        let unit: any = 'unknown';
+        let value = 0;
+        let totalValue = 0;
+
+        if (unitInfo) {
+            unit = unitInfo.unit;
+            value = unitInfo.value;
+            totalValue = unitInfo.totalValue;
+            pricePerUnit = calculatePricePerUnit(price, unitInfo.totalValue, unitInfo.unit);
+        }
+
+        let score = 999999;
+        if (unitInfo && price > 0) {
+            const normalized = normalizeUnit(unitInfo);
+            if (normalized.totalValue > 0) {
+                score = price / normalized.totalValue;
+            }
+        } else if (price > 0 && totalValue > 0) {
+            score = price / totalValue;
+        } else if (price > 0) {
+            score = price;
+        }
+
+        products.push({
+            id: asin,
+            title,
+            price,
+            image,
+            source: 'Amazon',
+            rating,
+            reviews,
+            unit,
+            amount: value,
+            totalAmount: totalValue,
+            pricePerUnit,
+            link,
+            currency: 'USD',
+            originalPrice: 0,
+            score,
+            unitInfo: unitInfo || undefined
+        });
+    });
+
+    return products;
 }

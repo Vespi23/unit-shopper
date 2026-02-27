@@ -10,49 +10,56 @@ describe('searchProducts', () => {
         globalFetch.mockReset();
     });
 
-    it('should fetch products successfully', async () => {
-        const mockResponse = {
-            request_info: { success: true },
-            search_results: [
-                {
-                    position: 1,
-                    title: 'Test Product',
-                    asin: 'B012345678',
-                    link: 'https://amazon.com/dp/B012345678',
-                    price: { value: 10.99, currency: 'USD' },
-                    image: 'https://example.com/image.jpg',
-                    rating: 4.5,
-                    ratings_total: 100,
-                    is_prime: true
-                }
-            ]
-        };
+    it('should fetch and parse products from Decodo HTML successfully', async () => {
+        // Mock a basic Amazon search result HTML structure that Cheerio can parse
+        const mockHtml = `
+            <html>
+                <body>
+                    <div data-component-type="s-search-result" data-asin="B012345678">
+                        <h2>
+                            <a href="/dp/B012345678">
+                                <span>Test Product - 10 Count</span>
+                            </a>
+                        </h2>
+                        <div class="a-price">
+                            <span class="a-offscreen">$10.99</span>
+                        </div>
+                        <img class="s-image" src="https://example.com/image.jpg" />
+                        <i data-cy="reviews-ratings-slot">
+                            <span class="a-icon-alt">4.5 out of 5 stars</span>
+                        </i>
+                        <span class="a-size-base s-underline-text">100</span>
+                    </div>
+                </body>
+            </html>
+        `;
 
         globalFetch.mockResolvedValue({
             ok: true,
-            json: async () => mockResponse
+            text: async () => mockHtml
         });
 
         const results = await searchProducts('test query', 1);
 
-        expect(results).toHaveLength(7);
-        expect(results[0].title).toBe('Test Product');
+        // searchProducts runs 7 concurrent fetches in the new code
+        // and deduplicates by ASIN. Since all 7 pages return the exact same mock HTML, we expect 1 unique product back.
+        expect(results).toHaveLength(1);
+        expect(results[0].title).toBe('Test Product - 10 Count');
         expect(results[0].price).toBe(10.99);
         expect(results[0].source).toBe('Amazon');
+        expect(results[0].rating).toBe(4.5);
+        expect(results[0].amount).toBe(10); // Extracted by unit parser
     });
 
-    it('should handle API errors gracefully', async () => {
+    it('should handle Decodo API errors gracefully', async () => {
         globalFetch.mockResolvedValue({
             ok: false,
             status: 500,
             statusText: 'Internal Server Error'
         });
 
-        // Depending on existing implementation, it might throw or return empty
-        // Looking at api-client.ts (I recall reading it), it likely throws or logs.
-        // Let's expect it to throw for now, or check implementation.
-        // Assuming it validates response.ok
         const results = await searchProducts('fail', 1);
         expect(results).toEqual([]);
     });
 });
+
