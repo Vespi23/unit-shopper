@@ -28,7 +28,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [query, setQuery] = useState(initialQuery);
     const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
     const [results, setResults] = useState<Product[]>(initialResults);
-    const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('price_asc');
+    const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
     const [selectedUnit, setSelectedUnit] = useState<UnitType | 'auto'>('auto');
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(!!initialQuery);
@@ -360,9 +360,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                         onChange={(e) => setSortBy(e.target.value as any)}
                                         className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
                                     >
-                                        <option value="score_asc">Best Value</option>
-                                        <option value="price_asc">Lowest Price</option>
-                                        <option value="price_desc">Highest Price</option>
+                                        <option value="score_asc">Lowest Unit Price</option>
+                                        <option value="price_asc">Lowest Total Price</option>
+                                        <option value="price_desc">Highest Total Price</option>
                                     </select>
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
                                         <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
