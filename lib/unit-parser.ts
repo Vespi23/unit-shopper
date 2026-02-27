@@ -226,7 +226,7 @@ export function convertValue(value: number, from: UnitType, to: UnitType): numbe
         'oz': 28.3495,
     };
 
-    // Volume Base: Milliliters (ml)
+    // Volume & Abstract Base: Milliliters (ml)
     const volumeToBase: Record<string, number> = {
         'ml': 1,
         'l': 1000,
@@ -234,6 +234,11 @@ export function convertValue(value: number, from: UnitType, to: UnitType): numbe
         'gal': 3785.41,
         'qt': 946.353,
         'pt': 473.176,
+        // Abstract Heuristics (Approximate Volume density equivalents)
+        'loads': 29.5735 * 1.5, // 1 load ~= 1.5 fl oz
+        'rolls': 1,             // Paper metric base
+        'sheets': 1 / 300,      // 300 sheets ~= 1 roll
+        'sq ft': 1 / 40,        // 40 sq ft ~= 1 roll
     };
 
     if (weightToBase[from] && weightToBase[to]) {
