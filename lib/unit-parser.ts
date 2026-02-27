@@ -124,10 +124,15 @@ export function parseUnit(title: string): UnitInfo | null {
 
     if (unit === 'unknown') return null;
 
-    // Handle SEO restatements (e.g., "24 Rolls, Pack of 24" or "24 Rolls, 24 Count")
-    // If a discrete unit value exactly matches the package quantity, it is almost certainly redundant.
-    // We restrict this to value > 2 to preserve legitimate "2-pack of 2" items.
     if ((unit === 'rolls' || unit === 'count' || unit === 'loads' || unit === 'sheets') && value === quantity && value > 2) {
+        quantity = 1;
+    }
+
+    // Heuristic: If the title explicitly states "Total of 240 fl oz" or "240 count total",
+    // the value matched is already the aggregate total. Multiplying it by the pack quantity
+    // would result in double-counting (e.g., 240 * 12 = 2880).
+    const isExplicitTotal = new RegExp(`total(?:\\s+of)?\\s+${value}|${value}\\s*[a-z\\s.]*\\s*total`, 'i').test(lowerTitle);
+    if (isExplicitTotal && quantity > 1) {
         quantity = 1;
     }
 
