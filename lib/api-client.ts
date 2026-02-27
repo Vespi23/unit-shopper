@@ -44,58 +44,87 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
 
         const encodedSearchTerm = encodeURIComponent(apiSearchTerm);
         // Using "k" for keyword search param on Amazon
-        const baseUrl = `https://www.amazon.com/s?k=${encodedSearchTerm}`;
+        let baseUrl = `https://www.amazon.com/s?k=${encodedSearchTerm}`;
 
-        // Fetch up to 7 pages concurrently using Decodo API
-        const pagePromises = [];
-        for (let p = 1; p <= 7; p++) {
-            const amazonUrl = p === 1 ? baseUrl : `${baseUrl}&page=${p}`;
+        // Helper function to fetch a single page via Decodo
+        const fetchPage = async (p: number, urlBase: string): Promise<string | null> => {
+            const amazonUrl = p === 1 ? urlBase : `${urlBase}&page=${p}`;
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
-
-            // Decodo returns raw HTML by default if not instructed otherwise
-            pagePromises.push(
-                fetch(decodoUrl, {
+            try {
+                const res = await fetch(decodoUrl, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
                         'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`
                     },
-                    body: JSON.stringify({
-                        url: amazonUrl
-                    })
-                })
-                    .then(res => {
-                        if (!res.ok) throw new Error(`Decodo API failed with status ${res.status}`);
-                        return res.json();
-                    })
-                    .then(json => {
-                        // Decodo v2 JSON response encapsulates the HTML inside a 'results' array
-                        if (json && json.results && json.results.length > 0 && json.results[0].content) {
-                            return json.results[0].content;
-                        }
-                        if (json && json.content) return json.content;
-                        if (json && json.body) return json.body;
-                        return json; // Fallback
-                    })
-                    .catch(err => {
-                        console.error(`Page ${p} fetch error:`, err);
-                        return null; // Return null so Promise.all doesn't fail the whole batch
-                    })
-            );
+                    body: JSON.stringify({ url: amazonUrl })
+                });
+                if (!res.ok) throw new Error(`Decodo API failed with status ${res.status}`);
+                const json = await res.json();
+                // Decodo v2 JSON response encapsulates the HTML inside a 'results' array
+                if (json && json.results && json.results.length > 0 && json.results[0].content) {
+                    return json.results[0].content;
+                }
+                if (json && json.content) return json.content;
+                if (json && json.body) return json.body;
+                return json; // Fallback
+            } catch (err) {
+                console.error(`Page ${p} fetch error:`, err);
+                return null;
+            }
+        };
+
+        console.log(`[API CALL] Fetching Page 1 first to check for category redirects...`);
+        let page1Html = await fetchPage(1, baseUrl);
+        let parsedPage1 = page1Html ? parseAmazonHTML(page1Html) : [];
+
+        // If Page 1 returned less than 5 products, Amazon might have served a category storefront (e.g., broad queries like "book").
+        // We fallback by wrapping the query in double quotes to force an exact-match search grid.
+        if (parsedPage1.length < 5 && !apiSearchTerm.startsWith('"') && !apiSearchTerm.endsWith('"')) {
+            console.warn(`[WARNING] Page 1 returned only ${parsedPage1.length} products. Amazon likely served a Category node instead of a search grid for "${query}".`);
+            console.log(`[API FALLBACK] Retrying Page 1 by forcing exact match quotes: "${query}"`);
+
+            const fallbackTerm = `"${query}"`;
+            const fallbackEncodedUrl = `https://www.amazon.com/s?k=${encodeURIComponent(fallbackTerm)}`;
+
+            const fallbackHtml = await fetchPage(1, fallbackEncodedUrl);
+            const fallbackProducts = fallbackHtml ? parseAmazonHTML(fallbackHtml) : [];
+
+            if (fallbackProducts.length > parsedPage1.length) {
+                console.log(`[API FALLBACK SUCCESS] Exact match yielded ${fallbackProducts.length} products! Proceeding with fallback URL.`);
+                page1Html = fallbackHtml;
+                parsedPage1 = fallbackProducts;
+                baseUrl = fallbackEncodedUrl;
+            } else {
+                console.log(`[API FALLBACK FAILED] Exact match yielded ${fallbackProducts.length} products. Proceeding with original empty results.`);
+            }
         }
 
-        const htmlResults = await Promise.all(pagePromises);
-        let allProducts: Product[] = [];
+        let allProducts: Product[] = [...parsedPage1];
+        console.log(`Page 1: Found ${parsedPage1.length} products`);
 
-        htmlResults.forEach((html, index) => {
-            if (html) {
-                console.log(`[DEBUG] Page ${index + 1} HTML snippet:`, typeof html === 'string' ? html.substring(0, 200) : 'Not a string');
-                const parsedProducts = parseAmazonHTML(html as string);
-                allProducts = [...allProducts, ...parsedProducts];
-                console.log(`Page ${index + 1}: Found ${parsedProducts.length} products`);
+        // If we still found no products even after fallback, there's no point wasting API quota on pages 2-7.
+        if (parsedPage1.length > 0) {
+            console.log(`[API CALL] Fetching Pages 2-7 concurrently...`);
+            const pagePromises = [];
+            for (let p = 2; p <= 7; p++) {
+                pagePromises.push(fetchPage(p, baseUrl));
             }
-        });
+
+            const htmlResults = await Promise.all(pagePromises);
+
+            htmlResults.forEach((html, index) => {
+                const pageNum = index + 2;
+                if (html) {
+                    const parsedProducts = parseAmazonHTML(html as string);
+                    allProducts = [...allProducts, ...parsedProducts];
+                    console.log(`Page ${pageNum}: Found ${parsedProducts.length} products`);
+                }
+            });
+        } else {
+            console.warn(`[API OPTIMIZATION] Aborting Pages 2-7 fetch because Page 1 yielded 0 results.`);
+        }
 
         // Ensure unique results by ASIN (id is ASIN)
         const uniqueProductsMap = new Map<string, Product>();
