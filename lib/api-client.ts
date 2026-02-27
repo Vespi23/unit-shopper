@@ -42,9 +42,19 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             console.log(`[API EXACT MATCH] Wrapping query in double quotes: ${apiSearchTerm}`);
         }
 
+        // As explicitly requested by the user, we now aggressively force ALL searches
+        // to be exact phrase matches by wrapping them in double quotes. This fundamentally
+        // prevents Amazon from serving category node storefronts (e.g. for generic terms like 'book')
+        // and guarantees a scrape-able product grid.
+        if (!apiSearchTerm.startsWith('"') && !apiSearchTerm.endsWith('"')) {
+            apiSearchTerm = `"${apiSearchTerm}"`;
+        }
+
+        console.log(`[API EXACT MATCH] Query is wrapped in double quotes universally: ${apiSearchTerm}`);
+
         const encodedSearchTerm = encodeURIComponent(apiSearchTerm);
         // Using "k" for keyword search param on Amazon
-        let baseUrl = `https://www.amazon.com/s?k=${encodedSearchTerm}`;
+        const baseUrl = `https://www.amazon.com/s?k=${encodedSearchTerm}`;
 
         // Helper function to fetch a single page via Decodo
         const fetchPage = async (p: number, urlBase: string): Promise<string | null> => {
@@ -75,57 +85,24 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             }
         };
 
-        console.log(`[API CALL] Fetching Page 1 first to check for category redirects...`);
-        let page1Html = await fetchPage(1, baseUrl);
-        let parsedPage1 = page1Html ? parseAmazonHTML(page1Html) : [];
-
-        // If Page 1 returned less than 5 products, Amazon might have served a category storefront (e.g., broad queries like "book").
-        // We fallback by wrapping the query in double quotes to force an exact-match search grid.
-        if (parsedPage1.length < 5 && !apiSearchTerm.startsWith('"') && !apiSearchTerm.endsWith('"')) {
-            console.warn(`[WARNING] Page 1 returned only ${parsedPage1.length} products. Amazon likely served a Category node instead of a search grid for "${query}".`);
-            console.log(`[API FALLBACK] Retrying Page 1 by forcing exact match quotes: "${query}"`);
-
-            const fallbackTerm = `"${query}"`;
-            const fallbackEncodedUrl = `https://www.amazon.com/s?k=${encodeURIComponent(fallbackTerm)}`;
-
-            const fallbackHtml = await fetchPage(1, fallbackEncodedUrl);
-            const fallbackProducts = fallbackHtml ? parseAmazonHTML(fallbackHtml) : [];
-
-            if (fallbackProducts.length > parsedPage1.length) {
-                console.log(`[API FALLBACK SUCCESS] Exact match yielded ${fallbackProducts.length} products! Proceeding with fallback URL.`);
-                page1Html = fallbackHtml;
-                parsedPage1 = fallbackProducts;
-                baseUrl = fallbackEncodedUrl;
-            } else {
-                console.log(`[API FALLBACK FAILED] Exact match yielded ${fallbackProducts.length} products. Proceeding with original empty results.`);
-            }
+        // Fetch Pages 1-7 concurrently since we know the exact-match quote prevents the category redirect
+        console.log(`[API CALL] Fetching Pages 1-7 concurrently for exact match...`);
+        const pagePromises = [];
+        for (let p = 1; p <= 7; p++) {
+            pagePromises.push(fetchPage(p, baseUrl));
         }
 
-        let allProducts: Product[] = [...parsedPage1];
-        console.log(`Page 1: Found ${parsedPage1.length} products`);
+        const htmlResults = await Promise.all(pagePromises);
+        let allProducts: Product[] = [];
 
-        // If we still found no products even after fallback, there's no point wasting API quota on pages 2-7.
-        if (parsedPage1.length > 0) {
-            console.log(`[API CALL] Fetching Pages 2-7 concurrently...`);
-            const pagePromises = [];
-            for (let p = 2; p <= 7; p++) {
-                pagePromises.push(fetchPage(p, baseUrl));
+        htmlResults.forEach((html, index) => {
+            const pageNum = index + 1;
+            if (html) {
+                const parsedProducts = parseAmazonHTML(html as string);
+                allProducts = [...allProducts, ...parsedProducts];
+                console.log(`Page ${pageNum}: Found ${parsedProducts.length} products`);
             }
-
-            const htmlResults = await Promise.all(pagePromises);
-
-            htmlResults.forEach((html, index) => {
-                const pageNum = index + 2;
-                if (html) {
-                    const parsedProducts = parseAmazonHTML(html as string);
-                    allProducts = [...allProducts, ...parsedProducts];
-                    console.log(`Page ${pageNum}: Found ${parsedProducts.length} products`);
-                }
-            });
-        } else {
-            console.warn(`[API OPTIMIZATION] Aborting Pages 2-7 fetch because Page 1 yielded 0 results.`);
-        }
-
+        });
         // Ensure unique results by ASIN (id is ASIN)
         const uniqueProductsMap = new Map<string, Product>();
         allProducts.forEach(product => {
