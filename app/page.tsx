@@ -81,6 +81,9 @@ function generateStructuredData(products: Product[], query: string) {
   return [breadcrumbSchema, productListSchema];
 }
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function Home(props: Props) {
   const searchParams = await props.searchParams;
   const rawQuery = typeof searchParams.q === 'string' ? searchParams.q : '';

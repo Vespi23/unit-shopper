@@ -80,7 +80,13 @@ export async function GET(request: Request) {
             }
         }
 
-        return NextResponse.json(results);
+        return NextResponse.json(results, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            }
+        });
     } catch (error) {
         console.error('Search error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
