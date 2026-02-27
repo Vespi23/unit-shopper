@@ -48,10 +48,15 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     // Sync results from Server if they change (e.g. navigation)
     useEffect(() => {
         if (initialResults) {
-            // Do not apply empty results to clear the screen if there is no query (brand new home page load)
             const activeQuery = new URLSearchParams(window.location.search).get('q');
-            if (initialResults.length === 0 && !activeQuery) {
-                return;
+
+            if (initialResults.length === 0) {
+                if (!activeQuery) {
+                    setResults([]);
+                    setSearched(false);
+                    setSubmittedQuery('');
+                }
+                return; // Server Redis Cache missed, defer exclusively to client-side fetching
             }
 
             console.log("Applying initialResults from server");
@@ -102,9 +107,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         async function fetchResults() {
             if (!submittedQuery) return;
 
-            // NEVER fetch page 1 from the client side!
-            // Next.js SSR handles page 1 natively via router.push hydration.
-            if (page === 1) return;
+            // Skip client fetch if SSR securely delivered non-empty results from the lightning-fast Redis cache
+            if (page === 1 && initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery) {
+                console.log("Skipping client fetch, valid cached initialResults provided by SSR");
+                return;
+            }
 
             setLoading(true);
             setSearched(true);

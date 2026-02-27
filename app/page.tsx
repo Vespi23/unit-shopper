@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import type { Metadata } from 'next';
 import { searchProducts } from '@/lib/api-client';
 import { Product } from '@/lib/types';
+import { redis } from '@/lib/redis';
 
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
@@ -92,13 +93,22 @@ export default async function Home(props: Props) {
   let initialResults: Product[] = [];
   let jsonLd: any[] | null = null;
 
-  // SSR Search
+  // SSR Search (Only from Cache to prevent Vercel 15s timeout on Hobby plan)
   if (query) {
     try {
-      initialResults = await searchProducts(query);
-      jsonLd = generateStructuredData(initialResults, query);
+      if (redis.isOpen || process.env.REDIS_URL || process.env.KV_URL) {
+        const cacheKey = `search:v2:${query.toLowerCase()}:${1}`;
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
+          initialResults = Array.isArray(parsed) ? parsed : [];
+          if (initialResults.length > 0) {
+            jsonLd = generateStructuredData(initialResults, query);
+          }
+        }
+      }
     } catch (e) {
-      console.error("SSR Search Error", e);
+      console.error("SSR Redis Cache Error", e);
     }
   }
 
