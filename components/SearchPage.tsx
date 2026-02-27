@@ -295,6 +295,39 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-4">
+                            {/* Convert Unit Dropdown */}
+                            {availableUnits.length > 0 && (
+                                <div className="flex items-center gap-3">
+                                    <label htmlFor="unit-select" className="text-sm font-medium text-muted-foreground mr-1">Units:</label>
+                                    <div className="relative">
+                                        <select
+                                            id="unit-select"
+                                            value={selectedUnit}
+                                            onChange={(e) => setSelectedUnit(e.target.value as any)}
+                                            className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                                        >
+                                            <option value="auto">Original</option>
+                                            {availableUnits.map(unit => (
+                                                <option key={unit} value={unit}>{unit}</option>
+                                            ))}
+                                            <option disabled>──────</option>
+                                            <option value="oz">oz (Weight)</option>
+                                            <option value="lb">lb</option>
+                                            <option value="g">g</option>
+                                            <option value="kg">kg</option>
+                                            <option value="fl oz">fl oz (Vol)</option>
+                                            <option value="gal">gal</option>
+                                            <option value="l">Liters</option>
+                                        </select>
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
+
                             {/* Sort Dropdown */}
                             <div className="flex items-center gap-3">
                                 <label htmlFor="sort-select" className="text-sm font-medium text-muted-foreground">Sort by:</label>
