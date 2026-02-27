@@ -67,6 +67,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         if (e) e.preventDefault();
 
         if (query !== searchParams.get('q')) {
+            setLoading(true);
             const params = new URLSearchParams(searchParams.toString());
             if (query) {
                 params.set('q', query);
@@ -74,6 +75,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 params.delete('q');
             }
             router.push(`/?${params.toString()}`, { scroll: false });
+        } else if (query.length > 0 && page > 1) {
+            // Re-searching the exact same query resets pagination instantly using cached server data
+            setResults(initialResults);
+            setPage(1);
+            return;
         }
 
         if (query.length > 0) {
@@ -96,10 +102,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         async function fetchResults() {
             if (!submittedQuery) return;
 
-            if (lastInitialResultsQuery.current === submittedQuery && page === 1) {
-                console.log("Skipping client fetch, using initialResults");
-                return;
-            }
+            // NEVER fetch page 1 from the client side!
+            // Next.js SSR handles page 1 natively via router.push hydration.
+            if (page === 1) return;
 
             setLoading(true);
             setSearched(true);
@@ -261,6 +266,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 {!searched && (
                     <TrendingCategories onSelect={(q) => {
                         setQuery(q);
+                        setLoading(true);
                         const params = new URLSearchParams(searchParams.toString());
                         params.set('q', q);
                         router.push(`/?${params.toString()}`, { scroll: false });
