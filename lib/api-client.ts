@@ -34,27 +34,21 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     try {
-        console.log(`[API CALL] Fetching Decodo Web Scraping API for: ${query} (Pages 1-7)`);
+        console.log(`[API CALL] Fetching Decodo Web Scraping API for: ${query}`);
 
         let apiSearchTerm = query;
+        let isExactMatch = false;
+
+        // Some queries are notoriously noisy and are best forced into exact match immediately
         if (EXACT_MATCH_QUERIES.has(query.toLowerCase().trim())) {
-            apiSearchTerm = `"${apiSearchTerm}"`;
-            console.log(`[API EXACT MATCH] Wrapping query in double quotes: ${apiSearchTerm}`);
+            apiSearchTerm = `"${query}"`;
+            isExactMatch = true;
+            console.log(`[API EXACT MATCH] Pre-wrapping known noisy query: ${apiSearchTerm}`);
+        } else if (query.startsWith('"') && query.endsWith('"')) {
+            isExactMatch = true;
         }
 
-        // As explicitly requested by the user, we now aggressively force ALL searches
-        // to be exact phrase matches by wrapping them in double quotes. This fundamentally
-        // prevents Amazon from serving category node storefronts (e.g. for generic terms like 'book')
-        // and guarantees a scrape-able product grid.
-        if (!apiSearchTerm.startsWith('"') && !apiSearchTerm.endsWith('"')) {
-            apiSearchTerm = `"${apiSearchTerm}"`;
-        }
-
-        console.log(`[API EXACT MATCH] Query is wrapped in double quotes universally: ${apiSearchTerm}`);
-
-        const encodedSearchTerm = encodeURIComponent(apiSearchTerm);
-        // Using "k" for keyword search param on Amazon
-        const baseUrl = `https://www.amazon.com/s?k=${encodedSearchTerm}`;
+        const getBaseUrl = (term: string) => `https://www.amazon.com/s?k=${encodeURIComponent(term)}`;
 
         // Helper function to fetch a single page via Decodo
         const fetchPage = async (p: number, urlBase: string): Promise<string | null> => {
@@ -85,25 +79,43 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             }
         };
 
-        // Fetch Pages 1-3 concurrently. We reduce from 7 to 3 to stay safely under
-        // the Decodo Free Tier concurrency limits (usually max 5) preventing 429 ratelimits.
-        console.log(`[API CALL] Fetching Pages 1-3 concurrently to prevent proxy 429s...`);
-        const pagePromises = [];
-        for (let p = 1; p <= 3; p++) {
-            pagePromises.push(fetchPage(p, baseUrl));
+        // Phase 1: Fetch Page 1
+        let baseUrl = getBaseUrl(apiSearchTerm);
+        console.log(`[API CALL] Fetching Page 1 for term: ${apiSearchTerm}`);
+        let firstPageHtml = await fetchPage(1, baseUrl);
+        let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
+
+        // Phase 2: If 0 products and not already exact match, Amazon served a category storefront.
+        // Fallback to strict UI parsing by forcing exact phrase quotes.
+        if (firstPageProducts.length === 0 && !isExactMatch) {
+            console.log(`[API FALLBACK] 0 products parsed for raw query. Retrying exactly: "${apiSearchTerm}"`);
+            apiSearchTerm = `"${query}"`;
+            baseUrl = getBaseUrl(apiSearchTerm);
+            firstPageHtml = await fetchPage(1, baseUrl);
+            firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
         }
 
-        const htmlResults = await Promise.all(pagePromises);
-        let allProducts: Product[] = [];
+        let allProducts: Product[] = [...firstPageProducts];
+        console.log(`Page 1: Found ${firstPageProducts.length} products`);
 
-        htmlResults.forEach((html, index) => {
-            const pageNum = index + 1;
-            if (html) {
-                const parsedProducts = parseAmazonHTML(html as string);
-                allProducts = [...allProducts, ...parsedProducts];
-                console.log(`Page ${pageNum}: Found ${parsedProducts.length} products`);
-            }
-        });
+        // Phase 3: Fetch remaining pages (2 and 3) concurrently to save time
+        if (allProducts.length > 0) {
+            console.log(`[API CALL] Fetching Pages 2-3 concurrently...`);
+            const pagePromises = [
+                fetchPage(2, baseUrl),
+                fetchPage(3, baseUrl)
+            ];
+
+            const htmlResults = await Promise.all(pagePromises);
+            htmlResults.forEach((html, index) => {
+                const pageNum = index + 2;
+                if (html) {
+                    const parsedProducts = parseAmazonHTML(html as string);
+                    allProducts = [...allProducts, ...parsedProducts];
+                    console.log(`Page ${pageNum}: Found ${parsedProducts.length} products`);
+                }
+            });
+        }
         // Ensure unique results by ASIN (id is ASIN)
         const uniqueProductsMap = new Map<string, Product>();
         allProducts.forEach(product => {

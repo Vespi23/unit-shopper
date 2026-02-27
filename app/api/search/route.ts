@@ -5,6 +5,8 @@ import { redis } from '@/lib/redis';
 const RATE_LIMIT_WINDOW_SECONDS = 10;
 const MAX_REQUESTS_PER_WINDOW = 10;
 
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
     // Rate Limiting
     const ip = request.headers.get('x-forwarded-for') || 'unknown';
