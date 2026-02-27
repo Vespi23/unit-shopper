@@ -217,35 +217,34 @@ export function convertValue(value: number, from: UnitType, to: UnitType): numbe
     if (from === to) return value;
     if (value <= 0) return null;
 
-    // Weight
-    if (from === 'lb' && to === 'oz') return value * 16;
-    if (from === 'oz' && to === 'lb') return value / 16;
-    if (from === 'kg' && to === 'g') return value * 1000;
-    if (from === 'g' && to === 'kg') return value / 1000;
-    if (from === 'mg' && to === 'g') return value / 1000;
-    if (from === 'g' && to === 'mg') return value * 1000;
-    if (from === 'kg' && to === 'lb') return value * 2.20462;
-    if (from === 'lb' && to === 'kg') return value / 2.20462;
-    if (from === 'g' && to === 'oz') return value * 0.035274;
-    if (from === 'oz' && to === 'g') return value / 0.035274;
-    if (from === 'kg' && to === 'oz') return value * 35.274;
-    if (from === 'oz' && to === 'kg') return value / 35.274;
+    // Weight Base: Grams (g)
+    const weightToBase: Record<string, number> = {
+        'g': 1,
+        'kg': 1000,
+        'mg': 0.001,
+        'lb': 453.592,
+        'oz': 28.3495,
+    };
 
-    // Volume
-    if (from === 'gal' && to === 'fl oz') return value * 128;
-    if (from === 'fl oz' && to === 'gal') return value / 128;
-    if (from === 'qt' && to === 'fl oz') return value * 32;
-    if (from === 'fl oz' && to === 'qt') return value / 32;
-    if (from === 'pt' && to === 'fl oz') return value * 16;
-    if (from === 'fl oz' && to === 'pt') return value / 16;
-    if (from === 'l' && to === 'ml') return value * 1000;
-    if (from === 'ml' && to === 'l') return value / 1000;
+    // Volume Base: Milliliters (ml)
+    const volumeToBase: Record<string, number> = {
+        'ml': 1,
+        'l': 1000,
+        'fl oz': 29.5735,
+        'gal': 3785.41,
+        'qt': 946.353,
+        'pt': 473.176,
+    };
 
-    // Volume Imperial <-> Metric (Approx)
-    if (from === 'l' && to === 'fl oz') return value * 33.814;
-    if (from === 'fl oz' && to === 'l') return value / 33.814;
-    if (from === 'ml' && to === 'fl oz') return value * 0.033814;
-    if (from === 'fl oz' && to === 'ml') return value / 0.033814;
+    if (weightToBase[from] && weightToBase[to]) {
+        const valueInGrams = value * weightToBase[from];
+        return valueInGrams / weightToBase[to];
+    }
+
+    if (volumeToBase[from] && volumeToBase[to]) {
+        const valueInMl = value * volumeToBase[from];
+        return valueInMl / volumeToBase[to];
+    }
 
     // Direct Count Identity
     if (from === 'count' && to === 'count') return value;
