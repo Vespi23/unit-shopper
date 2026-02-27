@@ -26,7 +26,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const initialQuery = searchParams.get('q') || '';
 
     const [query, setQuery] = useState(initialQuery);
-    const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
+    const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
     const [results, setResults] = useState<Product[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
     const [selectedUnit, setSelectedUnit] = useState<UnitType | 'auto'>('auto');
@@ -63,42 +63,40 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         }
     }, [initialResults]);
 
-    // Sync URL when query changes (Debounced)
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (query !== searchParams.get('q')) {
-                const params = new URLSearchParams(searchParams.toString());
-                if (query) {
-                    params.set('q', query);
-                } else {
-                    params.delete('q');
-                }
-                router.push(`/?${params.toString()}`, { scroll: false });
-            }
+    const handleSearch = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
 
-            if (query.length > 2) {
-                setDebouncedQuery(query);
-                setPage(1);
-            } else if (query.length === 0) {
-                setResults([]);
-                setSearched(false);
-                setPage(1);
-                setDebouncedQuery('');
+        if (query !== searchParams.get('q')) {
+            const params = new URLSearchParams(searchParams.toString());
+            if (query) {
+                params.set('q', query);
+            } else {
+                params.delete('q');
             }
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [query, router, searchParams]);
+            router.push(`/?${params.toString()}`, { scroll: false });
+        }
+
+        if (query.length > 0) {
+            setSubmittedQuery(query);
+            setPage(1);
+        } else if (query.length === 0) {
+            setResults([]);
+            setSearched(false);
+            setPage(1);
+            setSubmittedQuery('');
+        }
+    };
 
     useEffect(() => {
         setDisabledUnits(new Set());
-    }, [debouncedQuery, selectedUnit]);
+    }, [submittedQuery, selectedUnit]);
 
     // Fetch results
     useEffect(() => {
         async function fetchResults() {
-            if (!debouncedQuery) return;
+            if (!submittedQuery) return;
 
-            if (lastInitialResultsQuery.current === debouncedQuery && page === 1) {
+            if (lastInitialResultsQuery.current === submittedQuery && page === 1) {
                 console.log("Skipping client fetch, using initialResults");
                 return;
             }
@@ -106,8 +104,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             setLoading(true);
             setSearched(true);
             try {
-                console.log(`Fetching client results for: ${debouncedQuery}`);
-                const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&page=${page}`);
+                console.log(`Fetching client results for: ${submittedQuery}`);
+                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}&page=${page}`);
                 const data = await res.json();
 
                 const newResults = Array.isArray(data) ? data : [];
@@ -135,7 +133,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         }
 
         fetchResults();
-    }, [debouncedQuery, page]);
+    }, [submittedQuery, page]);
 
     const toggleCompare = useCallback((productId: string, selected: boolean) => {
         setCompareList(prev => {
@@ -238,7 +236,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 {/* Search Input */}
                 <div className="relative w-full max-w-2xl group z-10">
                     <div className={`absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 opacity-20 blur-xl transition duration-500 group-hover:opacity-40 ${query ? 'opacity-50' : ''}`}></div>
-                    <div className="relative flex items-center bg-card rounded-2xl border border-border/50 shadow-lg shadow-emerald-900/5 p-2 transition-shadow duration-300 focus-within:shadow-xl focus-within:shadow-emerald-900/10">
+                    <form onSubmit={handleSearch} className="relative flex items-center bg-card rounded-2xl border border-border/50 shadow-lg shadow-emerald-900/5 p-2 transition-shadow duration-300 focus-within:shadow-xl focus-within:shadow-emerald-900/10">
                         <Search className="h-6 w-6 text-muted-foreground ml-4 mr-3" />
                         <input
                             type="text"
@@ -249,13 +247,26 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             autoFocus
                             aria-label="Search products"
                         />
-                        {loading && <Loader2 className="h-6 w-6 animate-spin text-primary mr-4" />}
-                    </div>
+                        {loading ? (
+                            <Loader2 className="h-6 w-6 animate-spin text-primary mr-4" />
+                        ) : (
+                            <button type="submit" disabled={!query} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed hidden sm:block">
+                                Search
+                            </button>
+                        )}
+                    </form>
                 </div>
 
                 {/* Trending Categories (Only show if not searching) */}
                 {!searched && (
-                    <TrendingCategories onSelect={(q) => setQuery(q)} />
+                    <TrendingCategories onSelect={(q) => {
+                        setQuery(q);
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('q', q);
+                        router.push(`/?${params.toString()}`, { scroll: false });
+                        setSubmittedQuery(q);
+                        setPage(1);
+                    }} />
                 )}
             </section>
 
@@ -280,7 +291,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 {results.length > 0 && !loading && (
                     <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
                         <div className="text-sm text-muted-foreground font-medium">
-                            Found {results.length} results for <span className="text-foreground">"{debouncedQuery}"</span>
+                            Found {results.length} results for <span className="text-foreground">"{submittedQuery}"</span>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-4">
