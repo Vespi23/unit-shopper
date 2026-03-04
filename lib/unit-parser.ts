@@ -24,15 +24,22 @@ const UNIT_REGEX = {
     loads: /(\d+)\s?(?:load|loads)\b/i,
     rolls: /(\d+)\s?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
     sheets: /(\d+)\s?(?:sheet|sheets)\b/i,
-    count: /(\d+(?:\.\d+)?)\s?(?:count|ct|pack|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?)\b/i,
+    count: /(\d+(?:\.\d+)?)\s?(?:counts?|ct|pack|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i,
 };
 
-const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((\d+)\s?(?:cans?|boxes?|bottles?|pouches?|packs?|count|rolls?)\)/i;
-const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)\s?(?:count|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?)\b/i;
+const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((\d+)\s?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers)\)/i;
+const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)\s?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
 export function parseUnit(title: string): UnitInfo | null {
-    const lowerTitle = title.toLowerCase();
+    // Cleanse title of dimensions like "60x40 mm" or "68 x 27 mm" to prevent the 
+    // MULTIPLIER_REGEX from misinterpreting "68x" as a pack quantity.
+    let cleanTitle = title.toLowerCase()
+        .replace(/\b\d+(?:\.\d+)?\s?x\s?\d+(?:\.\d+)?\s?(?:mm|cm|in|inch|inches|ft|foot|feet|m|meter|meters|yd|yard|yards)\b/g, '')
+        .replace(/\s\d+\s?sizes?/g, '') // Also remove "5 sizes" to prevent confusion
+        .trim();
+
+    const lowerTitle = cleanTitle;
 
     // 1. Detect Standard Quantity (Pack of X, X Pack, Nx)
     let quantity = 1;
