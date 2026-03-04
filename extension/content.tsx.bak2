@@ -1,0 +1,160 @@
+import type { PlasmoCSConfig, PlasmoGetInlineAnchor } from "plasmo"
+import { useEffect, useState } from "react"
+
+import { calculatePricePerUnit, parseUnit } from "./unit-parser"
+
+export const config: PlasmoCSConfig = {
+  matches: [
+    "*://*.amazon.com/*/dp/*",
+    "*://*.amazon.com/dp/*",
+    "*://*.amazon.com/gp/product/*"
+  ]
+}
+
+export const getInlineAnchor: PlasmoGetInlineAnchor = async () =>
+  document.querySelector("#corePrice_feature_div") ||
+  document.querySelector("#corePriceDisplay_desktop_feature_div") ||
+  document.querySelector("#corePrice_desktop") ||
+  document.querySelector("#priceblock_ourprice") ||
+  document.querySelector(".a-price")
+
+const parsePrice = (priceStr: string) => {
+  return parseFloat(priceStr.replace(/[^0-9.]/g, ""))
+}
+
+const AmazonContentScript = () => {
+  const [productData, setProductData] = useState<{
+    title: string
+    price: string
+    unitPrice: string
+  } | null>(null)
+
+  useEffect(() => {
+    // Basic DOM extraction for title and price
+    const extractDetails = () => {
+      const titleEl = document.querySelector("#productTitle")
+      const priceEl =
+        document.querySelector("#corePrice_feature_div") ||
+        document.querySelector("#corePriceDisplay_desktop_feature_div") ||
+        document.querySelector("#corePrice_desktop") ||
+        document.querySelector("#priceblock_ourprice") ||
+        document.querySelector(".a-price")
+
+      const title = titleEl ? titleEl.textContent?.trim() || "" : ""
+      let priceStr = ""
+
+      if (priceEl) {
+        // Find screen reader price if available, otherwise just text
+        const offscreenPrice = priceEl.querySelector(".a-offscreen")
+        priceStr = offscreenPrice
+          ? offscreenPrice.textContent?.trim() || ""
+          : priceEl.textContent?.trim() || ""
+      }
+
+      console.log("BudgetLynx Debug -> Title:", title)
+      console.log("BudgetLynx Debug -> Price String:", priceStr)
+
+      let unitPriceLabel = "N/A"
+      if (title && priceStr) {
+        const parsedPrice = parsePrice(priceStr)
+        const unitInfo = parseUnit(title)
+
+        console.log("BudgetLynx Debug -> Parsed Price:", parsedPrice)
+        console.log("BudgetLynx Debug -> Unit Info from Parser:", unitInfo)
+
+        if (!isNaN(parsedPrice) && unitInfo) {
+          unitPriceLabel = calculatePricePerUnit(
+            parsedPrice,
+            unitInfo.totalValue,
+            unitInfo.unit
+          )
+        }
+      }
+
+      console.log("BudgetLynx Debug -> Final Unit Price Label:", unitPriceLabel)
+      setProductData({ title, price: priceStr, unitPrice: unitPriceLabel })
+    }
+
+    // Run extraction after a short delay to allow for dynamic rendering
+    // Amazon loads prices dynamically, so we should try a few times or use a MutationObserver.
+    // For simplicity and robustness, let's use a retry interval for a few seconds.
+    let attempts = 0
+    const maxAttempts = 10 // 5 seconds total (10 * 500ms)
+
+    const tryExtract = () => {
+      attempts++
+      const priceEl = getInlineAnchor() // Use our existing anchor logic to check if it's there
+
+      // Note: getInlineAnchor returns a Promise, but we can just do a DOM query directly here for synchronous checking
+      const isPriceReady =
+        document.querySelector("#corePrice_feature_div") ||
+        document.querySelector("#corePriceDisplay_desktop_feature_div") ||
+        document.querySelector("#corePrice_desktop") ||
+        document.querySelector("#priceblock_ourprice") ||
+        document.querySelector(".a-price")
+
+      if (isPriceReady) {
+        console.log(
+          `BudgetLynx Debug -> Found price element after ${attempts} attempts.`
+        )
+        extractDetails()
+      } else if (attempts < maxAttempts) {
+        console.log(
+          `BudgetLynx Debug -> Attempt ${attempts}: Price element not found yet. Retrying in 500ms...`
+        )
+        setTimeout(tryExtract, 500)
+      } else {
+        console.log(
+          "BudgetLynx Debug -> Gave up waiting for price element after 5 seconds."
+        )
+        // Try extracting anyway, just in case
+        extractDetails()
+      }
+    }
+
+    tryExtract()
+
+    // Cleanup isn't strictly necessary for this simple retry, but good practice if it were a continuous interval
+    return () => {}
+  }, [])
+
+  if (!productData) return null
+
+  const isError = productData.unitPrice === "N/A"
+
+  return (
+    <div
+      style={{
+        padding: "8px 12px",
+        marginTop: "8px",
+        marginBottom: "8px",
+        backgroundColor: isError ? "#f1f3f4" : "#e6f4ea",
+        border: `1px solid ${isError ? "#dadce0" : "#137333"}`,
+        borderRadius: "4px",
+        color: isError ? "#5f6368" : "#137333",
+        fontWeight: "bold",
+        fontSize: "14px",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        zIndex: 9999
+      }}>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill={isError ? "#5f6368" : "#137333"}
+        width="16px"
+        height="16px"
+        style={{ flexShrink: 0 }}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+      </svg>
+      <span>
+        {isError
+          ? "Lynx Vision: Could not parse unit."
+          : `Lynx Vision: ${productData.unitPrice}`}
+      </span>
+    </div>
+  )
+}
+
+export default AmazonContentScript
