@@ -24,6 +24,8 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "name": "Lynx Vision",
+    "description": "Compare Amazon products with better value options and calculate price per unit instantly while you shop.",
     "host_permissions": [
       "https://*.amazon.com/*"
     ]
