@@ -31,11 +31,11 @@ export const getInlineAnchorList: PlasmoGetInlineAnchorList = async () => {
     const seenPrices = new Set()
 
     searchResults.forEach((result) => {
-      // Ensure we only select the primary price block (not list prices .a-text-price)
-      const primaryPrice = result.querySelector(".a-price:not(.a-text-price)")
-      if (primaryPrice && !seenPrices.has(primaryPrice)) {
-        anchors.push(primaryPrice)
-        seenPrices.add(primaryPrice)
+      // Find a safe container that isn't clipped by the title's line-clamp CSS
+      const safeAnchor = result.querySelector('[data-cy="price-recipe"]') || result.querySelector('.a-spacing-top-small') || result.querySelector(".a-price:not(.a-text-price)")
+      if (safeAnchor && !seenPrices.has(safeAnchor)) {
+        anchors.push(safeAnchor)
+        seenPrices.add(safeAnchor)
       }
     })
   }
