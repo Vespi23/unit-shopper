@@ -142,7 +142,21 @@ export function parseUnit(title: string): UnitInfo | null {
       // Only look for count-quantity if we haven't found a pack-quantity
       const countMatch = lowerTitle.match(COUNT_AS_QUANTITY_REGEX)
       if (countMatch) {
-        quantity = parseInt(countMatch[1], 10)
+        const potentialQuantity = parseInt(countMatch[1], 10)
+
+        let isActuallyTotal = false
+        if (potentialQuantity > value && value >= 1) {
+          const ratio = potentialQuantity / value
+          if (Number.isInteger(ratio) && ratio !== value && ratio !== potentialQuantity) {
+            if (new RegExp(`\\b${ratio}\\b`).test(lowerTitle)) {
+              isActuallyTotal = true
+            }
+          }
+        }
+
+        if (!isActuallyTotal) {
+          quantity = potentialQuantity
+        }
       }
     }
   } else {
@@ -175,7 +189,18 @@ export function parseUnit(title: string): UnitInfo | null {
     `total(?:\\s+of)?\\s+${value}|${value}\\s*[a-z\\s.]*\\s*total`,
     "i"
   ).test(lowerTitle)
-  if (isExplicitTotal && quantity > 1) {
+
+  let isImplicitTotal = false
+  if (quantity > 1 && value > 1) {
+    const individualSize = value / quantity
+    if (Number.isInteger(individualSize) && individualSize !== value && individualSize !== quantity) {
+      if (new RegExp(`\\b${individualSize}\\b`).test(lowerTitle)) {
+        isImplicitTotal = true
+      }
+    }
+  }
+
+  if ((isExplicitTotal || isImplicitTotal) && quantity > 1) {
     quantity = 1
   }
 
