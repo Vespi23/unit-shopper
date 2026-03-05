@@ -26,16 +26,17 @@ export default function PrivacyPolicy() {
                 <CardContent className="pt-6">
                     <article className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4 prose-p:leading-7 prose-li:my-1">
                         <p>
-                            At BudgetLynx (operated by FinFlow LLC, "we," "us," or "our"), accessible from this website, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by BudgetLynx and how we use it.
+                            At BudgetLynx (operated by FinFlow LLC, "we," "us," or "our"), accessible from this website and the Lynx Vision browser extension, one of our main priorities is the privacy of our visitors and users. This Privacy Policy document contains types of information that is collected and recorded by BudgetLynx and how we use it.
                         </p>
 
                         <h2>1. Information We Collect</h2>
                         <p>
-                            We deliberately minimize the data we collect.
+                            We deliberately minimize the data we collect across all our platforms.
                         </p>
                         <ul>
-                            <li><strong>Local Storage:</strong> We store your "Shopping List" preferences locally on your device. This data is not sent to our servers.</li>
-                            <li><strong>Analytics:</strong> We use privacy-friendly analytics to understand website usage trends (e.g., page views, search popularity) without tracking individual users across the web.</li>
+                            <li><strong>Local Storage (Website):</strong> We store your "Shopping List" preferences locally on your device. This data is not sent to our servers.</li>
+                            <li><strong>Analytics (Website):</strong> We use privacy-friendly analytics to understand website usage trends (e.g., page views, search popularity) without tracking individual users across the web.</li>
+                            <li><strong>Lynx Vision Extension:</strong> The Lynx Vision browser extension operates entirely on your device. It requests permission to read and change data strictly on `amazon.com` domains to inject unit price badges. <strong>The extension does not track your browsing history, does not collect personal information, and does not send Amazon product data or your user data to our servers.</strong> All unit price calculations happen locally in your browser.</li>
                         </ul>
 
                         <h2>2. Third-Party Services</h2>
@@ -43,8 +44,8 @@ export default function PrivacyPolicy() {
                             We may employ third-party companies and individuals due to the following reasons:
                         </p>
                         <ul>
-                            <li><strong>Affiliate Partners:</strong> This site participates in affiliate marketing programs (e.g., Amazon Associates, Walmart Affiliate Program). If you click on a link and make a purchase, we may earn a commission at no extra cost to you. These third parties may use cookies to track referrals.</li>
-                            <li><strong>Search Providers:</strong> Product data is retrieved via third-party APIs (e.g., SerpApi) which aggregate public information.</li>
+                            <li><strong>Affiliate Partners:</strong> Both our website and the Lynx Vision extension participate in affiliate marketing programs. If you click on a product link (either on our site or via the extension's unit price badges) and make a purchase, we may earn a commission at no extra cost to you. These affiliate networks (e.g. Amazon Associates) may use cookies to track referrals.</li>
+                            <li><strong>Search Providers (Website):</strong> Product data on our main website is retrieved via third-party APIs which aggregate public information. The extension, however, reads data directly from the page you are viewing.</li>
                         </ul>
 
                         <h2>3. Children's Privacy (COPPA Compliance)</h2>
