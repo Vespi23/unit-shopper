@@ -25,7 +25,7 @@ const UNIT_REGEX = {
     rolls: /(\d+)[-\s]?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
     sheets: /(\d+)[-\s]?(?:sheet|sheets)\b/i,
     // Reduce count aggressiveness to avoid hitting "4 Pack" as the primary value before a later "80 count".
-    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i,
+    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?)\b/i,
 };
 
 // Relax "pack" match constraints, ensuring we grab explicitly delimited packs rather than arbitrary strings.
@@ -113,8 +113,8 @@ export function parseUnit(title: string): UnitInfo | null {
                 { key: 'g', type: 'g' },
                 { key: 'sq_ft', type: 'sq ft' },
                 { key: 'loads', type: 'loads' },
-                { key: 'rolls', type: 'rolls' },
-                { key: 'sheets', type: 'sheets' }
+                { key: 'sheets', type: 'sheets' },
+                { key: 'rolls', type: 'rolls' }
             ];
 
             for (const u of unitOrder) {
@@ -182,6 +182,14 @@ export function parseUnit(title: string): UnitInfo | null {
                 quantity = parseInt(secondaryRollsMatch[1], 10);
             }
         }
+    }
+
+    // 4. Standalone Multiplier Fallback check
+    if (unit === 'unknown' && foundPackMultiplier && value <= 0 && quantity > 1) {
+        // e.g. "24 Pack AA Batteries" -> Caught in PACK_REGEX, but no other explicit noun was detected.
+        value = quantity;
+        unit = 'count';
+        quantity = 1;
     }
 
     if (unit === 'unknown' || value <= 0) return null;
