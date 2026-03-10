@@ -36,6 +36,7 @@ export function parseUnit(title: string): UnitInfo | null {
     // MULTIPLIER_REGEX from misinterpreting "68x" as a pack quantity.
     let cleanTitle = title.toLowerCase()
         .replace(/\b\d+(?:\.\d+)?\s?x\s?\d+(?:\.\d+)?\s?(?:mm|cm|in|inch|inches|ft|foot|feet|m|meter|meters|yd|yard|yards)\b/g, '')
+        .replace(/\b\d+\s?x\s?(?:power|concentrated|concentration|strength|action|cleaning|ultra|advanced|max|tough|deep|clean|plus|oxy|stain|grease|odor|scent|formula|performance|boost|lasting|wash|magnification|zoom)\b/g, '')
         .replace(/\s\d+\s?sizes?/g, '') // Also remove "5 sizes" to prevent confusion
         .trim();
 
