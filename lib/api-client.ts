@@ -26,7 +26,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     // Check Cache
-    const cacheKey = `${query.toLowerCase().trim()}-multi-v7-decodo`;
+    const cacheKey = `${query.toLowerCase().trim()}-multi-v9-decodo`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
         console.log(`[CACHE HIT] Serving results for: ${query} (Multi-page)`);
@@ -130,6 +130,9 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             if (product.price === 0) return false;
             return true;
         });
+
+        // Sort by normalized price per unit (lowest first)
+        filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
         console.log(`[API STATS] Decodo fetched -> ${allProducts.length} raw parsed -> ${filteredResults.length} filtered (4+ stars)`);
 
