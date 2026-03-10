@@ -26,7 +26,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     // Check Cache
-    const cacheKey = `${query.toLowerCase().trim()}-multi-v11-decodo`;
+    const cacheKey = `${query.toLowerCase().trim()}-multi-v12-decodo`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
         console.log(`[CACHE HIT] Serving results for: ${query} (Multi-page)`);
