@@ -166,24 +166,16 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         setSelectedProduct(product);
     }, []);
 
-    // Sort Logic (Memoized)
-    const filteredAndSortedResults = useMemo(() => {
-        return [...results]
-            .filter((product, index, self) =>
-                index === self.findIndex((t) => (
-                    t.id === product.id
-                ))
-            )
-            .sort((a, b) => {
-                if (sortBy === 'price_asc') return a.price - b.price;
-                if (sortBy === 'price_desc') return b.price - a.price;
-                return (a.score || 999999) - (b.score || 999999);
-            });
-    }, [results, sortBy]);
-
     // Apply Unit Conversion (Memoized)
     const convertedResults = useMemo(() => {
-        return filteredAndSortedResults.map(product => {
+        // First deduplicate the raw results
+        const uniqueResults = [...results].filter((product, index, self) =>
+            index === self.findIndex((t) => (
+                t.id === product.id
+            ))
+        );
+
+        return uniqueResults.map(product => {
             if (selectedUnit === 'auto' || !product.unitInfo) return product;
 
             const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
@@ -192,6 +184,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 return {
                     ...product,
                     pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit as string),
+                    score: product.price / convertedAmount, // IMPORTANT: Update score for proper sorting
                     unitInfo: {
                         ...product.unitInfo,
                         formatted: `${Number.isInteger(convertedAmount) ? convertedAmount : convertedAmount.toFixed(2)} ${selectedUnit}`
@@ -203,13 +196,23 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             return {
                 ...product,
                 pricePerUnit: 'N/A',
+                score: 999999, // Push to bottom
                 unitInfo: {
                     ...product.unitInfo,
                     formatted: `Incompatible w/ ${selectedUnit}`
                 }
             };
         });
-    }, [filteredAndSortedResults, selectedUnit]);
+    }, [results, selectedUnit]);
+
+    // Sort Logic (Memoized)
+    const sortedAndConvertedResults = useMemo(() => {
+        return [...convertedResults].sort((a, b) => {
+            if (sortBy === 'price_asc') return a.price - b.price;
+            if (sortBy === 'price_desc') return b.price - a.price;
+            return (a.score ?? 999999) - (b.score ?? 999999);
+        });
+    }, [convertedResults, sortBy]);
 
     // Extract Available Units (Memoized)
     const availableUnits = useMemo(() => {
@@ -219,10 +222,10 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
     // Filter by Disabled Units (Memoized)
     const displayResults = useMemo(() => {
-        return convertedResults.filter(product => {
+        return sortedAndConvertedResults.filter(product => {
             return !product.unitInfo?.unit || !disabledUnits.has(product.unitInfo.unit);
         });
-    }, [convertedResults, disabledUnits]);
+    }, [sortedAndConvertedResults, disabledUnits]);
 
     return (
         <div className="flex flex-col items-center w-full pb-20">
