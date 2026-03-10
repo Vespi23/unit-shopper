@@ -9,32 +9,33 @@ export interface UnitInfo {
 }
 
 const UNIT_REGEX = {
-    fl_oz: /(\d+(?:\.\d+)?)\s?(?:fl\.?\s?oz\.?|fluid\s?ounces?|fl\.?\s?ounces?)\b/i,
-    oz: /(\d+(?:\.\d+)?)\s?(?:oz|ounce|ounces)\b/i,
-    lb: /(\d+(?:\.\d+)?)\s?(?:lb|lbs|pound|pounds)\b/i,
-    g: /(\d+(?:\.\d+)?)\s?(?:g|gram|grams)\b/i,
-    kg: /(\d+(?:\.\d+)?)\s?(?:kg|kilogram|kilograms)\b/i,
-    mg: /(\d+(?:\.\d+)?)\s?(?:mg|milligram|milligrams)\b/i,
-    l: /(\d+(?:\.\d+)?)\s?(?:l|liter|liters)\b/i,
-    ml: /(\d+(?:\.\d+)?)\s?(?:ml|milliliter|milliliters)\b/i,
-    gal: /(\d+(?:\.\d+)?)\s?(?:gal|gallon|gallons)\b/i,
-    qt: /(\d+(?:\.\d+)?)\s?(?:qt|quart|quarts)\b/i,
-    pt: /(\d+(?:\.\d+)?)\s?(?:pt|pint|pints)\b/i,
-    sq_ft: /(\d+(?:\.\d+)?)\s?(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
-    loads: /(\d+)\s?(?:load|loads)\b/i,
-    rolls: /(\d+)\s?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
-    sheets: /(\d+)\s?(?:sheet|sheets)\b/i,
-    count: /(\d+(?:\.\d+)?)\s?(?:counts?|ct|pack|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i,
+    fl_oz: /(\d+(?:\.\d+)?)[-\s]?(?:fl\.?\s?oz\.?|fluid\s?ounces?|fl\.?\s?ounces?|fz|fl\.?\s?z\.?|f\.?\s?z\.?)\b/i,
+    oz: /(\d+(?:\.\d+)?)[-\s]?(?:oz|ounce|ounces)\b/i,
+    lb: /(\d+(?:\.\d+)?)[-\s]?(?:lb|lbs|pound|pounds)\b/i,
+    g: /(\d+(?:\.\d+)?)[-\s]?(?:g|gram|grams)\b/i,
+    kg: /(\d+(?:\.\d+)?)[-\s]?(?:kg|kilogram|kilograms)\b/i,
+    mg: /(\d+(?:\.\d+)?)[-\s]?(?:mg|milligram|milligrams)\b/i,
+    l: /(\d+(?:\.\d+)?)[-\s]?(?:l|liter|liters)\b/i,
+    ml: /(\d+(?:\.\d+)?)[-\s]?(?:ml|milliliter|milliliters)\b/i,
+    gal: /(\d+(?:\.\d+)?)[-\s]?(?:gal|gallon|gallons)\b/i,
+    qt: /(\d+(?:\.\d+)?)[-\s]?(?:qt|quart|quarts)\b/i,
+    pt: /(\d+(?:\.\d+)?)[-\s]?(?:pt|pint|pints)\b/i,
+    sq_ft: /(\d+(?:\.\d+)?)[-\s]?(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
+    loads: /(\d+)[-\s]?(?:load|loads)\b/i,
+    rolls: /(\d+)[-\s]?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
+    sheets: /(\d+)[-\s]?(?:sheet|sheets)\b/i,
+    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pack|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i,
 };
 
-const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((\d+)\s?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers)\)/i;
-const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)\s?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i;
+const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((\d+)[-\s]?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers)\)/i;
+const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
 export function parseUnit(title: string): UnitInfo | null {
     // Cleanse title of dimensions like "60x40 mm" or "68 x 27 mm" to prevent the 
     // MULTIPLIER_REGEX from misinterpreting "68x" as a pack quantity.
     let cleanTitle = title.toLowerCase()
+        .replace(/\b(\d+),(\d+)\b/g, '$1.$2') // Convert European comma decimals to periods (e.g., 8,5 -> 8.5)
         .replace(/\b\d+(?:\.\d+)?\s?x\s?\d+(?:\.\d+)?\s?(?:mm|cm|in|inch|inches|ft|foot|feet|m|meter|meters|yd|yard|yards)\b/g, '')
         .replace(/\b\d+(?:\.\d+)?\s?x[\)\s-]*(?:power|concentrated|concentration|strength|stronger|action|cleaning|ultra|advanced|max|tough|deep|clean|plus|oxy|stain|grease|odor|scent|formula|performance|boost|lasting|wash|magnification|zoom)\b/g, '')
         .replace(/\(\d+(?:\.\d+)?\s?x\)/g, '') // Also strip standalone "(20x)" style claims
