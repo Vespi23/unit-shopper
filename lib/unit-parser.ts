@@ -24,10 +24,12 @@ const UNIT_REGEX = {
     loads: /(\d+)[-\s]?(?:load|loads)\b/i,
     rolls: /(\d+)[-\s]?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
     sheets: /(\d+)[-\s]?(?:sheet|sheets)\b/i,
-    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pack|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i,
+    // Reduce count aggressiveness to avoid hitting "4 Pack" as the primary value before a later "80 count".
+    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i,
 };
 
-const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((\d+)[-\s]?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers)\)/i;
+// Relax "pack" match constraints, ensuring we grab explicitly delimited packs rather than arbitrary strings.
+const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers|ct)?\)/i;
 const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
@@ -44,21 +46,35 @@ export function parseUnit(title: string): UnitInfo | null {
 
     const lowerTitle = cleanTitle;
 
-    // 1. Detect Standard Quantity (Pack of X, X Pack, Nx)
+    // 1. Detect Explicit TOTAL Overrides
+    const explicitTotalMatch = lowerTitle.match(/\b(?:\d+.*)?total\s(?:of\s)?(\d+)\b|\b(\d+)\s?(?:total|in\s?total)\b/i);
+    let explicitTotalValue: number | null = null;
+    if (explicitTotalMatch) {
+        const t = explicitTotalMatch[1] || explicitTotalMatch[2];
+        if (t) explicitTotalValue = parseFloat(t);
+    }
+
+    // 2. Detect Standard Quantity (Pack of X, X Pack, Nx)
     let quantity = 1;
+    let foundPackMultiplier = false;
+
     const packMatch = lowerTitle.match(PACK_REGEX);
     if (packMatch) {
         const q = packMatch[1] || packMatch[2] || packMatch[3];
-        if (q) quantity = parseInt(q, 10);
+        if (q) {
+            quantity = parseInt(q, 10);
+            foundPackMultiplier = true;
+        }
     } else {
         // Try multiplier (e.g., 2x, 3x)
         const multMatch = lowerTitle.match(MULTIPLIER_REGEX);
         if (multMatch) {
             quantity = parseInt(multMatch[1], 10);
+            foundPackMultiplier = true;
         }
     }
 
-    // 2. Detect Unit & Value
+    // 3. Detect Unit & Value
     let value = 0;
     let unit: UnitType = 'unknown';
 
@@ -143,12 +159,43 @@ export function parseUnit(title: string): UnitInfo | null {
         if (match) {
             value = parseFloat(match[1]);
             unit = 'count';
+        } else if (lowerTitle.includes('pack')) {
+            // "4 Pack" as fallback if 'pack' was removed from count regex
+            const packValMatch = lowerTitle.match(/(\d+)[-\s]?pack/i);
+            if (packValMatch && !foundPackMultiplier) {
+                value = parseFloat(packValMatch[1]);
+                unit = 'count';
+            }
         }
     }
 
-    if (unit === 'unknown') return null;
+    // Paper Towel / Toilet Paper Edge Case: 
+    // "Sheets" are often multiplied by "Count" or "Rolls" rather than a true explicit Pack.
+    if ((unit === 'sheets' || unit === 'sq ft') && !foundPackMultiplier) {
+        // Did we find a separate 'count' describing the rolls?
+        const secondaryCountMatch = lowerTitle.match(UNIT_REGEX.count);
+        if (secondaryCountMatch) {
+            quantity = parseInt(secondaryCountMatch[1], 10);
+        } else {
+            const secondaryRollsMatch = lowerTitle.match(UNIT_REGEX.rolls);
+            if (secondaryRollsMatch) {
+                quantity = parseInt(secondaryRollsMatch[1], 10);
+            }
+        }
+    }
 
-    if ((unit === 'rolls' || unit === 'count' || unit === 'loads' || unit === 'sheets') && value === quantity && value > 2) {
+    if (unit === 'unknown' || value <= 0) return null;
+
+    // Explicit Default Total check
+    if (explicitTotalValue !== null) {
+        // ONLY override if the explicit total seems plausible (e.g., 80 Total over 4 packs of 20 = 80... yes)
+        value = explicitTotalValue;
+        quantity = 1;
+    }
+
+    // 4. Overcounting Preventers. 
+    // Double-counting implicit totals
+    if ((unit === 'rolls' || unit === 'count' || unit === 'loads') && value === quantity && value > 2) {
         quantity = 1;
     }
 
