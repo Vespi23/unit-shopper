@@ -219,12 +219,18 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         return units.sort();
     }, [convertedResults]);
 
-    // Automatically set the selected unit to the first available unit if it hasn't been set yet
+    // Automatically set the selected unit to the first search result's unit
     useEffect(() => {
-        if (!selectedUnit && availableUnits.length > 0) {
-            setSelectedUnit(availableUnits[0]);
+        if (!selectedUnit && results.length > 0) {
+            // Prioritize the unit of the best/first search result over arbitrary alphabetical order
+            const firstValidUnit = results.find(p => p.unitInfo?.unit)?.unitInfo?.unit;
+            if (firstValidUnit) {
+                setSelectedUnit(firstValidUnit);
+            } else if (availableUnits.length > 0) {
+                setSelectedUnit(availableUnits[0]);
+            }
         }
-    }, [availableUnits, selectedUnit]);
+    }, [results, availableUnits, selectedUnit]);
 
     // Filter by Disabled Units (Memoized)
     const displayResults = useMemo(() => {
