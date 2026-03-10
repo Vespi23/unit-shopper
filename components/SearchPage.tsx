@@ -29,7 +29,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
     const [results, setResults] = useState<Product[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
-    const [selectedUnit, setSelectedUnit] = useState<UnitType | 'auto'>('auto');
+    const [selectedUnit, setSelectedUnit] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(!!initialQuery);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -176,7 +176,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         );
 
         return uniqueResults.map(product => {
-            if (selectedUnit === 'auto' || !product.unitInfo) return product;
+            if (!selectedUnit || !product.unitInfo) return product;
 
             const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
 
@@ -214,11 +214,17 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         });
     }, [convertedResults, sortBy]);
 
-    // Extract Available Units (Memoized)
     const availableUnits = useMemo(() => {
         const units = Array.from(new Set(convertedResults.map(p => p.unitInfo?.unit).filter(Boolean))) as string[];
         return units.sort();
     }, [convertedResults]);
+
+    // Automatically set the selected unit to the first available unit if it hasn't been set yet
+    useEffect(() => {
+        if (!selectedUnit && availableUnits.length > 0) {
+            setSelectedUnit(availableUnits[0]);
+        }
+    }, [availableUnits, selectedUnit]);
 
     // Filter by Disabled Units (Memoized)
     const displayResults = useMemo(() => {
@@ -348,7 +354,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                             onChange={(e) => setSelectedUnit(e.target.value as any)}
                                             className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
                                         >
-                                            <option value="auto">Original</option>
                                             {availableUnits.map(unit => (
                                                 <option key={unit} value={unit}>{unit}</option>
                                             ))}
