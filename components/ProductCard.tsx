@@ -67,8 +67,7 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
     };
 
     const getCtaText = () => {
-        if (variant === 'variant_b') return "Get it Now";
-        return "View Deal";
+        return "View Deals";
     };
 
     return (
