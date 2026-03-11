@@ -1,5 +1,3 @@
-
-
 function IndexPopup() {
   return (
     <div
@@ -7,7 +5,7 @@ function IndexPopup() {
         display: "flex",
         flexDirection: "column",
         padding: 16,
-        width: 300,
+        width: 320,
         fontFamily: "system-ui, sans-serif"
       }}>
       <h2 style={{ margin: "0 0 8px 0", color: "#137333", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -26,16 +24,45 @@ function IndexPopup() {
       <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "#555" }}>
         The Lynx Vision extension is active!
       </p>
-      <div style={{ backgroundColor: "#f8f9fa", padding: "12px", borderRadius: "8px", fontSize: "13px" }}>
-        <p style={{ margin: "0 0 8px 0" }}>
-          <strong>How to use:</strong>
+      <div style={{ backgroundColor: "#f8f9fa", border: "1px solid #e5e7eb", padding: "12px", borderRadius: "8px", fontSize: "13px" }}>
+        <p style={{ margin: "0 0 8px 0", color: "#1f2937", fontWeight: 600 }}>
+          How it works:
         </p>
-        <ol style={{ margin: 0, paddingLeft: "20px", color: "#444" }}>
-          <li>Navigate to any Amazon product page.</li>
-          <li>Look for the green <strong>Lynx Vision</strong> badge under the product price.</li>
-          <li>It automatically calculates the unit price for you!</li>
+        <ol style={{ margin: 0, paddingLeft: "20px", color: "#4b5563", display: "flex", flexDirection: "column", gap: "6px" }}>
+          <li>Navigate to any Amazon search page.</li>
+          <li>Look for the auto-opening <strong>BudgetLynx</strong> panel on the right side of the screen.</li>
+          <li>See real alternatives and instantly compare unit prices!</li>
         </ol>
       </div>
+
+      <button
+        onClick={async () => {
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+          if (tabs.length > 0 && tabs[0].id) {
+            chrome.tabs.sendMessage(tabs[0].id, { action: "open_budgetlynx_overlay" }, () => {
+              // Optionally close the popup after sending
+              window.close()
+            })
+          }
+        }}
+        style={{
+          marginTop: "16px",
+          padding: "10px 16px",
+          backgroundColor: "#137333",
+          color: "white",
+          border: "none",
+          borderRadius: "6px",
+          fontSize: "14px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          textAlign: "center",
+          transition: "background-color 0.2s"
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#0d5224" }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#137333" }}
+      >
+        Reopen Deals Overlay
+      </button>
     </div>
   )
 }
