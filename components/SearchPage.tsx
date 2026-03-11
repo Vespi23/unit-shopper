@@ -24,6 +24,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
     // Initialize state from URL
     const initialQuery = searchParams.get('q') || '';
+    const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
     const [query, setQuery] = useState(initialQuery);
     const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
@@ -240,7 +241,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     }, [sortedAndConvertedResults, disabledUnits]);
 
     return (
-        <div className="flex flex-col items-center w-full pb-20">
+        <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
@@ -258,6 +259,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 }}
             />
             {/* Hero Section */}
+            {!isExtension && (
             <section className="w-full bg-gradient-to-b from-emerald-50/50 via-background to-background pt-24 pb-4 px-4 flex flex-col items-center text-center">
                 <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground hover:bg-primary/80 mb-6 uppercase tracking-wider shadow-sm">
                     Beta
@@ -306,9 +308,10 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     }} />
                 )}
             </section>
+            )}
 
             {/* Features Section (Only show if not searching) */}
-            {!searched && (
+            {!searched && !isExtension && (
                 <FeaturesSection />
             )}
 
@@ -469,7 +472,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 )}
 
                 <h2 className="sr-only">Search Results</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 ${isExtension ? 'xl:grid-cols-5 2xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4 lg:gap-6`}>
                     {loading && page === 1 ? (
                         Array.from({ length: 8 }).map((_, i) => (
                             <ProductCardSkeleton key={i} />
