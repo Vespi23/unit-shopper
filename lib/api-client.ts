@@ -1,4 +1,4 @@
-import 'server-only';
+// import 'server-only';
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
@@ -26,7 +26,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     }
 
     // Check Cache
-    const cacheKey = `${query.toLowerCase().trim()}-multi-v12-decodo`;
+    const cacheKey = `${query.toLowerCase().trim()}-multi-v13-decodo`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
         console.log(`[CACHE HIT] Serving results for: ${query} (Multi-page)`);
