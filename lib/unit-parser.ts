@@ -25,12 +25,12 @@ const UNIT_REGEX = {
     rolls: /(\d+)[-\s]?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
     sheets: /(\d+)[-\s]?(?:sheet|sheets)\b/i,
     // Reduce count aggressiveness to avoid hitting "4 Pack" as the primary value before a later "80 count".
-    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?)\b/i,
+    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?|servings?)\b/i,
 };
 
 // Relax "pack" match constraints, ensuring we grab explicitly delimited packs rather than arbitrary strings.
-const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers|ct)?\)/i;
-const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers)\b/i;
+const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers|ct|pods?|capsules?|k-cups?|servings?)?\)/i;
+const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?|servings?)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
 export function parseUnit(title: string): UnitInfo | null {
