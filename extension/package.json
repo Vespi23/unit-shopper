@@ -1,7 +1,7 @@
 {
   "name": "lynx-vision",
   "displayName": "Lynx Vision",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Compare Amazon products with better value options and calculate price per unit instantly while you shop.",
   "author": "BudgetLynx <successinventor511@gmail.com>",
   "scripts": {
@@ -24,10 +24,12 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "version": "1.0.1",
     "name": "Lynx Vision",
     "description": "Compare Amazon products with better value options and calculate price per unit instantly while you shop.",
     "host_permissions": [
-      "https://*.amazon.com/*"
+      "https://*.amazon.com/*",
+      "https://*.budgetlynx.com/*"
     ]
   }
 }

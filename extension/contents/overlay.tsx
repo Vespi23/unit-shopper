@@ -1,6 +1,8 @@
 import type { PlasmoCSConfig, PlasmoGetStyle } from "plasmo"
 import { useEffect, useState } from "react"
 
+import logoUrl from "data-base64:~assets/icon.png"
+
 export const config: PlasmoCSConfig = {
   matches: ["https://*.amazon.com/s*"],
   all_frames: false,
@@ -86,56 +88,92 @@ const BudgetLynxOverlay = () => {
         width: "90vw",
         maxWidth: "1350px",
         height: "85vh",
-        backgroundColor: "#fff",
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 9999px rgba(0,0,0,0.5)",
-        borderRadius: "16px",
+        backgroundColor: "rgba(255, 255, 255, 0.8)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        border: "1px solid rgba(255, 255, 255, 0.5)",
+        boxShadow: "0 30px 60px -15px rgba(0, 0, 0, 0.4), 0 0 0 9999px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.2) inset",
+        borderRadius: "24px",
         overflow: "hidden",
         zIndex: 2147483647, // Max z-index
         display: "flex",
         flexDirection: "column",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        animation: "fadeInScale 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+        animation: "springScale 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.1) forwards",
         opacity: 0 // Starting opacity for animation
       }}>
       
       {/* Header / Grab Bar */}
       <div 
         style={{
-          backgroundColor: "#137333",
-          padding: "12px 20px",
+          background: "linear-gradient(135deg, #0d1117 0%, #161b22 100%)",
+          padding: "16px 24px",
           color: "white",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          borderBottom: "1px solid rgba(0,0,0,0.15)"
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+          position: "relative",
+          zIndex: 10
         }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="22px" height="22px">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-          </svg>
-          <span style={{ fontSize: "16px", fontWeight: "bold", letterSpacing: "0.2px" }}>Lynx Vision</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 0 10px rgba(0, 0, 0, 0.2)",
+            borderRadius: "8px",
+            overflow: "hidden",
+            width: "32px",
+            height: "32px",
+            backgroundColor: "white"
+          }}>
+            <img src={logoUrl} alt="Lynx Vision Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          </div>
+          <span style={{ 
+            fontSize: "18px", 
+            fontWeight: "700", 
+            letterSpacing: "0.3px",
+            background: "linear-gradient(to right, #ffffff, #a7f3d0)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent"
+          }}>Lynx Vision</span>
         </div>
         
         {/* Close Button */}
         <button
           onClick={() => setIsOpen(false)}
           style={{
-            background: "rgba(255,255,255,0.15)",
-            border: "1px solid rgba(255,255,255,0.3)",
+            background: "rgba(255,255,255,0.08)",
+            border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: "50%",
-            color: "white",
+            color: "rgba(255,255,255,0.8)",
             cursor: "pointer",
-            width: "32px",
-            height: "32px",
+            width: "36px",
+            height: "36px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            transition: "all 0.2s"
+            transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+            backdropFilter: "blur(4px)"
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.3)"; e.currentTarget.style.transform = "scale(1.05)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; e.currentTarget.style.transform = "scale(1)"; }}
-          aria-label="Close BudgetLynx Overlay">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          onMouseEnter={(e) => { 
+            e.currentTarget.style.background = "rgba(255,59,48,0.9)"; 
+            e.currentTarget.style.border = "1px solid rgba(255,59,48,1)"; 
+            e.currentTarget.style.color = "white"; 
+            e.currentTarget.style.transform = "scale(1.1) rotate(90deg)"; 
+            e.currentTarget.style.boxShadow = "0 0 15px rgba(255,59,48,0.4)";
+          }}
+          onMouseLeave={(e) => { 
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)"; 
+            e.currentTarget.style.border = "1px solid rgba(255,255,255,0.1)"; 
+            e.currentTarget.style.color = "rgba(255,255,255,0.8)"; 
+            e.currentTarget.style.transform = "scale(1) rotate(0deg)"; 
+            e.currentTarget.style.boxShadow = "none";
+          }}
+          aria-label="Close Lynx Vision">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
@@ -143,7 +181,7 @@ const BudgetLynxOverlay = () => {
       </div>
 
       {/* Iframe Content */}
-      <div style={{ flex: 1, position: "relative", backgroundColor: "#f9fafb" }}>
+      <div style={{ flex: 1, position: "relative", backgroundColor: "rgba(249, 250, 251, 0.95)" }}>
         <iframe
           src={searchUrl}
           style={{
@@ -153,17 +191,20 @@ const BudgetLynxOverlay = () => {
             width: "100%",
             height: "100%",
             border: "none",
-            backgroundColor: "transparent"
+            backgroundColor: "transparent",
+            borderRadius: "0 0 24px 24px"
           }}
-          title="BudgetLynx Deals"
+          title="Lynx Vision Deals"
         />
       </div>
       
       {/* Inject animation keyframes right into the component using a raw style block for simplicity */}
       <style>{`
-        @keyframes fadeInScale {
-          from { opacity: 0; transform: translate(-50%, -46%) scale(0.97); }
-          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @keyframes springScale {
+          0% { opacity: 0; transform: translate(-50%, -46%) scale(0.95); }
+          50% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
+          100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
       `}</style>
     </div>
