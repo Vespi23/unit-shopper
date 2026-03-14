@@ -133,7 +133,28 @@ const AmazonContentScript = ({ anchor }: { anchor: any }) => {
     extractDetails()
   }, [anchor.element])
 
-  return null
+  // Prevent rendering if the math failed or data is missing
+  if (!productData || productData.unitPrice === "N/A") return null;
+
+  // 3. The Visual Projection (Inline Badge)
+  return (
+    <div style={{
+      display: "inline-flex",
+      alignItems: "center",
+      backgroundColor: "#ecfdf5", // Tailwind Emerald 50
+      color: "#059669", // Tailwind Emerald 600
+      padding: "4px 8px",
+      borderRadius: "6px",
+      fontSize: "14px",
+      fontWeight: "bold",
+      border: "1px solid #34d399", // Tailwind Emerald 400
+      marginLeft: "8px",
+      whiteSpace: "nowrap",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+    }}>
+      ⚡ {productData.unitPrice}
+    </div>
+  )
 }
 
 export default AmazonContentScript
