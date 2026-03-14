@@ -27,9 +27,12 @@
     "version": "1.0.1",
     "name": "Lynx Vision",
     "description": "Compare Amazon products with better value options and calculate price per unit instantly while you shop.",
+    "permissions": [
+      "tabs"
+    ],
     "host_permissions": [
-      "https://*.amazon.com/*",
-      "https://*.budgetlynx.com/*"
+      "*://*.amazon.com/*",
+      "*://*.budgetlynx.com/*"
     ]
   }
 }
