@@ -1,16 +1,22 @@
 import { Product } from './types';
 
-// Replace these with real tags once approved
+// Define the missing configuration object
 const AFFILIATE_CONFIG = {
-    amazon: {
-        tag: 'budgetlynx-20',
-        enabled: true
-    },
-    walmart: {
-        impactId: '', // Placeholder for Impact Radius ID
-        enabled: true
-    }
+  amazon: {
+    enabled: true,
+    tag: "budgetlynx-20" // Your Amazon Associate Tag
+  },
+  walmart: {
+    enabled: false, // Set to true once you have Impact Radius set up
+    impactId: ""
+  }
 };
+
+// REGEX 1: Matches standard and mobile path structures (PATCHED: Alphanumeric ASIN support)
+const ASIN_PATH_REGEX = /(?:dp|o|ASIN|gp\/product|gp\/offer-listing|gp\/product\/ajax|gp\/aw\/d)\/(B[A-Z0-9]{9}|[0-9]{9}(?:X|[0-9]))/i;
+
+// REGEX 2: Fallback for query string ASINs (PATCHED: Alphanumeric ASIN support)
+const ASIN_QUERY_REGEX = /(?:[?&]asin=)(B[A-Z0-9]{9}|[0-9]{9}(?:X|[0-9]))/i;
 
 export function getAffiliateLink(product: Product): string {
     if (!product.link) return '#';

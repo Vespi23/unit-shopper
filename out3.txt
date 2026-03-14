@@ -1,0 +1,82 @@
+[
+  {
+    "title": "Amazon Fresh, White Vinegar, 64 Fl Oz",
+    "parsed": {
+      "value": 64,
+      "unit": "fl oz",
+      "quantity": 1,
+      "totalValue": 64,
+      "formatted": "64 fl oz"
+    }
+  },
+  {
+    "title": "Heinz All Natural Distilled White Vinegar, 5% Acidity, 1 gal Jug",
+    "parsed": {
+      "value": 1,
+      "unit": "gal",
+      "quantity": 1,
+      "totalValue": 1,
+      "formatted": "1 gal"
+    }
+  },
+  {
+    "title": "Heinz All Natural Distilled White Vinegar, 5% Acidity, 132 fl oz Jug",
+    "parsed": {
+      "value": 132,
+      "unit": "fl oz",
+      "quantity": 1,
+      "totalValue": 132,
+      "formatted": "132 fl oz"
+    }
+  },
+  {
+    "title": "Lucy's Family Owned - Natural Distilled White Vinegar, 1 Gallon (128 oz) - 5% Acidity",
+    "parsed": {
+      "value": 1,
+      "unit": "gal",
+      "quantity": 1,
+      "totalValue": 1,
+      "formatted": "1 gal"
+    }
+  },
+  {
+    "title": "Great Value Distilled White Vinegar, 1 Gallon",
+    "parsed": {
+      "value": 1,
+      "unit": "gal",
+      "quantity": 1,
+      "totalValue": 1,
+      "formatted": "1 gal"
+    }
+  },
+  {
+    "title": "Spectrum Naturals Organic Distilled White Vinegar, 32 fl oz",
+    "parsed": {
+      "value": 32,
+      "unit": "fl oz",
+      "quantity": 1,
+      "totalValue": 32,
+      "formatted": "32 fl oz"
+    }
+  },
+  {
+    "title": "Heinz Cleaning Vinegar, 1 Gallon",
+    "parsed": {
+      "value": 1,
+      "unit": "gal",
+      "quantity": 1,
+      "totalValue": 1,
+      "formatted": "1 gal"
+    }
+  },
+  {
+    "title": "365 by Whole Foods Market, Vinegar White Distilled Organic, 32 Fl Oz",
+    "parsed": {
+      "value": 32,
+      "unit": "fl oz",
+      "quantity": 1,
+      "totalValue": 32,
+      "formatted": "32 fl oz"
+    }
+  }
+]

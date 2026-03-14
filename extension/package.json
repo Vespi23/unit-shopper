@@ -32,7 +32,9 @@
     ],
     "host_permissions": [
       "*://*.amazon.com/*",
-      "*://*.budgetlynx.com/*"
+      "*://*.budgetlynx.com/*",
+      "*://m.media-amazon.com/*",
+      "*://images-na.ssl-images-amazon.com/*"
     ]
   }
 }
