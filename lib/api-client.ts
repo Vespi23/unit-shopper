@@ -279,3 +279,107 @@ function parseAmazonHTML(html: string): Product[] {
 
     return products;
 }
+// Add this helper function at the bottom of lib/api-client.ts
+async function verifyUnitsWithAI(products: any[]) {
+    if (products.length === 0) return [];
+
+    const prompt = `
+    You are a grocery data expert. I will give you a list of Amazon product titles and prices.
+    Extract the TRUE TOTAL units (e.g., total ounces, total count) even if the title is poorly formatted.
+    
+    Rules:
+    1. For "10 packets, 1.1 Oz", if 1.1 Oz is likely the total weight, return 1.1.
+    2. If price is high (e.g. $50) but weight is low (1oz), look for a missed "Pack of X".
+    3. Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
+    
+    Products:
+    ${products.map(p => `ID: ${p.id} | Title: ${p.title} | Price: $${p.price}`).join('\n')}
+    `;
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            })
+        });
+
+        const data = await response.json();
+        const resultText = data.candidates[0].content.parts[0].text;
+        return JSON.parse(resultText);
+    } catch (error) {
+        console.error("AI Tie-Breaker Failed:", error);
+        return [];
+    }
+}
+
+// Update your searchProducts function logic
+export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
+    // ... (Keep your existing Cache and Fetch logic at the top)
+
+    try {
+        // ... (Keep your existing Page Fetching logic)
+
+        let allProducts: Product[] = [...firstPageProducts];
+        // ... (Keep your existing Concurrent Page Fetching)
+
+        // Ensure unique results
+        const uniqueProductsMap = new Map<string, Product>();
+        allProducts.forEach(product => {
+            if (!uniqueProductsMap.has(product.id)) uniqueProductsMap.set(product.id, product);
+        });
+        let uniqueProducts = Array.from(uniqueProductsMap.values());
+
+        // ==========================================
+        // NEW: AI TIE-BREAKER INTEGRATION
+        // ==========================================
+        // Identify "High Risk" items (Suspect PPU > $50 or unknown units)
+        const highRisk = uniqueProducts.filter(p => p.score > 50 || p.unit === 'unknown');
+        
+        if (highRisk.length > 0) {
+            console.log(`[AI TIE-BREAKER] Verifying ${highRisk.length} high-risk products...`);
+            const corrections = await verifyUnitsWithAI(highRisk);
+            
+            uniqueProducts = uniqueProducts.map(p => {
+                const correction = corrections.find((c: any) => c.id === p.id);
+                if (correction) {
+                    const totalVal = correction.verifiedTotal;
+                    const unit = correction.unit;
+                    
+                    // Create a pseudo-unitInfo for normalization
+                    const aiUnitInfo = {
+                        value: totalVal,
+                        unit: unit,
+                        totalValue: totalVal,
+                        quantity: 1,
+                        formatted: `${totalVal} ${unit}`
+                    } as any;
+
+                    const normalized = normalizeUnit(aiUnitInfo);
+                    p.unit = unit;
+                    p.totalAmount = totalVal;
+                    p.amount = totalVal;
+                    p.score = p.price / (normalized.totalValue || totalVal);
+                    p.pricePerUnit = calculatePricePerUnit(p.price, totalVal, unit);
+                }
+                return p;
+            });
+        }
+        // ==========================================
+
+        const filteredResults = uniqueProducts.filter((product: Product) => {
+            if (product.rating === undefined || product.rating < 4) return false;
+            if (product.price === 0) return false;
+            return true;
+        });
+
+        filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
+
+        // ... (Keep Cache Saving and Return logic)
+
+    } catch (error) {
+        // ... (Keep Error handling)
+    }
+}
