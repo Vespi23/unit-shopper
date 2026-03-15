@@ -17,7 +17,10 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    const prompt = `Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] for these products: ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
+    const prompt = `Return ONLY a raw JSON array of objects. Do not include markdown formatting.
+Format: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
+Products: 
+${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -25,7 +28,9 @@ async function verifyUnitsWithAI(products: any[]) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
+                generationConfig: { 
+                    response_mime_type: "application/json" // CHANGED: Added underscores
+                }
             })
         });
 
