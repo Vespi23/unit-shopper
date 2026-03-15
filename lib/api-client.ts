@@ -17,15 +17,18 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    // CHUNKING LOGIC: Process 25 products at a time to avoid Vercel timeouts
-    const CHUNK_SIZE = 25;
-    const allCorrections: any[] = [];
-
+    const CHUNK_SIZE = 30; // Slightly larger chunks
+    const chunks = [];
+    
     for (let i = 0; i < products.length; i += CHUNK_SIZE) {
-        const chunk = products.slice(i, i + CHUNK_SIZE);
-        console.log(`[AI CHUNK] Processing items ${i + 1} to ${Math.min(i + CHUNK_SIZE, products.length)}...`);
+        chunks.push(products.slice(i, i + CHUNK_SIZE));
+    }
 
-        const prompt = `Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] for these products:
+    console.log(`[AI TIE-BREAKER] Parallelizing ${chunks.length} chunks...`);
+
+    // RUN ALL CHUNKS AT ONCE
+    const chunkPromises = chunks.map(async (chunk, index) => {
+        const prompt = `Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] for:
         ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
         try {
@@ -39,21 +42,20 @@ async function verifyUnitsWithAI(products: any[]) {
 
             const data = await response.json();
             const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            
-            if (rawText) {
-                const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    allCorrections.push(...parsed);
-                }
-            }
-        } catch (error) {
-            console.error("Chunk processing failed:", error);
-            // Continue to next chunk instead of failing entirely
-        }
-    }
+            if (!rawText) return [];
 
-    console.log(`✅ Total AI corrections received: ${allCorrections.length}`);
+            const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+            return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+        } catch (error) {
+            console.error(`Chunk ${index} failed:`, error);
+            return [];
+        }
+    });
+
+    const results = await Promise.all(chunkPromises);
+    const allCorrections = results.flat();
+
+    console.log(`✅ Parallel AI verification complete. Received ${allCorrections.length} corrections.`);
     return allCorrections;
 }
 
