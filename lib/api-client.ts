@@ -1,15 +1,11 @@
-// import 'server-only';
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
 import { getAmazonAffiliateLink } from './affiliate';
 
-// Simple in-memory cache to save API quota
-// Key: query + page, Value: { timestamp: number, data: Product[] }
-const CACHE_DURATION_MS = 1000 * 60 * 60 * 24; // 24 hours
+const CACHE_DURATION_MS = 1000 * 60 * 60 * 24; 
 const searchCache = new Map<string, { timestamp: number, data: Product[] }>();
 
-// Map of base queries that receive severe accessory bloat and require exact-phrase quotation
 const EXACT_MATCH_QUERIES = new Set([
     'toilet paper',
     'paper towel',
@@ -17,15 +13,12 @@ const EXACT_MATCH_QUERIES = new Set([
 ]);
 
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
-
-    // Security: Truncate query to prevent abuse
     const MAX_QUERY_LENGTH = 100;
     if (query.length > MAX_QUERY_LENGTH) {
         console.warn(`Query truncated from ${query.length} to ${MAX_QUERY_LENGTH} chars`);
         query = query.substring(0, MAX_QUERY_LENGTH);
     }
 
-    // Check Cache
     const cacheKey = `${query.toLowerCase().trim()}-multi-v13-decodo`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
@@ -39,7 +32,6 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         let apiSearchTerm = query;
         let isExactMatch = false;
 
-        // Some queries are notoriously noisy and are best forced into exact match immediately
         if (EXACT_MATCH_QUERIES.has(query.toLowerCase().trim())) {
             apiSearchTerm = `"${query}"`;
             isExactMatch = true;
@@ -50,7 +42,6 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
 
         const getBaseUrl = (term: string) => `https://www.amazon.com/s?k=${encodeURIComponent(term)}`;
 
-        // Helper function to fetch a single page via Decodo
         const fetchPage = async (p: number, urlBase: string): Promise<string | null> => {
             const amazonUrl = p === 1 ? urlBase : `${urlBase}&page=${p}`;
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
@@ -66,27 +57,23 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                 });
                 if (!res.ok) throw new Error(`Decodo API failed with status ${res.status}`);
                 const json = await res.json();
-                // Decodo v2 JSON response encapsulates the HTML inside a 'results' array
                 if (json && json.results && json.results.length > 0 && json.results[0].content) {
                     return json.results[0].content;
                 }
                 if (json && json.content) return json.content;
                 if (json && json.body) return json.body;
-                return json; // Fallback
+                return json; 
             } catch (err) {
                 console.error(`Page ${p} fetch error:`, err);
                 return null;
             }
         };
 
-        // Phase 1: Fetch Page 1
         let baseUrl = getBaseUrl(apiSearchTerm);
         console.log(`[API CALL] Fetching Page 1 for term: ${apiSearchTerm}`);
         let firstPageHtml = await fetchPage(1, baseUrl);
         let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
 
-        // Phase 2: If 0 products and not already exact match, Amazon served a category storefront.
-        // Fallback to strict UI parsing by forcing exact phrase quotes.
         if (firstPageProducts.length === 0 && !isExactMatch) {
             console.log(`[API FALLBACK] 0 products parsed for raw query. Retrying exactly: "${apiSearchTerm}"`);
             apiSearchTerm = `"${query}"`;
@@ -98,7 +85,6 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         let allProducts: Product[] = [...firstPageProducts];
         console.log(`Page 1: Found ${firstPageProducts.length} products`);
 
-        // Phase 3: Fetch remaining pages (2 and 3) concurrently to save time
         if (allProducts.length > 0) {
             console.log(`[API CALL] Fetching Pages 2-3 concurrently...`);
             const pagePromises = [
@@ -116,7 +102,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                 }
             });
         }
-        // Ensure unique results by ASIN (id is ASIN)
+        
         const uniqueProductsMap = new Map<string, Product>();
         allProducts.forEach(product => {
             if (!uniqueProductsMap.has(product.id)) {
@@ -131,12 +117,10 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             return true;
         });
 
-        // Sort by normalized price per unit (lowest first)
         filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
         console.log(`[API STATS] Decodo fetched -> ${allProducts.length} raw parsed -> ${filteredResults.length} filtered (4+ stars)`);
 
-        // Save to Cache
         if (filteredResults.length > 0) {
             searchCache.set(cacheKey, {
                 timestamp: Date.now(),
@@ -147,40 +131,33 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         return filteredResults;
 
     } catch (error) {
-        console.error('Error fetching from Decodo Scraper API:', error);
+        console.error('Error fetching from Decodo:', error);
         if (cached) {
-            console.log(`[CACHE FALLBACK] Serving stale results due to error for: ${query}`);
             return cached.data;
         }
         return [];
     }
 }
 
-
 function parseAmazonHTML(html: string): Product[] {
     const $ = cheerio.load(html);
     const products: Product[] = [];
 
-    // Select all search result items (ignoring some sponsored blocks that don't match the general grid)
     $('div[data-component-type="s-search-result"]').each((i, element) => {
         const item = $(element);
 
-        // ASIN
         const asin = item.attr('data-asin') || String(Math.random());
 
-        // Title
         let title = item.find('h2 a span').text().trim();
         if (!title) title = item.find('h2 span').text().trim();
         if (!title) title = item.find('span.a-text-normal').text().trim();
 
-        if (!title) return; // Skip if no title
+        if (!title) return; 
 
-        // Price
         let price = 0;
         const priceElement = item.find('.a-price span.a-offscreen').first();
         if (priceElement.length > 0) {
             const priceText = priceElement.text();
-            // Remove $ and commas
             const cleanedPriceText = priceText.replace(/[\$,]/g, '').trim();
             const parsedPrice = parseFloat(cleanedPriceText);
             if (!isNaN(parsedPrice)) {
@@ -188,11 +165,9 @@ function parseAmazonHTML(html: string): Product[] {
             }
         }
 
-        // Image
         const imageElement = item.find('img.s-image').first();
         const image = imageElement.attr('src') || '';
 
-        // Rating
         let rating = 0;
         const ratingElement = item.find('i[data-cy="reviews-ratings-slot"] span.a-icon-alt, span[aria-label*="out of 5 stars"]').first();
         if (ratingElement.length > 0) {
@@ -203,7 +178,6 @@ function parseAmazonHTML(html: string): Product[] {
             }
         }
 
-        // Reviews Total
         let reviews = 0;
         const reviewsElement = item.find('span.a-size-base.s-underline-text').first();
         if (reviewsElement.length > 0) {
@@ -213,11 +187,49 @@ function parseAmazonHTML(html: string): Product[] {
             }
         }
 
-        // Affiliate Link Processing
         const link = getAmazonAffiliateLink(asin);
 
-        // Unit Calculation Map
-        const unitInfo = parseUnit(title);
+        // ==========================================
+        // NEW: THE AMAZON MATH OVERRIDE
+        // ==========================================
+        let amazonPpu = 0;
+        let amazonUnit = '';
+
+        // Scrape the grey secondary text for "($1.10 / Ounce)"
+        item.find('.a-size-base.a-color-secondary, .a-color-price').each((_, el) => {
+            const text = $(el).text().trim();
+            const match = text.match(/\(?\$([0-9.]+)\s*\/\s*([a-zA-Z\s.]+)\)?/i);
+            if (match && !amazonPpu) {
+                amazonPpu = parseFloat(match[1]);
+                amazonUnit = match[2].trim().toLowerCase();
+            }
+        });
+
+        let unitInfo = null;
+        
+        if (amazonPpu > 0 && amazonUnit && price > 0) {
+            // Reverse engineer the total amount from Amazon's explicit math!
+            const calculatedTotal = parseFloat((price / amazonPpu).toFixed(2));
+            
+            // Map Amazon's raw string to your standardized units
+            let mappedUnit = amazonUnit.replace(/\./g, ''); // Remove periods like Fl. Oz.
+            if (mappedUnit.includes('fl oz') || mappedUnit.includes('fluid')) mappedUnit = 'fl oz';
+            else if (mappedUnit.includes('oz') || mappedUnit.includes('ounce')) mappedUnit = 'oz';
+            else if (mappedUnit.includes('lb') || mappedUnit.includes('pound')) mappedUnit = 'lb';
+            else if (mappedUnit.includes('count') || mappedUnit.includes('item') || mappedUnit.includes('ct')) mappedUnit = 'ct';
+
+            // Create a fake unitInfo object so the rest of the app doesn't break
+            unitInfo = {
+                value: calculatedTotal,
+                unit: mappedUnit,
+                totalValue: calculatedTotal
+            };
+            // console.log(`[AMAZON MATH] ${asin}: Bypassed Regex. Used $${amazonPpu}/${mappedUnit}`);
+        } else {
+            // FALLBACK: If Amazon hides the unit price, use your Regex parser on the Title
+            unitInfo = parseUnit(title);
+        }
+        // ==========================================
 
         let pricePerUnit = 'N/A';
         let unit: any = 'unknown';
