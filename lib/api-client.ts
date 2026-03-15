@@ -17,15 +17,16 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    // We put the instructions inside the prompt to ensure JSON output
-    const prompt = `You are a data parser. Return ONLY a valid JSON array of objects. 
-    No conversational text, no markdown backticks.
+    const prompt = `You are a data expert. Return ONLY a valid JSON array of objects for the products listed below. 
+    Do not include markdown backticks (like \`\`\`json) or any other text.
+    
     Format: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
     
-    Products to parse:
+    Products:
     ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
+        // Using v1 stable endpoint
         const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -33,30 +34,30 @@ async function verifyUnitsWithAI(products: any[]) {
                 contents: [{ 
                     parts: [{ text: prompt }] 
                 }]
-                // Removed generationConfig entirely to fix the 400 error
+                // Removed generationConfig to prevent the 400 error
             })
         });
 
         const data = await response.json();
         console.log("[AI RAW DATA]:", JSON.stringify(data)); 
 
-        if (!data.candidates || !data.candidates[0]) {
-            console.error("❌ Gemini error or safety block. Check RAW DATA above.");
+        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            console.error("❌ Gemini Error: No text content in response.");
             return [];
         }
 
-        let text = data.candidates[0].content.parts[0].text;
+        const rawText = data.candidates[0].content.parts[0].text;
         
-        // Final safety: strip anything that isn't the JSON array
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        // SAFETY NET: Use regex to find the JSON array in case Gemini added text
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
-            console.error("❌ No JSON array found in AI response text.");
+            console.error("❌ No JSON array found in response text.");
             return [];
         }
         
         return JSON.parse(jsonMatch[0]);
     } catch (error) {
-        console.error("AI Parsing Error:", error);
+        console.error("AI Parsing/Fetch Error:", error);
         return [];
     }
 }
