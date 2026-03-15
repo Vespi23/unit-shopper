@@ -1,9 +1,11 @@
 'use client';
 
+import { memo, useCallback } from 'react';
 import { Product } from '@/lib/types';
-import { ExternalLink, ShoppingCart, Star } from 'lucide-react';
+import { ExternalLink, Star, Sparkles } from 'lucide-react';
 import { getAffiliateLink } from '@/lib/affiliate';
 import { generateProductSchema } from '@/lib/schema';
+import { useABTest } from '@/hooks/useABTest';
 
 interface ProductCardProps {
     product: Product;
@@ -28,10 +30,6 @@ export function ProductCardSkeleton() {
     );
 }
 
-import { useABTest } from '@/hooks/useABTest';
-
-import { memo, useCallback } from 'react';
-
 export const ProductCard = memo(function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
     const { variant, trackConversion, isReady } = useABTest('cta_color');
 
@@ -44,29 +42,17 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
     }, [onSelect, product.id]);
 
     const handleViewDeal = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Link handles navigation, but we track first?
-        // Actually for <a> tag, user navigates away. We track, but it might race.
-        // Usually safer to use onClick.
+        e.stopPropagation();
         trackConversion('CTA Clicked', { productId: product.id, title: product.title });
     };
 
-    // Experiment Styles
     const getCtaStyle = () => {
         const base = "mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all group-hover:shadow-lg";
-
-        if (!isReady) return `${base} bg-primary/10 text-primary hover:bg-primary hover:text-white`; // Loading/Default
-
+        if (!isReady) return `${base} bg-primary/10 text-primary hover:bg-primary hover:text-white`;
         if (variant === 'variant_b') {
-            // Variant B: "Destructive" Red for Urgency
             return `${base} bg-red-100 text-red-600 hover:bg-red-600 hover:text-white hover:shadow-red-900/20`;
         }
-
-        // Control: Standard Primary Blue/Theme
         return `${base} bg-primary/10 text-primary hover:bg-primary hover:text-white group-hover:shadow-primary/20`;
-    };
-
-    const getCtaText = () => {
-        return "View Deals";
     };
 
     return (
@@ -96,7 +82,6 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
 
             {/* Image Section */}
             <div className="relative aspect-square w-full overflow-hidden bg-white p-6">
-                {/* PATCHED: Standard HTML img tag to bypass Vercel Image Optimization 402 Error */}
                 <img
                     src={product.image}
                     alt={product.title}
@@ -112,6 +97,14 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
 
             {/* Content Section */}
             <div className="flex flex-1 flex-col p-5 bg-gradient-to-b from-transparent to-muted/20">
+                {/* AI Verified Badge */}
+                {product.aiVerified && (
+                    <div className="mb-3 flex items-center gap-1.5 w-fit rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-400/20">
+                        <Sparkles className="h-3 w-3 animate-pulse" />
+                        AI Verified math
+                    </div>
+                )}
+                
                 <div className="mb-2 flex items-center gap-1 text-xs text-amber-500 font-medium">
                     <Star className="h-3 w-3 fill-current" />
                     <span>{product.rating}</span>
@@ -147,7 +140,7 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                     rel="nofollow noopener noreferrer"
                     className={getCtaStyle()}
                 >
-                    {getCtaText()} <ExternalLink className="h-4 w-4" />
+                    View Deals <ExternalLink className="h-4 w-4" />
                 </a>
             </div>
 

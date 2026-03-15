@@ -143,6 +143,7 @@ const highRisk = uniqueProducts.filter(p => (p.score ?? 0) > 50 || p.unit === 'u
                     p.amount = totalVal;
                     p.score = p.price / (normalized.totalValue || totalVal);
                     p.pricePerUnit = calculatePricePerUnit(p.price, totalVal, unit);
+                    p.aiVerified = true; // <-- This tells the UI to show the sparkle badge
                 }
                 return p;
             });

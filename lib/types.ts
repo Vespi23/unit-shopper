@@ -17,14 +17,17 @@ export interface Product {
         totalValue: number;
         formatted: string;
     };
-    // Flattened fields for easier access if needed, matching current usage
+    
     unit?: string;
     amount?: number;
     totalAmount?: number;
 
+    // NEW FIELD
+    aiVerified?: boolean; 
+
     originalPrice: number;
     pricePerUnit?: string;
-    score?: number; // Calculated field for sorting
+    score?: number; 
 }
 
 export type SortOption = 'price_asc' | 'price_desc' | 'unit_price_asc';
