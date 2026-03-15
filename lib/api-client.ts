@@ -24,9 +24,11 @@ async function verifyUnitsWithAI(products: any[]) {
     ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
-        // THE CANONICAL URL: Using the explicit version name
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-            method: 'POST',
+        // TEMPORARY: List models to the log
+        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
+        const listData = await listRes.json();
+        console.log("[AI MODELS LIST]:", JSON.stringify(listData));
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${process.env.GEMINI_API_KEY}`, {            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ 
