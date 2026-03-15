@@ -17,37 +17,44 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    const prompt = `You are a data expert. Return ONLY a valid JSON array of objects.
-    Format: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
-    
-    Products:
-    ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
+    // CHUNKING LOGIC: Process 25 products at a time to avoid Vercel timeouts
+    const CHUNK_SIZE = 25;
+    const allCorrections: any[] = [];
 
-    try {
-        // UPDATED: Using gemini-2.5-flash from your authorized model list
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-            })
-        });
+    for (let i = 0; i < products.length; i += CHUNK_SIZE) {
+        const chunk = products.slice(i, i + CHUNK_SIZE);
+        console.log(`[AI CHUNK] Processing items ${i + 1} to ${Math.min(i + CHUNK_SIZE, products.length)}...`);
 
-        const data = await response.json();
-        
-        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            console.error("❌ Gemini Error:", JSON.stringify(data));
-            return [];
+        const prompt = `Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] for these products:
+        ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
+
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }]
+                })
+            });
+
+            const data = await response.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (rawText) {
+                const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    allCorrections.push(...parsed);
+                }
+            }
+        } catch (error) {
+            console.error("Chunk processing failed:", error);
+            // Continue to next chunk instead of failing entirely
         }
-
-        const rawText = data.candidates[0].content.parts[0].text;
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-        
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-    } catch (error) {
-        console.error("AI Parsing Error:", error);
-        return [];
     }
+
+    console.log(`✅ Total AI corrections received: ${allCorrections.length}`);
+    return allCorrections;
 }
 
 // --- MAIN SEARCH FUNCTION ---
