@@ -225,7 +225,7 @@ function parseAmazonHTML(html: string): Product[] {
                 totalValue: calculatedTotal,
                 quantity: 1, // <-- ADDED: Satisfies TypeScript requirement
                 formatted: `${calculatedTotal} ${mappedUnit}` // <-- ADDED: Satisfies TypeScript requirement
-            }; as any;
+            } as any;
             // console.log(`[AMAZON MATH] ${asin}: Bypassed Regex. Used $${amazonPpu}/${mappedUnit}`);
         } else {
             // FALLBACK: If Amazon hides the unit price, use your Regex parser on the Title
