@@ -15,18 +15,11 @@ const EXACT_MATCH_QUERIES = new Set([
 // --- AI TIE-BREAKER HELPER ---
 async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
-
-    // DEBUG: Check if Key exists
-    if (!process.env.GEMINI_API_KEY) {
-        console.error("❌ ERROR: GEMINI_API_KEY is missing from Environment Variables");
-        return [];
-    }
+    if (!process.env.GEMINI_API_KEY) return [];
 
     const prompt = `Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] for these products: ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
-        console.log(`[AI CALL] Sending ${products.length} products to Gemini...`);
-        
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -36,18 +29,14 @@ async function verifyUnitsWithAI(products: any[]) {
             })
         });
 
-        if (!response.ok) {
-            const errorData = await response.text();
-            console.error(`❌ Gemini API Error (${response.status}):`, errorData);
-            return [];
-        }
-
         const data = await response.json();
-        const resultText = data.candidates[0].content.parts[0].text;
-        console.log("✅ AI Response received successfully.");
-        return JSON.parse(resultText);
+        // CLEANER: Remove any markdown backticks if Gemini sends them
+        let text = data.candidates[0].content.parts[0].text;
+        text = text.replace(/```json|```/g, "").trim(); 
+        
+        return JSON.parse(text);
     } catch (error) {
-        console.error("❌ AI Fetch Failed:", error);
+        console.error("AI Parsing Error:", error);
         return [];
     }
 }
@@ -59,7 +48,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         query = query.substring(0, MAX_QUERY_LENGTH);
     }
 
-    const cacheKey = `${query.toLowerCase().trim()}-multi-v13-decodo`;
+    const cacheKey = `${query.toLowerCase().trim()}-multi-v15-ai-force`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
         return cached.data;
