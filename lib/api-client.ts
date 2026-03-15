@@ -24,15 +24,14 @@ async function verifyUnitsWithAI(products: any[]) {
     ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
-        // v1beta is the most reliable for the Flash 1.5 model specifically
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        // UPDATED URL: Changed model name to gemini-1.5-flash-latest
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ 
                     parts: [{ text: prompt }] 
                 }]
-                // We leave out ALL generationConfig to ensure it doesn't 400
             })
         });
 
