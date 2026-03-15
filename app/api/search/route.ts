@@ -1,22 +1,33 @@
 import { NextResponse } from 'next/server';
+import { searchProducts } from '@/lib/api-client';
 
-export async function POST(request: Request) {
+export const maxDuration = 60;
+
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('q');
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+
+    if (!query) {
+        return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
+    }
+
     try {
-        const body = await request.json();
+        console.log(`Searching for: ${query}, page: ${page} (IP: ${ip})`);
         
-        // Since Redis is removed, we log the feedback to the Vercel console.
-        // You can view these in the Vercel Dashboard -> Logs.
-        console.log('New Feedback Received:', body);
+        // Direct fetch from Decodo
+        const results = await searchProducts(query, page);
 
-        return NextResponse.json({ 
-            success: true, 
-            message: 'Feedback submitted successfully' 
+        return NextResponse.json(results, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            }
         });
     } catch (error) {
-        console.error('Feedback parsing error:', error);
-        return NextResponse.json(
-            { error: 'Internal server error' }, 
-            { status: 500 }
-        );
+        console.error('Search error:', error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
