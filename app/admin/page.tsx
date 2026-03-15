@@ -1,5 +1,4 @@
 import { cookies } from 'next/headers';
-import { redis } from '@/lib/redis';
 import { login, logout } from './actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,23 +11,9 @@ export default async function AdminPage(props: {
     const error = typeof searchParams.error === 'string' ? searchParams.error : null;
     const cookieStore = await cookies();
     const sessionId = cookieStore.get('admin-session')?.value;
-    let isLoggedIn = false;
-
-    // Validate Session
-    if (sessionId) {
-        try {
-            if (redis.isOpen || process.env.REDIS_URL) {
-                const isValid = await redis.exists(`session:${sessionId}`);
-                isLoggedIn = isValid === 1;
-            } else {
-                // Fallback for dev if Redis not connected? No, secure by default.
-                isLoggedIn = false;
-            }
-        } catch (error) {
-            console.error('Failed to validate session:', error);
-            isLoggedIn = false;
-        }
-    }
+    
+    // NEW STATELESS SESSION VALIDATION
+    const isLoggedIn = sessionId === 'authenticated';
 
     // If not logged in, show login form
     if (!isLoggedIn) {
@@ -77,16 +62,8 @@ export default async function AdminPage(props: {
         );
     }
 
-    // Fetch feedback data
+    // Fetch feedback data (Disabled due to Redis removal)
     let feedbackList: any[] = [];
-    try {
-        if (redis.isOpen || process.env.REDIS_URL) {
-            const rawData = await redis.lRange('feedback:list', 0, -1);
-            feedbackList = rawData.map((item) => JSON.parse(item));
-        }
-    } catch (error) {
-        console.error('Failed to fetch feedback:', error);
-    }
 
     return (
         <div className="container mx-auto py-10 px-4">
