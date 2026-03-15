@@ -30,7 +30,11 @@ async function verifyUnitsWithAI(products: any[]) {
         });
 
         const data = await response.json();
-        // CLEANER: Remove any markdown backticks if Gemini sends them
+
+        // --- ADD THE LOG HERE ---
+        console.log("[AI RAW DATA]:", JSON.stringify(data)); 
+        // ------------------------
+
         let text = data.candidates[0].content.parts[0].text;
         text = text.replace(/```json|```/g, "").trim(); 
         
@@ -161,9 +165,15 @@ function parseAmazonHTML(html: string): Product[] {
     const $ = cheerio.load(html);
     const products: Product[] = [];
 
-    $('div[data-component-type="s-search-result"]').each((_, element) => {
+    // CHANGED: Added 'i' as the first parameter
+    $('div[data-component-type="s-search-result"]').each((i, element) => {
         const item = $(element);
-        const asin = item.attr('data-asin') || String(Math.random());
+        
+        // STABLE ID LOGIC: 1. data-asin, 2. URL extraction, 3. Stable Index
+        const asin = item.attr('data-asin') || 
+                     item.find('h2 a').attr('href')?.match(/\/dp\/([A-Z0-9]{10})/)?.[1] || 
+                     `idx-${i}`; 
+
         let title = item.find('h2 a span, h2 span, span.a-text-normal').first().text().trim();
         if (!title) return;
 
