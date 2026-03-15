@@ -16,20 +16,17 @@ const EXACT_MATCH_QUERIES = new Set([
 async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
 
-    const prompt = `
-    You are a grocery data expert. I will give you a list of Amazon product titles and prices.
-    Extract the TRUE TOTAL units (e.g., total ounces, total count) even if the title is poorly formatted.
-    
-    Rules:
-    1. For "10 packets, 1.1 Oz", if 1.1 Oz is likely the total weight, return 1.1.
-    2. If price is high (e.g. $50) but weight is low (1oz), look for a missed "Pack of X".
-    3. Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
-    
-    Products:
-    ${products.map(p => `ID: ${p.id} | Title: ${p.title} | Price: $${p.price}`).join('\n')}
-    `;
+    // DEBUG: Check if Key exists
+    if (!process.env.GEMINI_API_KEY) {
+        console.error("❌ ERROR: GEMINI_API_KEY is missing from Environment Variables");
+        return [];
+    }
+
+    const prompt = `Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] for these products: ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
+        console.log(`[AI CALL] Sending ${products.length} products to Gemini...`);
+        
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -39,11 +36,18 @@ async function verifyUnitsWithAI(products: any[]) {
             })
         });
 
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error(`❌ Gemini API Error (${response.status}):`, errorData);
+            return [];
+        }
+
         const data = await response.json();
         const resultText = data.candidates[0].content.parts[0].text;
+        console.log("✅ AI Response received successfully.");
         return JSON.parse(resultText);
     } catch (error) {
-        console.error("AI Tie-Breaker Failed:", error);
+        console.error("❌ AI Fetch Failed:", error);
         return [];
     }
 }
@@ -126,7 +130,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         let uniqueProducts = Array.from(uniqueProductsMap.values());
 
         // --- AI TIE-BREAKER INTEGRATION ---
-const highRisk = uniqueProducts.filter(p => (p.score ?? 0) > 50 || p.unit === 'unknown');
+const highRisk = uniqueProducts;
         if (highRisk.length > 0) {
             console.log(`[AI TIE-BREAKER] Verifying ${highRisk.length} products...`);
             const corrections = await verifyUnitsWithAI(highRisk);
