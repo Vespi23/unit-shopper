@@ -24,9 +24,8 @@ async function verifyUnitsWithAI(products: any[]) {
     ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
-        // UPDATED URL: Changed model name to gemini-1.5-flash-latest
-        // THE SKELETON KEY URL: Using gemini-pro on v1beta
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        // THE CANONICAL URL: Using the explicit version name
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
