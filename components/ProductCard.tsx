@@ -2,7 +2,6 @@
 
 import { Product } from '@/lib/types';
 import { ExternalLink, ShoppingCart, Star } from 'lucide-react';
-import Image from 'next/image';
 import { getAffiliateLink } from '@/lib/affiliate';
 import { generateProductSchema } from '@/lib/schema';
 
@@ -97,12 +96,11 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
 
             {/* Image Section */}
             <div className="relative aspect-square w-full overflow-hidden bg-white p-6">
-                <Image
+                {/* PATCHED: Standard HTML img tag to bypass Vercel Image Optimization 402 Error */}
+                <img
                     src={product.image}
                     alt={product.title}
-                    width={300}
-                    height={300}
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    loading="lazy"
                     className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                 />
 

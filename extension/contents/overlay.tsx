@@ -60,6 +60,9 @@ const BudgetLynxOverlay = () => {
           const blUrl = new URL("https://budgetlynx.com/")
           blUrl.searchParams.set("q", query)
           blUrl.searchParams.set("utm_source", "chrome_extension")
+          // ADD THIS LINE: The Cache Buster
+          blUrl.searchParams.set("cb", Date.now().toString()) 
+          
           setSearchUrl(blUrl.toString())
           setIsOpen(true)
           console.log("[BudgetLynx] Overlay opened with URL:", blUrl.toString())
@@ -184,6 +187,7 @@ const BudgetLynxOverlay = () => {
       <div style={{ flex: 1, position: "relative", backgroundColor: "rgba(249, 250, 251, 0.95)" }}>
         <iframe
           src={searchUrl}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           style={{
             position: "absolute",
             top: 0,
@@ -194,7 +198,7 @@ const BudgetLynxOverlay = () => {
             backgroundColor: "transparent",
             borderRadius: "0 0 24px 24px"
           }}
-          title="Lynx Vision Deals"
+          title="Lynx Vision"
         />
       </div>
       
