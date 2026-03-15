@@ -126,7 +126,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         let uniqueProducts = Array.from(uniqueProductsMap.values());
 
         // --- AI TIE-BREAKER INTEGRATION ---
-        const highRisk = uniqueProducts.filter(p => p.score > 50 || p.unit === 'unknown');
+const highRisk = uniqueProducts.filter(p => (p.score ?? 0) > 50 || p.unit === 'unknown');
         if (highRisk.length > 0) {
             console.log(`[AI TIE-BREAKER] Verifying ${highRisk.length} products...`);
             const corrections = await verifyUnitsWithAI(highRisk);
