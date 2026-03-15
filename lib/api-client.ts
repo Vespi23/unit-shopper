@@ -17,47 +17,41 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    const prompt = `You are a data expert. Return ONLY a valid JSON array of objects for the products listed below. 
-    Do not include markdown backticks (like \`\`\`json) or any other text.
-    
+    const prompt = `Return ONLY a JSON array of objects. No markdown, no text.
     Format: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
     
     Products:
     ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
-        // Using v1 stable endpoint
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        // v1beta is the most reliable for the Flash 1.5 model specifically
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ 
                     parts: [{ text: prompt }] 
                 }]
-                // Removed generationConfig to prevent the 400 error
+                // We leave out ALL generationConfig to ensure it doesn't 400
             })
         });
 
         const data = await response.json();
         console.log("[AI RAW DATA]:", JSON.stringify(data)); 
 
-        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            console.error("❌ Gemini Error: No text content in response.");
+        if (data.error) {
+            console.error(`❌ Gemini API Error: ${data.error.message}`);
             return [];
         }
 
-        const rawText = data.candidates[0].content.parts[0].text;
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) return [];
         
-        // SAFETY NET: Use regex to find the JSON array in case Gemini added text
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
-            console.error("❌ No JSON array found in response text.");
-            return [];
-        }
-        
-        return JSON.parse(jsonMatch[0]);
+        // Clean markdown backticks just in case
+        const jsonMatch = rawText.replace(/```json|```/g, "").trim();
+        return JSON.parse(jsonMatch);
     } catch (error) {
-        console.error("AI Parsing/Fetch Error:", error);
+        console.error("AI Parsing Error:", error);
         return [];
     }
 }
