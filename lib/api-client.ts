@@ -28,7 +28,16 @@ async function verifyUnitsWithAI(products: any[]) {
 
     // RUN ALL CHUNKS AT ONCE
     const chunkPromises = chunks.map(async (chunk, index) => {
-        const prompt = `Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] for:
+        const prompt = `You are a grocery math expert. I will provide a list of product titles.
+        For each product:
+        1. Identify if it's a "Pack" or "Case" (e.g., "10 Packets").
+        2. Identify the weight listed ON THE BOX (e.g., "Net Wt 1.06 oz").
+        3. Determine the TOTAL weight. 
+        - CRITICAL: If the title says "Net Wt 1.06 oz (30g)", that is the TOTAL for the whole box. Do NOT multiply it again by the packet count.
+
+        Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
+
+        Products to analyze:
         ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
         try {
@@ -66,7 +75,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         query = query.substring(0, MAX_QUERY_LENGTH);
     }
 
-    const cacheKey = `${query.toLowerCase().trim()}-multi-v15-ai-force`;
+    const cacheKey = `${query.toLowerCase().trim()}-multi-v16-logic-fix`;
     const cached = searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
         return cached.data;
@@ -149,6 +158,7 @@ const highRisk = uniqueProducts;
                     const unit = correction.unit;
                     const aiUnitInfo = { value: totalVal, unit, totalValue: totalVal, quantity: 1, formatted: `${totalVal} ${unit}` } as any;
                     const normalized = normalizeUnit(aiUnitInfo);
+                    const pricePerOz = p.price / totalVal;
                     p.unit = unit;
                     p.totalAmount = totalVal;
                     p.amount = totalVal;
