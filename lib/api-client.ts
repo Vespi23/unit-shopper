@@ -17,36 +17,44 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    const prompt = `Return ONLY a raw JSON array of objects. Do not include markdown formatting.
-Format: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
-Products: 
-${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
+    // We put the instructions inside the prompt to ensure JSON output
+    const prompt = `You are a data parser. Return ONLY a valid JSON array of objects. 
+    No conversational text, no markdown backticks.
+    Format: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
+    
+    Products to parse:
+    ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { 
-                    response_mime_type: "application/json" // CHANGED: Added underscores
-                }
+                contents: [{ 
+                    parts: [{ text: prompt }] 
+                }]
+                // Removed generationConfig entirely to fix the 400 error
             })
         });
 
         const data = await response.json();
         console.log("[AI RAW DATA]:", JSON.stringify(data)); 
 
-        // SAFETY CHECK: Ensure we actually have data before reading it
         if (!data.candidates || !data.candidates[0]) {
-            console.error("❌ Gemini returned no candidates. Check error field in logs.");
+            console.error("❌ Gemini error or safety block. Check RAW DATA above.");
             return [];
         }
 
         let text = data.candidates[0].content.parts[0].text;
-        text = text.replace(/```json|```/g, "").trim(); 
         
-        return JSON.parse(text);
+        // Final safety: strip anything that isn't the JSON array
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) {
+            console.error("❌ No JSON array found in AI response text.");
+            return [];
+        }
+        
+        return JSON.parse(jsonMatch[0]);
     } catch (error) {
         console.error("AI Parsing Error:", error);
         return [];
