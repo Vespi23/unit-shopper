@@ -9,23 +9,23 @@ export interface UnitInfo {
 }
 
 const UNIT_REGEX = {
-    fl_oz: /(\d+(?:\.\d+)?)[-\s]?(?:fl\.?\s?oz\.?|fluid\s?ounces?|fl\.?\s?ounces?|fz|fl\.?\s?z\.?|f\.?\s?z\.?)\b/i,
-    oz: /(\d+(?:\.\d+)?)[-\s]?(?:oz|ounce|ounces)\b/i,
-    lb: /(\d+(?:\.\d+)?)[-\s]?(?:lb|lbs|pound|pounds)\b/i,
-    g: /(\d+(?:\.\d+)?)[-\s]?(?:g|gram|grams)\b/i,
-    kg: /(\d+(?:\.\d+)?)[-\s]?(?:kg|kilogram|kilograms)\b/i,
-    mg: /(\d+(?:\.\d+)?)[-\s]?(?:mg|milligram|milligrams)\b/i,
-    l: /(\d+(?:\.\d+)?)[-\s]?(?:l|liter|liters)\b/i,
-    ml: /(\d+(?:\.\d+)?)[-\s]?(?:ml|milliliter|milliliters)\b/i,
-    gal: /(\d+(?:\.\d+)?)[-\s]?(?:gal|gallon|gallons)\b/i,
-    qt: /(\d+(?:\.\d+)?)[-\s]?(?:qt|quart|quarts)\b/i,
-    pt: /(\d+(?:\.\d+)?)[-\s]?(?:pt|pint|pints)\b/i,
-    sq_ft: /(\d+(?:\.\d+)?)[-\s]?(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
+    // PATCHED: ((?:\d*\.)?\d+) allows decimals without leading zeros (e.g., ".10")
+    fl_oz: /((?:\d*\.)?\d+)[-\s]?(?:fl\.?\s?oz\.?|fluid\s?ounces?|fl\.?\s?ounces?|fz|fl\.?\s?z\.?|f\.?\s?z\.?)\b/i,
+    oz: /((?:\d*\.)?\d+)[-\s]?(?:oz|ounce|ounces)\b/i,
+    lb: /((?:\d*\.)?\d+)[-\s]?(?:lb|lbs|pound|pounds)\b/i,
+    g: /((?:\d*\.)?\d+)[-\s]?(?:g|gram|grams)\b/i,
+    kg: /((?:\d*\.)?\d+)[-\s]?(?:kg|kilogram|kilograms)\b/i,
+    mg: /((?:\d*\.)?\d+)[-\s]?(?:mg|milligram|milligrams)\b/i,
+    l: /((?:\d*\.)?\d+)[-\s]?(?:l|liter|liters)\b/i,
+    ml: /((?:\d*\.)?\d+)[-\s]?(?:ml|milliliter|milliliters)\b/i,
+    gal: /((?:\d*\.)?\d+)[-\s]?(?:gal|gallon|gallons)\b/i,
+    qt: /((?:\d*\.)?\d+)[-\s]?(?:qt|quart|quarts)\b/i,
+    pt: /((?:\d*\.)?\d+)[-\s]?(?:pt|pint|pints)\b/i,
+    sq_ft: /((?:\d*\.)?\d+)[-\s]?(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
     loads: /(\d+)[-\s]?(?:load|loads)\b/i,
     rolls: /(\d+)[-\s]?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
     sheets: /(\d+)[-\s]?(?:sheet|sheets)\b/i,
-    // Reduce count aggressiveness to avoid hitting "4 Pack" as the primary value before a later "80 count".
-    count: /(\d+(?:\.\d+)?)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i,
+    count: /((?:\d*\.)?\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i,
 };
 
 // Relax "pack" match constraints, ensuring we grab explicitly delimited packs rather than arbitrary strings.
