@@ -241,11 +241,27 @@ export function parseUnit(title: string): UnitInfo | null {
 export function normalizeUnit(info: UnitInfo): UnitInfo {
     const copy = { ...info };
 
+    // 1. WEIGHT NORMALIZATION (Target: oz)
     if (copy.unit === 'lb') {
         copy.value *= 16;
         copy.unit = 'oz';
         copy.totalValue *= 16;
-    } else if (copy.unit === 'gal') {
+    } else if (copy.unit === 'kg') {
+        copy.value *= 35.274; // kg to oz
+        copy.unit = 'oz';
+        copy.totalValue *= 35.274;
+    } else if (copy.unit === 'g') {
+        copy.value *= 0.035274; // g to oz
+        copy.unit = 'oz';
+        copy.totalValue *= 0.035274;
+    } else if (copy.unit === 'mg') {
+        copy.value *= 0.000035274; // mg to oz
+        copy.unit = 'oz';
+        copy.totalValue *= 0.000035274;
+    }
+
+    // 2. VOLUME NORMALIZATION (Target: fl oz)
+    else if (copy.unit === 'gal') {
         copy.value *= 128;
         copy.unit = 'fl oz';
         copy.totalValue *= 128;
@@ -257,35 +273,27 @@ export function normalizeUnit(info: UnitInfo): UnitInfo {
         copy.value *= 16;
         copy.unit = 'fl oz';
         copy.totalValue *= 16;
-    } else if (copy.unit === 'fl oz') {
-        copy.unit = 'oz'; // Normalizing fluid ounce to ounce for simplicity in UI if desired, or keep as fl oz.
-        // For consistent pricing, let's keep it simple: Everything fluid -> fl oz.
-        copy.unit = 'fl oz';
-    } else if (copy.unit === 'kg') {
-        copy.value *= 1000;
-        copy.unit = 'g';
-        copy.totalValue *= 1000;
-    } else if (copy.unit === 'mg') {
-        copy.value /= 1000;
-        copy.unit = 'g';
-        copy.totalValue /= 1000;
     } else if (copy.unit === 'l') {
-        copy.value *= 1000;
-        copy.unit = 'ml';
-        copy.totalValue *= 1000;
+        copy.value *= 33.814; // liters to fl oz
+        copy.unit = 'fl oz';
+        copy.totalValue *= 33.814;
+    } else if (copy.unit === 'ml') {
+        copy.value *= 0.033814; // ml to fl oz
+        copy.unit = 'fl oz';
+        copy.totalValue *= 0.033814;
     }
-    // Heuristic Normalizations for Abstract Units
-    // (To align algorithmic rank to realistic product density)
+
+    // 3. ABSTRACT HEURISTICS
     else if (copy.unit === 'sheets') {
-        copy.value /= 300; // 300 sheets ~= 1 roll
+        copy.value /= 300; 
         copy.unit = 'rolls';
         copy.totalValue /= 300;
     } else if (copy.unit === 'sq ft') {
-        copy.value /= 40; // 40 sq ft ~= 1 roll
+        copy.value /= 40; 
         copy.unit = 'rolls';
         copy.totalValue /= 40;
     } else if (copy.unit === 'loads') {
-        copy.value *= 1.5; // 1 load ~= 1.5 fl oz
+        copy.value *= 1.5; 
         copy.unit = 'fl oz';
         copy.totalValue *= 1.5;
     }
