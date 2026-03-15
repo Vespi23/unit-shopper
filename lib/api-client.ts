@@ -17,40 +17,33 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    const prompt = `Return ONLY a JSON array of objects. No markdown, no text.
+    const prompt = `You are a data expert. Return ONLY a valid JSON array of objects.
     Format: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
     
     Products:
     ${products.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     try {
-        // TEMPORARY: List models to the log
-        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
-        const listData = await listRes.json();
-        console.log("[AI MODELS LIST]:", JSON.stringify(listData));
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${process.env.GEMINI_API_KEY}`, {            method: 'POST',
+        // UPDATED: Using gemini-2.5-flash from your authorized model list
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ 
-                    parts: [{ text: prompt }] 
-                }]
+                contents: [{ parts: [{ text: prompt }] }]
             })
         });
 
         const data = await response.json();
-        console.log("[AI RAW DATA]:", JSON.stringify(data)); 
-
-        if (data.error) {
-            console.error(`❌ Gemini API Error: ${data.error.message}`);
+        
+        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            console.error("❌ Gemini Error:", JSON.stringify(data));
             return [];
         }
 
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) return [];
+        const rawText = data.candidates[0].content.parts[0].text;
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
         
-        // Clean markdown backticks just in case
-        const jsonMatch = rawText.replace(/```json|```/g, "").trim();
-        return JSON.parse(jsonMatch);
+        return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
     } catch (error) {
         console.error("AI Parsing Error:", error);
         return [];
