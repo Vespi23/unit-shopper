@@ -1,15 +1,15 @@
 import { Product } from './types';
 
-// Define the missing configuration object
+// Define the configuration object
 const AFFILIATE_CONFIG = {
-  amazon: {
-    enabled: true,
-    tag: "budgetlynx-20" // Your Amazon Associate Tag
-  },
-  walmart: {
-    enabled: false, // Set to true once you have Impact Radius set up
-    impactId: ""
-  }
+    amazon: {
+        enabled: true,
+        tag: "budgetlynx-20" // Your Amazon Associate Tag
+    },
+    walmart: {
+        enabled: false, // Set to true once you have Impact Radius set up
+        impactId: ""
+    }
 };
 
 // REGEX 1: Matches standard and mobile path structures (PATCHED: Alphanumeric ASIN support)
@@ -33,7 +33,15 @@ export function getAffiliateLink(product: Product): string {
         const source = product.source.toLowerCase();
 
         if (source.includes('amazon') && AFFILIATE_CONFIG.amazon.enabled) {
-            // Amazon: Append ?tag=xyz
+            // 1. Try to extract the exact ASIN using your existing Regex
+            const asinMatch = product.link.match(ASIN_PATH_REGEX) || product.link.match(ASIN_QUERY_REGEX);
+            
+            if (asinMatch && asinMatch[1]) {
+                // 2. SUCCESS! Rebuild a 100% clean URL with zero scraper junk
+                return `https://www.amazon.com/dp/${asinMatch[1]}?tag=${AFFILIATE_CONFIG.amazon.tag}`;
+            }
+
+            // 3. FALLBACK: If Regex fails, append the tag as safely as possible
             url.searchParams.delete('tag'); // Remove existing tag
             url.searchParams.set('tag', AFFILIATE_CONFIG.amazon.tag);
             return url.toString();
