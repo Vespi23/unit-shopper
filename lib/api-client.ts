@@ -190,7 +190,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
 
     } catch (error) {
         console.error('Search Error:', error);
-        return cached?.data || [];
+        return [];
     }
 }
 
