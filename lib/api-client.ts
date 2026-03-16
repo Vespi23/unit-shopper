@@ -98,6 +98,9 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             const amazonUrl = p === 1 ? urlBase : `${urlBase}&page=${p}`;
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
             try {
+                // Stagger requests slightly to prevent hammering Decodo at the exact same millisecond
+                if (p > 1) await new Promise(res => setTimeout(res, (p - 1) * 200));
+
                 const res = await fetch(decodoUrl, {
                     method: 'POST',
                     headers: {
@@ -130,11 +133,23 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
 
         let allProducts: Product[] = [...firstPageProducts];
 
-        // Fetch Pages 2-3 concurrently
+        // Fetch up to 7 pages concurrently
         if (allProducts.length > 0) {
-            const htmlResults = await Promise.all([fetchPage(2, baseUrl), fetchPage(3, baseUrl)]);
-            htmlResults.forEach(html => {
-                if (html) allProducts = [...allProducts, ...parseAmazonHTML(html)];
+            const MAX_PAGES = 7;
+            const pagePromises = [];
+            
+            console.log(`[SCRAPER] Fetching pages 2 through ${MAX_PAGES} concurrently...`);
+            for (let p = 2; p <= MAX_PAGES; p++) {
+                pagePromises.push(fetchPage(p, baseUrl));
+            }
+
+            // allSettled ensures we process successful pages even if some timeout
+            const results = await Promise.allSettled(pagePromises);
+            
+            results.forEach((result) => {
+                if (result.status === 'fulfilled' && result.value) {
+                    allProducts = [...allProducts, ...parseAmazonHTML(result.value)];
+                }
             });
         }
 
@@ -146,9 +161,16 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         let uniqueProducts = Array.from(uniqueProductsMap.values());
 
         // --- AI TIE-BREAKER INTEGRATION ---
-const highRisk = uniqueProducts;
+        
+        // 1. Pre-sort before AI to ensure the AI focuses on the most promising products
+        uniqueProducts.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
+
+        // 2. Limit AI verification to the top 60 to prevent 60-second timeouts & Gemini Rate Limits
+        const AI_VERIFICATION_LIMIT = 60;
+        const highRisk = uniqueProducts.slice(0, AI_VERIFICATION_LIMIT);
+        
         if (highRisk.length > 0) {
-            console.log(`[AI TIE-BREAKER] Verifying ${highRisk.length} products...`);
+            console.log(`[AI TIE-BREAKER] Verifying top ${highRisk.length} products...`);
             const corrections = await verifyUnitsWithAI(highRisk);
             
             uniqueProducts = uniqueProducts.map(p => {
@@ -158,18 +180,18 @@ const highRisk = uniqueProducts;
                     const unit = correction.unit;
                     const aiUnitInfo = { value: totalVal, unit, totalValue: totalVal, quantity: 1, formatted: `${totalVal} ${unit}` } as any;
                     const normalized = normalizeUnit(aiUnitInfo);
-                    const pricePerOz = p.price / totalVal;
                     p.unit = unit;
                     p.totalAmount = totalVal;
                     p.amount = totalVal;
                     p.score = p.price / (normalized.totalValue || totalVal);
                     p.pricePerUnit = calculatePricePerUnit(p.price, totalVal, unit);
-                    p.aiVerified = true; // <-- This tells the UI to show the sparkle badge
+                    p.aiVerified = true; 
                 }
                 return p;
             });
         }
 
+        // Final sort and filter
         const filteredResults = uniqueProducts.filter(p => (p.rating ?? 0) >= 4 && p.price > 0);
         filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
@@ -189,11 +211,9 @@ function parseAmazonHTML(html: string): Product[] {
     const $ = cheerio.load(html);
     const products: Product[] = [];
 
-    // CHANGED: Added 'i' as the first parameter
     $('div[data-component-type="s-search-result"]').each((i, element) => {
         const item = $(element);
         
-        // STABLE ID LOGIC: 1. data-asin, 2. URL extraction, 3. Stable Index
         const asin = item.attr('data-asin') || 
                      item.find('h2 a').attr('href')?.match(/\/dp\/([A-Z0-9]{10})/)?.[1] || 
                      `idx-${i}`; 
@@ -215,7 +235,6 @@ function parseAmazonHTML(html: string): Product[] {
 
         const link = getAmazonAffiliateLink(asin);
 
-        // Scrape Amazon's built-in PPU
         let amazonPpu = 0;
         let amazonUnit = '';
         item.find('.a-size-base.a-color-secondary, .a-color-price').each((_, el) => {

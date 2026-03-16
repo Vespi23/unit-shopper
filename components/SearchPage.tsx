@@ -7,16 +7,17 @@ import { Search, Loader2, Filter, X, Info } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
-import { track } from '@vercel/analytics';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { FeaturesSection } from '@/components/FeaturesSection';
 import { TrendingCategories } from '@/components/TrendingCategories';
-import { convertValue, calculatePricePerUnit, UnitType } from '@/lib/unit-parser';
+import { convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
 
 interface SearchPageProps {
     initialResults?: Product[];
 }
+
+const ITEMS_PER_PAGE = 40;
 
 export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const router = useRouter();
@@ -37,11 +38,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
     const [disabledUnits, setDisabledUnits] = useState<Set<string>>(new Set());
+    
+    // Pagination state for local slicing
     const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
-
-    // Track if we have already used the initial data
-    const initialRenderRef = useRef(true);
 
     // Track if we successfully loaded `initialResults` for the current query
     const lastInitialResultsQuery = useRef<string | null>(null);
@@ -81,9 +80,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 params.delete('q');
             }
             router.push(`/?${params.toString()}`, { scroll: false });
-        } else if (query.length > 0 && page > 1) {
-            // Re-searching the exact same query resets pagination instantly using cached server data
-            setResults(initialResults);
+        } else if (query.length > 0) {
+            // Re-searching the exact same query resets pagination instantly
             setPage(1);
             return;
         }
@@ -103,13 +101,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         setDisabledUnits(new Set());
     }, [submittedQuery, selectedUnit]);
 
-    // Fetch results
+    // Fetch results (Backend now returns all pages at once)
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
 
-            // Skip client fetch if SSR securely delivered non-empty results from the lightning-fast Redis cache
-            if (page === 1 && initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery) {
+            // Skip client fetch if SSR securely delivered non-empty results from cache
+            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery) {
                 console.log("Skipping client fetch, valid cached initialResults provided by SSR");
                 return;
             }
@@ -118,26 +116,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             setSearched(true);
             try {
                 console.log(`Fetching client results for: ${submittedQuery}`);
-                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}&page=${page}`);
+                // Notice we no longer pass page here. The backend does all the fetching.
+                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}`);
                 const data = await res.json();
 
                 const newResults = Array.isArray(data) ? data : [];
-
-                if (newResults.length === 0) {
-                    setHasMore(false);
-                }
-
-                setResults(prev => {
-                    const combined = page === 1 ? newResults : [...prev, ...newResults];
-                    const uniqueMap = new Map();
-                    combined.forEach(item => {
-                        if (!uniqueMap.has(item.id)) {
-                            uniqueMap.set(item.id, item);
-                        }
-                    });
-                    return Array.from(uniqueMap.values());
-                });
-
+                setResults(newResults);
+                setPage(1); // Reset local pagination to first page
             } catch (error) {
                 console.error("Search failed", error);
             } finally {
@@ -146,7 +131,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         }
 
         fetchResults();
-    }, [submittedQuery, page]);
+    }, [submittedQuery]); // Removed `page` from dependency array so "Load More" doesn't trigger API
 
     const toggleCompare = useCallback((productId: string, selected: boolean) => {
         setCompareList(prev => {
@@ -169,14 +154,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
     // Apply Unit Conversion (Memoized)
     const convertedResults = useMemo(() => {
-        // First deduplicate the raw results
-        const uniqueResults = [...results].filter((product, index, self) =>
-            index === self.findIndex((t) => (
-                t.id === product.id
-            ))
-        );
-
-        return uniqueResults.map(product => {
+        // Backend now handles deduplication, so we just run the conversion
+        return results.map(product => {
             if (!selectedUnit || !product.unitInfo) return product;
 
             const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
@@ -185,7 +164,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 return {
                     ...product,
                     pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit as string),
-                    score: product.price / convertedAmount, // IMPORTANT: Update score for proper sorting
+                    score: product.price / convertedAmount, 
                     unitInfo: {
                         ...product.unitInfo,
                         formatted: `${Number.isInteger(convertedAmount) ? convertedAmount : convertedAmount.toFixed(2)} ${selectedUnit}`
@@ -193,11 +172,10 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 };
             }
 
-            // Visual feedback for incompatible unit selections (e.g., trying to parse Count as Gallons)
             return {
                 ...product,
                 pricePerUnit: 'N/A',
-                score: 999999, // Push to bottom
+                score: 999999, 
                 unitInfo: {
                     ...product.unitInfo,
                     formatted: `Incompatible w/ ${selectedUnit}`
@@ -220,10 +198,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         return units.sort();
     }, [convertedResults]);
 
-    // Automatically set the selected unit to the first search result's unit
     useEffect(() => {
         if (!selectedUnit && results.length > 0) {
-            // Prioritize the unit of the best/first search result over arbitrary alphabetical order
             const firstValidUnit = results.find(p => p.unitInfo?.unit)?.unitInfo?.unit;
             if (firstValidUnit) {
                 setSelectedUnit(firstValidUnit);
@@ -239,6 +215,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             return !product.unitInfo?.unit || !disabledUnits.has(product.unitInfo.unit);
         });
     }, [sortedAndConvertedResults, disabledUnits]);
+
+    // --- LOCAL PAGINATION SLICE ---
+    const paginatedDisplayResults = useMemo(() => {
+        return displayResults.slice(0, page * ITEMS_PER_PAGE);
+    }, [displayResults, page]);
 
     return (
         <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
@@ -295,7 +276,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </form>
                 </div>
 
-                {/* Trending Categories (Only show if not searching) */}
+                {/* Trending Categories */}
                 {!searched && (
                     <TrendingCategories onSelect={(q) => {
                         setQuery(q);
@@ -310,7 +291,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             </section>
             )}
 
-            {/* Features Section (Only show if not searching) */}
             {!searched && !isExtension && (
                 <FeaturesSection />
             )}
@@ -327,15 +307,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
-                {/* Controls Section */}
                 {results.length > 0 && !loading && (
                     <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
                         <div className="text-sm text-muted-foreground font-medium">
-                            Found {results.length} results for <span className="text-foreground">"{submittedQuery}"</span>
+                            Found {displayResults.length} results for <span className="text-foreground">"{submittedQuery}"</span>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-4">
-                            {/* Convert Unit Dropdown */}
                             {availableUnits.length > 0 && (
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center mr-1">
@@ -384,7 +362,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
                             <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
 
-                            {/* Sort Dropdown */}
                             <div className="flex items-center gap-3">
                                 <label htmlFor="sort-select" className="text-sm font-medium text-muted-foreground">Sort by:</label>
                                 <div className="relative">
@@ -407,7 +384,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
-                {/* Unit Filter Chips */}
                 {loading && (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-8 -mt-4 p-4 bg-muted/30 rounded-2xl border border-border/40 animate-pulse">
                         <div className="h-4 w-24 bg-muted-foreground/20 rounded"></div>
@@ -462,7 +438,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
-                {/* Amazon Compliance Disclaimer */}
                 {results.length > 0 && (
                     <div className="w-full text-center mb-6">
                         <p className="text-xs text-muted-foreground">
@@ -473,46 +448,39 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
                 <h2 className="sr-only">Search Results</h2>
                 <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 ${isExtension ? 'xl:grid-cols-5 2xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4 lg:gap-6`}>
-                    {loading && page === 1 ? (
-                        Array.from({ length: 8 }).map((_, i) => (
+                    {loading ? (
+                        Array.from({ length: 10 }).map((_, i) => (
                             <ProductCardSkeleton key={i} />
                         ))
                     ) : (
-                        <>
-                            {displayResults.map((product) => (
-                                <ProductCard
-                                    key={product.id}
-                                    product={product}
-                                    onClick={handleProductClick}
-                                    onSelect={toggleCompare}
-                                    isSelected={compareList.includes(product.id)}
-                                />
-                            ))}
-                            {loading && (
-                                Array.from({ length: 4 }).map((_, i) => (
-                                    <ProductCardSkeleton key={`skeleton-${i}`} />
-                                ))
-                            )}
-                        </>
+                        paginatedDisplayResults.map((product) => (
+                            <ProductCard
+                                key={product.id}
+                                product={product}
+                                onClick={handleProductClick}
+                                onSelect={toggleCompare}
+                                isSelected={compareList.includes(product.id)}
+                            />
+                        ))
                     )}
                 </div>
 
-                {/* Load More Button */}
-                {results.length > 0 && hasMore && (
+                {/* Instant Local Pagination Load More Button */}
+                {!loading && displayResults.length > page * ITEMS_PER_PAGE && (
                     <div className="flex justify-center mt-16 mb-20">
                         <button
                             onClick={() => setPage(p => p + 1)}
-                            disabled={loading}
-                            className="px-8 py-4 bg-card border border-border hover:border-primary/50 rounded-2xl shadow-sm text-base font-semibold transition-all hover:bg-accent disabled:opacity-50 flex items-center gap-3 group"
+                            className="px-8 py-4 bg-card border border-border hover:border-primary/50 rounded-2xl shadow-sm text-base font-semibold transition-all hover:bg-accent flex items-center gap-3 group"
                         >
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin text-primary" /> : null}
-                            {loading ? 'Loading...' : <>Load More Results <div className="bg-muted group-hover:bg-primary/20 p-1 rounded-md transition-colors"><svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" className="rotate-180 group-hover:text-primary transition-colors"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></div></>}
+                            Load More Results 
+                            <div className="bg-muted group-hover:bg-primary/20 p-1 rounded-md transition-colors">
+                                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" className="rotate-180 group-hover:text-primary transition-colors"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            </div>
                         </button>
                     </div>
                 )}
             </section>
 
-            {/* Product Detail Modal */}
             {selectedProduct && (
                 <ProductDetailModal
                     product={selectedProduct}
@@ -520,16 +488,14 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 />
             )}
 
-            {/* Comparison Drawer */}
             <ComparisonDrawer
                 selectedIds={compareList}
-                products={results} // We pass results so the drawer can find title/image from ID
+                products={results} 
                 onRemove={(id) => setCompareList(coords => coords.filter(c => c !== id))}
                 onClear={() => setCompareList([])}
                 onCompare={() => setShowComparison(true)}
             />
 
-            {/* Comparison View Modal */}
             {showComparison && (
                 <ComparisonView
                     products={results.filter(p => compareList.includes(p.id))}
