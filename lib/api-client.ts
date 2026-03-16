@@ -3,9 +3,6 @@ import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
 import { getAmazonAffiliateLink } from './affiliate';
 
-const CACHE_DURATION_MS = 1000 * 60 * 60 * 24; 
-const searchCache = new Map<string, { timestamp: number, data: Product[] }>();
-
 const EXACT_MATCH_QUERIES = new Set([
     'toilet paper',
     'paper towel',
@@ -75,13 +72,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         query = query.substring(0, MAX_QUERY_LENGTH);
     }
 
-    const cacheKey = `${query.toLowerCase().trim()}-multi-v16-logic-fix`;
-    const cached = searchCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < CACHE_DURATION_MS)) {
-        return cached.data;
-    }
-
-    try {
+        try {
         let apiSearchTerm = query;
         let isExactMatch = false;
 
@@ -195,9 +186,6 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         const filteredResults = uniqueProducts.filter(p => (p.rating ?? 0) >= 4 && p.price > 0);
         filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
-        if (filteredResults.length > 0) {
-            searchCache.set(cacheKey, { timestamp: Date.now(), data: filteredResults });
-        }
         return filteredResults;
 
     } catch (error) {

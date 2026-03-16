@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { searchProducts } from '@/lib/api-client';
 
+// Force Next.js to always execute this route live and never cache it statically
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
-    const page = parseInt(searchParams.get('page') || '1', 10);
     const ip = request.headers.get('x-forwarded-for') || 'unknown';
 
     if (!query) {
@@ -14,10 +16,10 @@ export async function GET(request: Request) {
     }
 
     try {
-        console.log(`Searching for: ${query}, page: ${page} (IP: ${ip})`);
+        console.log(`Searching for: ${query} (IP: ${ip})`);
         
-        // Direct fetch from Decodo
-        const results = await searchProducts(query, page);
+        // Direct fetch from Decodo (Now fetches up to 7 pages concurrently)
+        const results = await searchProducts(query);
 
         return NextResponse.json(results, {
             headers: {
