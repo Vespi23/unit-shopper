@@ -4,7 +4,6 @@ import { memo, useCallback } from 'react';
 import { Product } from '@/lib/types';
 import { ExternalLink, Star, Sparkles } from 'lucide-react';
 import { getAffiliateLink } from '@/lib/affiliate';
-import { generateProductSchema } from '@/lib/schema';
 import { useABTest } from '@/hooks/useABTest';
 
 interface ProductCardProps {
@@ -12,6 +11,7 @@ interface ProductCardProps {
     onClick: (product: Product) => void;
     onSelect: (productId: string, selected: boolean) => void;
     isSelected: boolean;
+    index?: number; // Added index to determine image priority
 }
 
 export function ProductCardSkeleton() {
@@ -30,8 +30,12 @@ export function ProductCardSkeleton() {
     );
 }
 
-export const ProductCard = memo(function ProductCard({ product, onClick, onSelect, isSelected }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product, onClick, onSelect, isSelected, index = 99 }: ProductCardProps) {
     const { variant, trackConversion, isReady } = useABTest('cta_color');
+
+    // The first 4 items are visible above the fold on most devices. 
+    // They get highest fetch priority to maximize Core Web Vitals (LCP).
+    const isPriority = index < 4;
 
     const handleCardClick = useCallback(() => {
         onClick(product);
@@ -85,7 +89,9 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                 <img
                     src={product.image}
                     alt={product.title}
-                    loading="lazy"
+                    loading={isPriority ? "eager" : "lazy"}
+                    fetchPriority={isPriority ? "high" : "auto"}
+                    decoding="async"
                     className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                 />
 
@@ -143,12 +149,6 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                     View Deals <ExternalLink className="h-4 w-4" />
                 </a>
             </div>
-
-            {/* Structured Data (JSON-LD) */}
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(generateProductSchema(product)) }}
-            />
         </div>
     );
 });

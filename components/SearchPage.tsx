@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FeaturesSection } from '@/components/FeaturesSection';
 import { TrendingCategories } from '@/components/TrendingCategories';
 import { convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
+import { generateProductSchema } from '@/lib/schema';
 
 interface SearchPageProps {
     initialResults?: Product[];
@@ -446,17 +447,31 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
+                {/* Replace the h2 and grid div with this: */}
+
                 <h2 className="sr-only">Search Results</h2>
+
+                {/* Aggregated JSON-LD for SEO (prevents 40 separate script tags from choking the DOM) */}
+                {!loading && paginatedDisplayResults.length > 0 && (
+                    <script
+                        type="application/ld+json"
+                        dangerouslySetInnerHTML={{
+                            __html: JSON.stringify(paginatedDisplayResults.map(p => generateProductSchema(p)))
+                        }}
+                    />
+                )}
+
                 <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 ${isExtension ? 'xl:grid-cols-5 2xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4 lg:gap-6`}>
                     {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
                             <ProductCardSkeleton key={i} />
                         ))
                     ) : (
-                        paginatedDisplayResults.map((product) => (
+                        paginatedDisplayResults.map((product, index) => (
                             <ProductCard
                                 key={product.id}
                                 product={product}
+                                index={index} // <-- Pass index here so the card knows if it's top-row
                                 onClick={handleProductClick}
                                 onSelect={toggleCompare}
                                 isSelected={compareList.includes(product.id)}
@@ -464,7 +479,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         ))
                     )}
                 </div>
-
+                
                 {/* Instant Local Pagination Load More Button */}
                 {!loading && displayResults.length > page * ITEMS_PER_PAGE && (
                     <div className="flex justify-center mt-16 mb-20">

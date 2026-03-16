@@ -32,6 +32,7 @@ export async function generateMetadata(
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const runtime = 'edge';
 
 export default async function Home() {
   return (
