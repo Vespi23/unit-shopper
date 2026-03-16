@@ -3,11 +3,17 @@ import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
 import { getAmazonAffiliateLink } from './affiliate';
 
+// --- CONSTANTS & PRE-COMPILED REGEXES ---
 const EXACT_MATCH_QUERIES = new Set([
     'toilet paper',
     'paper towel',
     'paper towels'
 ]);
+
+// Compiling these once at startup saves massive CPU cycles during HTML parsing
+const ASIN_REGEX = /\/dp\/([A-Z0-9]{10})/;
+const RATING_REGEX = /([0-9.]+) out of 5/;
+const PPU_REGEX = /\(?\$([0-9.]+)\s*\/\s*([a-zA-Z\s.]+)\)?/i;
 
 // --- AI TIE-BREAKER HELPER ---
 async function verifyUnitsWithAI(products: any[]) {
@@ -72,7 +78,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         query = query.substring(0, MAX_QUERY_LENGTH);
     }
 
-        try {
+    try {
         let apiSearchTerm = query;
         let isExactMatch = false;
 
@@ -164,8 +170,11 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             console.log(`[AI TIE-BREAKER] Verifying top ${highRisk.length} products...`);
             const corrections = await verifyUnitsWithAI(highRisk);
             
+            // O(1) Lookup Map to prevent nested looping through 20,000+ combinations
+            const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
+            
             uniqueProducts = uniqueProducts.map(p => {
-                const correction = corrections.find((c: any) => c.id === p.id);
+                const correction = correctionMap.get(p.id);
                 if (correction) {
                     const totalVal = correction.verifiedTotal;
                     const unit = correction.unit;
@@ -202,8 +211,9 @@ function parseAmazonHTML(html: string): Product[] {
     $('div[data-component-type="s-search-result"]').each((i, element) => {
         const item = $(element);
         
+        // Use pre-compiled ASIN_REGEX
         const asin = item.attr('data-asin') || 
-                     item.find('h2 a').attr('href')?.match(/\/dp\/([A-Z0-9]{10})/)?.[1] || 
+                     item.find('h2 a').attr('href')?.match(ASIN_REGEX)?.[1] || 
                      `idx-${i}`; 
 
         let title = item.find('h2 a span, h2 span, span.a-text-normal').first().text().trim();
@@ -214,8 +224,10 @@ function parseAmazonHTML(html: string): Product[] {
         if (priceText) price = parseFloat(priceText);
 
         const image = item.find('img.s-image').attr('src') || '';
+        
+        // Use pre-compiled RATING_REGEX
         const ratingText = item.find('i[data-cy="reviews-ratings-slot"] span.a-icon-alt, span[aria-label*="out of 5 stars"]').first().text();
-        const ratingMatch = ratingText.match(/([0-9.]+) out of 5/);
+        const ratingMatch = ratingText.match(RATING_REGEX);
         const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
 
         const reviewsText = item.find('span.a-size-base.s-underline-text').first().text().replace(/[,()]/g, '');
@@ -226,7 +238,8 @@ function parseAmazonHTML(html: string): Product[] {
         let amazonPpu = 0;
         let amazonUnit = '';
         item.find('.a-size-base.a-color-secondary, .a-color-price').each((_, el) => {
-            const match = $(el).text().trim().match(/\(?\$([0-9.]+)\s*\/\s*([a-zA-Z\s.]+)\)?/i);
+            // Use pre-compiled PPU_REGEX
+            const match = $(el).text().trim().match(PPU_REGEX);
             if (match && !amazonPpu) {
                 amazonPpu = parseFloat(match[1]);
                 amazonUnit = match[2].trim().toLowerCase();

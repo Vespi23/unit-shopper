@@ -34,17 +34,30 @@ const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cu
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
 export function parseUnit(title: string): UnitInfo | null {
-    // Cleanse title of dimensions like "60x40 mm" or "68 x 27 mm" to prevent the 
-    // MULTIPLIER_REGEX from misinterpreting "68x" as a pack quantity.
-    let cleanTitle = title.toLowerCase()
-        .replace(/\b(\d+),(\d+)\b/g, '$1.$2') // Convert European comma decimals to periods (e.g., 8,5 -> 8.5)
-        .replace(/\b\d+(?:\.\d+)?\s?x\s?\d+(?:\.\d+)?\s?(?:mm|cm|in|inch|inches|ft|foot|feet|m|meter|meters|yd|yard|yards)\b/g, '')
-        .replace(/\b\d+(?:\.\d+)?\s?x[\)\s-]*(?:power|concentrated|concentration|strength|stronger|action|cleaning|ultra|advanced|max|tough|deep|clean|plus|oxy|stain|grease|odor|scent|formula|performance|boost|lasting|wash|magnification|zoom)\b/g, '')
-        .replace(/\(\d+(?:\.\d+)?\s?x\)/g, '') // Also strip standalone "(20x)" style claims
-        .replace(/\s\d+\s?sizes?/g, '') // Also remove "5 sizes" to prevent confusion
-        .replace(/\b\d+(?:\.\d+)?[-\s]?servings?\b/g, '')
-        .trim();
+    let cleanTitle = title.toLowerCase();
 
+    // FAST-FAIL: Only run the heavy European comma regex if a comma actually exists
+    if (cleanTitle.includes(',')) {
+        cleanTitle = cleanTitle.replace(/\b(\d+),(\d+)\b/g, '$1.$2');
+    }
+
+    // FAST-FAIL: Only run the heavy dimensions/power stripping if "x" exists
+    if (cleanTitle.includes('x')) {
+        cleanTitle = cleanTitle
+            .replace(/\b\d+(?:\.\d+)?\s?x\s?\d+(?:\.\d+)?\s?(?:mm|cm|in|inch|inches|ft|foot|feet|m|meter|meters|yd|yard|yards)\b/g, '')
+            .replace(/\b\d+(?:\.\d+)?\s?x[\)\s-]*(?:power|concentrated|concentration|strength|stronger|action|cleaning|ultra|advanced|max|tough|deep|clean|plus|oxy|stain|grease|odor|scent|formula|performance|boost|lasting|wash|magnification|zoom)\b/g, '')
+            .replace(/\(\d+(?:\.\d+)?\s?x\)/g, '');
+    }
+
+    // FAST-FAIL: Only run serving/size regexes if the words exist
+    if (cleanTitle.includes('size')) {
+        cleanTitle = cleanTitle.replace(/\s\d+\s?sizes?/g, '');
+    }
+    if (cleanTitle.includes('serving')) {
+        cleanTitle = cleanTitle.replace(/\b\d+(?:\.\d+)?[-\s]?servings?\b/g, '');
+    }
+
+    cleanTitle = cleanTitle.trim();
     const lowerTitle = cleanTitle;
 
     // 1. Detect Explicit TOTAL Overrides
