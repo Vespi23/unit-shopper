@@ -20,7 +20,8 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    const CHUNK_SIZE = 30; // Slightly larger chunks
+    // Decrease chunk size to speed up LLM token generation time
+    const CHUNK_SIZE = 15; 
     const chunks = [];
     
     for (let i = 0; i < products.length; i += CHUNK_SIZE) {
@@ -43,14 +44,21 @@ async function verifyUnitsWithAI(products: any[]) {
         Products to analyze:
         ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
+        // Create an AbortController to kill the request if it takes longer than 15 seconds
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }]
-                })
+                }),
+                signal: controller.signal // Apply the timeout signal
             });
+            
+            clearTimeout(timeoutId); // Clear timeout if it succeeds quickly
 
             const data = await response.json();
             const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -58,9 +66,14 @@ async function verifyUnitsWithAI(products: any[]) {
 
             const jsonMatch = rawText.match(/\[[\s\S]*\]/);
             return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-        } catch (error) {
-            console.error(`Chunk ${index} failed:`, error);
-            return [];
+        } catch (error: any) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                console.warn(`[AI TIE-BREAKER] Chunk ${index} timed out to prevent Vercel crash.`);
+            } else {
+                console.error(`Chunk ${index} failed:`, error);
+            }
+            return []; // Gracefully fail without crashing the app
         }
     });
 
@@ -172,8 +185,8 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         // 1. Pre-sort before AI to ensure the AI focuses on the most promising products
         uniqueProducts.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
-        // 2. Limit AI verification to the top 60 to prevent 60-second timeouts & Gemini Rate Limits
-        const AI_VERIFICATION_LIMIT = 60;
+        // 2. Limit AI verification to the top 40 to prevent 60-second timeouts & Gemini Rate Limits
+        const AI_VERIFICATION_LIMIT = 40;
         const highRisk = uniqueProducts.slice(0, AI_VERIFICATION_LIMIT);
         
         if (highRisk.length > 0) {
