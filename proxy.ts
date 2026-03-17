@@ -5,8 +5,8 @@ import { Redis } from '@upstash/redis';
 
 // Initialize Redis connection
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
+  url: process.env.UPSTASH_REDIS_REST_KV_REST_API_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN || '',
 });
 
 // Create a sliding window rate limiter: 15 requests per 1 minute per IP
