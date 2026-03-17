@@ -117,8 +117,11 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
 
         // Fetch Page 1
         let baseUrl = getBaseUrl(apiSearchTerm);
-        let firstPageHtml = await fetchPage(1, baseUrl);
+        let firstPageHtml: string | null = await fetchPage(1, baseUrl);
         let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
+        
+        // 🧹 GARBAGE COLLECTION: Free Page 1 RAM
+        firstPageHtml = null;
 
         // Fallback if empty
         if (firstPageProducts.length === 0 && !isExactMatch) {
@@ -126,6 +129,9 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             baseUrl = getBaseUrl(apiSearchTerm);
             firstPageHtml = await fetchPage(1, baseUrl);
             firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
+            
+            // 🧹 GARBAGE COLLECTION: Free Fallback Page RAM
+            firstPageHtml = null;
         }
 
         let allProducts: Product[] = [...firstPageProducts];
@@ -146,6 +152,10 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             results.forEach((result) => {
                 if (result.status === 'fulfilled' && result.value) {
                     allProducts = [...allProducts, ...parseAmazonHTML(result.value)];
+                    
+                    // 🧹 GARBAGE COLLECTION: Destroy the 1MB+ HTML string from memory 
+                    // the millisecond we are done extracting the products from it.
+                    result.value = null as any;
                 }
             });
         }
