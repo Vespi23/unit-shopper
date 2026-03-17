@@ -10,23 +10,18 @@ const EXACT_MATCH_QUERIES = new Set([
     'paper towels'
 ]);
 
-// Compiling these once at startup saves massive CPU cycles during HTML parsing
 const ASIN_REGEX = /\/dp\/([A-Z0-9]{10})/;
 const RATING_REGEX = /([0-9.]+) out of 5/;
 const PPU_REGEX = /\(?\$([0-9.]+)\s*\/\s*([a-zA-Z\s.]+)\)?/i;
 
-// 🛡️ THE 60-SECOND MEMORY CACHE
-// Stores the data and the exact millisecond it was fetched
 const searchCache = new Map<string, { data: Product[], timestamp: number }>();
-const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const CACHE_TTL_MS = 60 * 1000; 
 
 // --- AI TIE-BREAKER HELPER ---
 async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    // Chunk size 15 matches your search rate limit (15 searches/min)
-    // and ensures we stay within Gemini's 15 Requests Per Minute (RPM) free tier.
     const CHUNK_SIZE = 15; 
     const chunks = [];
     
@@ -50,7 +45,7 @@ async function verifyUnitsWithAI(products: any[]) {
         ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s for AI chunk
 
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -72,61 +67,44 @@ async function verifyUnitsWithAI(products: any[]) {
             return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
         } catch (error: any) {
             clearTimeout(timeoutId);
-            if (error.name === 'AbortError') {
-                console.warn(`[AI TIE-BREAKER] Chunk ${index} timed out.`);
-            } else {
-                console.error(`Chunk ${index} failed:`, error);
-            }
+            console.warn(`[AI TIE-BREAKER] Chunk ${index} failed or timed out.`);
             return [];
         }
     });
 
     const results = await Promise.all(chunkPromises);
-    const allCorrections = results.flat();
-
-    console.log(`✅ Parallel AI verification complete. Received ${allCorrections.length} corrections.`);
-    return allCorrections;
+    return results.flat();
 }
 
 // --- MAIN SEARCH FUNCTION ---
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
-    // ⏱️ GLOBAL TIMEOUT: Ensure we never hit Vercel's 60s limit
     const START_TIME = Date.now();
-    const MAX_EXECUTION_TIME_MS = 52 * 1000; 
+    const MAX_EXECUTION_TIME_MS = 54 * 1000; // 54s limit
 
     const MAX_QUERY_LENGTH = 100;
-    if (query.length > MAX_QUERY_LENGTH) {
-        query = query.substring(0, MAX_QUERY_LENGTH);
-    }
-
-    const cacheKey = query.toLowerCase().trim();
+    const normalizedQuery = query.length > MAX_QUERY_LENGTH ? query.substring(0, MAX_QUERY_LENGTH) : query;
+    const cacheKey = normalizedQuery.toLowerCase().trim();
 
     // 🛡️ CACHE CHECK
     const cachedData = searchCache.get(cacheKey);
     if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL_MS) {
-        console.log(`[CACHE HIT] Returning fresh memory cache for: "${query}"`);
+        console.log(`[CACHE HIT] Serving memory cache for: "${normalizedQuery}"`);
         return cachedData.data;
     }
 
     try {
-        let apiSearchTerm = query;
-        let isExactMatch = false;
-
-        if (EXACT_MATCH_QUERIES.has(query.toLowerCase().trim())) {
-            apiSearchTerm = `"${query}"`;
-            isExactMatch = true;
-        } else if (query.startsWith('"') && query.endsWith('"')) {
-            isExactMatch = true;
+        let apiSearchTerm = normalizedQuery;
+        if (EXACT_MATCH_QUERIES.has(cacheKey) || (normalizedQuery.startsWith('"') && normalizedQuery.endsWith('"'))) {
+            apiSearchTerm = `"${normalizedQuery.replace(/"/g, '')}"`;
         }
 
-        const getBaseUrl = (term: string) => `https://www.amazon.com/s?k=${encodeURIComponent(term)}`;
-
-        const fetchPage = async (p: number, urlBase: string): Promise<string | null> => {
-            const amazonUrl = p === 1 ? urlBase : `${urlBase}&page=${p}`;
+        const baseUrl = `https://www.amazon.com/s?k=${encodeURIComponent(apiSearchTerm)}`;
+        
+        const fetchPage = async (p: number): Promise<Product[]> => {
+            const amazonUrl = p === 1 ? baseUrl : `${baseUrl}&page=${p}`;
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
+            
             try {
-                if (p > 1) await new Promise(res => setTimeout(res, (p - 1) * 200));
-
                 const res = await fetch(decodoUrl, {
                     method: 'POST',
                     headers: {
@@ -141,54 +119,40 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                     })
                 });
                 const json = await res.json();
-                return json.results?.[0]?.content || json.content || json.body || null;
+                const html = json.results?.[0]?.content || json.content || json.body || null;
+                return html ? parseAmazonHTML(html) : [];
             } catch (err) {
                 console.error(`Page ${p} fetch error:`, err);
-                return null;
+                return [];
             }
         };
 
-        // Fetch Page 1
-        let baseUrl = getBaseUrl(apiSearchTerm);
-        let firstPageHtml: string | null = await fetchPage(1, baseUrl);
-        let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
-        firstPageHtml = null;
+        // 🚀 PARALLEL AGGRESSIVE SCRAPE
+        // We fire all 7 pages at once with a tiny 150ms stagger to stay under the 10req/s limit.
+        console.log(`[SCRAPER] Firing 7-page parallel scrape for "${apiSearchTerm}"...`);
+        
+        const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
+        const SCRAPE_TIMEOUT_MS = 25000; // If scrape isn't done in 25s, move on to what we have.
 
-        if (firstPageProducts.length === 0 && !isExactMatch) {
-            apiSearchTerm = `"${query}"`;
-            baseUrl = getBaseUrl(apiSearchTerm);
-            firstPageHtml = await fetchPage(1, baseUrl);
-            firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
-            firstPageHtml = null;
-        }
-
-        let allProducts: Product[] = [...firstPageProducts];
-
-        // ⏱️ TIME CHECK: Do we have enough time to fetch pages 2-7?
-        const timeElapsedSoFar = Date.now() - START_TIME;
-        const timeRemainingForScrape = MAX_EXECUTION_TIME_MS - timeElapsedSoFar - 8000; 
-
-        if (allProducts.length > 0 && timeRemainingForScrape > 0) {
-            const MAX_PAGES = 7;
-            const pagePromises = [];
-            
-            console.log(`[SCRAPER] Fetching deep pages with ${timeRemainingForScrape}ms left...`);
-            
-            for (let p = 2; p <= MAX_PAGES; p++) {
-                const timeoutPromise = new Promise<null>((resolve) => 
-                    setTimeout(() => resolve(null), timeRemainingForScrape)
-                );
-                pagePromises.push(Promise.race([fetchPage(p, baseUrl), timeoutPromise]));
-            }
-
-            const results = await Promise.allSettled(pagePromises);
-            results.forEach((result) => {
-                if (result.status === 'fulfilled' && result.value) {
-                    allProducts = [...allProducts, ...parseAmazonHTML(result.value)];
-                    result.value = null as any;
-                }
+        const pagePromises = pageNumbers.map(p => {
+            const delay = (p - 1) * 150; 
+            return new Promise<Product[]>(async (resolve) => {
+                await new Promise(r => setTimeout(r, delay));
+                
+                // Individual page timeout to prevent one hanging request from killing the search
+                const timeout = setTimeout(() => resolve([]), SCRAPE_TIMEOUT_MS);
+                const products = await fetchPage(p);
+                clearTimeout(timeout);
+                resolve(products);
             });
-        }
+        });
+
+        const settleResults = await Promise.allSettled(pagePromises);
+        let allProducts: Product[] = [];
+        
+        settleResults.forEach(res => {
+            if (res.status === 'fulfilled') allProducts = [...allProducts, ...res.value];
+        });
 
         // Unique results
         const uniqueProductsMap = new Map<string, Product>();
@@ -200,12 +164,13 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         // --- AI TIE-BREAKER ---
         uniqueProducts.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
-        // Sync with your Upstash rate limit (15 searches/min) to stay within Gemini free tier
+        // Limit AI to top 15 to stay within free Gemini RPM (15)
         const AI_VERIFICATION_LIMIT = 15; 
         const highRisk = uniqueProducts.slice(0, AI_VERIFICATION_LIMIT);
         
-        if (highRisk.length > 0 && (Date.now() - START_TIME) < MAX_EXECUTION_TIME_MS) {
-            console.log(`[AI TIE-BREAKER] Verifying top ${highRisk.length} products...`);
+        const timeElapsed = Date.now() - START_TIME;
+        if (highRisk.length > 0 && timeElapsed < (MAX_EXECUTION_TIME_MS - 15000)) {
+            console.log(`[AI TIE-BREAKER] Verifying top ${highRisk.length} items. Time elapsed: ${timeElapsed/1000}s`);
             const corrections = await verifyUnitsWithAI(highRisk);
             const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
             
@@ -230,12 +195,9 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         const filteredResults = uniqueProducts.filter(p => (p.rating ?? 0) >= 4 && p.price > 0);
         filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
-        searchCache.set(cacheKey, {
-            data: filteredResults,
-            timestamp: Date.now()
-        });
+        searchCache.set(cacheKey, { data: filteredResults, timestamp: Date.now() });
 
-        console.log(`✅ Search Complete in ${(Date.now() - START_TIME)/1000}s.`);
+        console.log(`✅ Search Complete in ${(Date.now() - START_TIME)/1000}s. Returning ${filteredResults.length} items.`);
         return filteredResults;
 
     } catch (error) {
@@ -251,9 +213,7 @@ function parseAmazonHTML(html: string): Product[] {
 
     $('div[data-component-type="s-search-result"]').each((i, element) => {
         const item = $(element);
-        const asin = item.attr('data-asin') || 
-                     item.find('h2 a').attr('href')?.match(ASIN_REGEX)?.[1] || 
-                     `idx-${i}`; 
+        const asin = item.attr('data-asin') || item.find('h2 a').attr('href')?.match(ASIN_REGEX)?.[1] || `idx-${i}`; 
 
         let title = item.find('h2 a span, h2 span, span.a-text-normal').first().text().trim();
         if (!title) return;
@@ -281,18 +241,14 @@ function parseAmazonHTML(html: string): Product[] {
             }
         });
 
-        let unitInfo = null;
-        if (amazonPpu > 0 && price > 0) {
-            const total = parseFloat((price / amazonPpu).toFixed(2));
-            let unit = amazonUnit.replace(/\./g, '');
-            if (unit.includes('fl oz')) unit = 'fl oz';
-            else if (unit.includes('oz')) unit = 'oz';
-            else if (unit.includes('lb')) unit = 'lb';
-            else if (unit.includes('count') || unit.includes('ct')) unit = 'ct';
-            unitInfo = { value: total, unit, totalValue: total, quantity: 1, formatted: `${total} ${unit}` } as any;
-        } else {
-            unitInfo = parseUnit(title);
-        }
+        let unitInfo = (amazonPpu > 0 && price > 0) 
+            ? { value: parseFloat((price / amazonPpu).toFixed(2)), unit: amazonUnit.replace(/\./g, ''), totalValue: parseFloat((price / amazonPpu).toFixed(2)), quantity: 1, formatted: `${parseFloat((price / amazonPpu).toFixed(2))} ${amazonUnit}` }
+            : parseUnit(title);
+
+        if (unitInfo.unit.includes('fl oz')) unitInfo.unit = 'fl oz';
+        else if (unitInfo.unit.includes('oz')) unitInfo.unit = 'oz';
+        else if (unitInfo.unit.includes('lb')) unitInfo.unit = 'lb';
+        else if (unitInfo.unit.includes('count') || unitInfo.unit.includes('ct')) unitInfo.unit = 'ct';
 
         const totalValue = unitInfo?.totalValue || 0;
         const unit = unitInfo?.unit || 'unknown';
@@ -302,7 +258,7 @@ function parseAmazonHTML(html: string): Product[] {
             id: asin, title, price, image, source: 'Amazon', rating, reviews,
             unit, amount: unitInfo?.value || 0, totalAmount: totalValue,
             pricePerUnit: calculatePricePerUnit(price, totalValue, unit),
-            link, currency: 'USD', originalPrice: 0, score, unitInfo: unitInfo || undefined
+            link, currency: 'USD', originalPrice: 0, score, unitInfo: unitInfo as any
         });
     });
     return products;
