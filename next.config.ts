@@ -50,6 +50,10 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'i5.walmartimages.com' }
     ],
   },
+  // ADDED: This strips the 1,400+ unused icons from the client bundle!
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
 };
 
 export default nextConfig;
