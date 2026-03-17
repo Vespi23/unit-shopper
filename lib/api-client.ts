@@ -115,6 +115,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                     body: JSON.stringify({ 
                         url: amazonUrl,
                         proxy_pool: "premium", 
+                        proxy_type: "premium",
                         headless: "html"       
                     })
                 });
@@ -132,7 +133,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         console.log(`[SCRAPER] Firing 7-page parallel scrape for "${apiSearchTerm}"...`);
         
         const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
-        const SCRAPE_TIMEOUT_MS = 25000; // If scrape isn't done in 25s, move on to what we have.
+        const SCRAPE_TIMEOUT_MS = 35000; // If scrape isn't done in 35s, move on to what we have.
 
         const pagePromises = pageNumbers.map(p => {
             const delay = (p - 1) * 150; 
