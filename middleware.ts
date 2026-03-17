@@ -3,10 +3,10 @@ import type { NextRequest } from 'next/server';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
-// Initialize Redis connection (runs at the Edge, instant connection)
+// Initialize Redis connection using the new Upstash environment variables
 const redis = new Redis({
-  url: process.env.KV_REST_API_URL || '',
-  token: process.env.KV_REST_API_TOKEN || '',
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '',
 });
 
 // Create a sliding window rate limiter: 15 requests per 1 minute per IP
@@ -46,7 +46,6 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// Tell Next.js to only run this middleware on API routes to save execution time
 export const config = {
   matcher: '/api/:path*',
 };
