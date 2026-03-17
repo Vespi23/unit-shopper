@@ -216,22 +216,33 @@ export function parseUnit(title: string): UnitInfo | null {
     }
 
     // 4. Overcounting Preventers. 
-    // Double-counting implicit totals
     if ((unit === 'rolls' || unit === 'count' || unit === 'loads') && value === quantity && value > 2) {
         quantity = 1;
     }
 
-    // Heuristic: If the title explicitly states "Total of 240 fl oz" or "240 count total",
-    // the value matched is already the aggregate total. Multiplying it by the pack quantity
-    // would result in double-counting (e.g., 240 * 12 = 2880).
-    const isExplicitTotal = new RegExp(`total(?:\\s+of)?\\s+${value}|${value}\\s*[a-z\\s.]*\\s*total`, 'i').test(lowerTitle);
+    // CPU FIX: Replace the dynamic RegExp compilation with lightning-fast string checks
+    const valueStr = value.toString();
+    const isExplicitTotal = lowerTitle.includes(`total of ${valueStr}`) || 
+                            lowerTitle.includes(`total ${valueStr}`) || 
+                            lowerTitle.includes(`${valueStr} total`);
 
     let isImplicitTotal = false;
     if (quantity > 1 && value > 1) {
         const individualSize = value / quantity;
         if (Number.isInteger(individualSize) && individualSize !== value && individualSize !== quantity) {
-            if (new RegExp(`\\b${individualSize}\\b`).test(lowerTitle)) {
-                isImplicitTotal = true;
+            // CPU FIX: Use a simple split/boundary check instead of compiling a new RegExp
+            const sizeStr = individualSize.toString();
+            // Check if the size string exists as a standalone word/number in the title
+            if (lowerTitle.includes(sizeStr)) {
+                const parts = lowerTitle.split(sizeStr);
+                // Ensure it's not just a substring of a larger number (like '5' inside '50')
+                if (parts.length > 1) {
+                    const charBefore = parts[0].slice(-1);
+                    const charAfter = parts[1].charAt(0);
+                    const isStandalone = (!charBefore || /[\s\-(]/.test(charBefore)) && 
+                                         (!charAfter || /[\s\-)]/.test(charAfter));
+                    if (isStandalone) isImplicitTotal = true;
+                }
             }
         }
     }
