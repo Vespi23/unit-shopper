@@ -25,7 +25,8 @@ async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
     if (!process.env.GEMINI_API_KEY) return [];
 
-    // Decrease chunk size to speed up LLM token generation time
+    // Chunk size 15 matches your search rate limit (15 searches/min)
+    // and ensures we stay within Gemini's 15 Requests Per Minute (RPM) free tier.
     const CHUNK_SIZE = 15; 
     const chunks = [];
     
@@ -35,7 +36,6 @@ async function verifyUnitsWithAI(products: any[]) {
 
     console.log(`[AI TIE-BREAKER] Parallelizing ${chunks.length} chunks...`);
 
-    // RUN ALL CHUNKS AT ONCE
     const chunkPromises = chunks.map(async (chunk, index) => {
         const prompt = `You are a grocery math expert. I will provide a list of product titles.
         For each product:
@@ -49,7 +49,6 @@ async function verifyUnitsWithAI(products: any[]) {
         Products to analyze:
         ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
-        // Create an AbortController to kill the request if it takes longer than 15 seconds
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -60,10 +59,10 @@ async function verifyUnitsWithAI(products: any[]) {
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }]
                 }),
-                signal: controller.signal // Apply the timeout signal
+                signal: controller.signal 
             });
             
-            clearTimeout(timeoutId); // Clear timeout if it succeeds quickly
+            clearTimeout(timeoutId);
 
             const data = await response.json();
             const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -74,11 +73,11 @@ async function verifyUnitsWithAI(products: any[]) {
         } catch (error: any) {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {
-                console.warn(`[AI TIE-BREAKER] Chunk ${index} timed out to prevent Vercel crash.`);
+                console.warn(`[AI TIE-BREAKER] Chunk ${index} timed out.`);
             } else {
                 console.error(`Chunk ${index} failed:`, error);
             }
-            return []; // Gracefully fail without crashing the app
+            return [];
         }
     });
 
@@ -91,10 +90,9 @@ async function verifyUnitsWithAI(products: any[]) {
 
 // --- MAIN SEARCH FUNCTION ---
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
-    // ⏱️ GLOBAL TIMEOUT: Ensure we NEVER hit Vercel's 60s limit. 
-    // We start the clock the millisecond the function is called.
+    // ⏱️ GLOBAL TIMEOUT: Ensure we never hit Vercel's 60s limit
     const START_TIME = Date.now();
-    const MAX_EXECUTION_TIME_MS = 52 * 1000; // 52 seconds
+    const MAX_EXECUTION_TIME_MS = 52 * 1000; 
 
     const MAX_QUERY_LENGTH = 100;
     if (query.length > MAX_QUERY_LENGTH) {
@@ -106,7 +104,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
     // 🛡️ CACHE CHECK
     const cachedData = searchCache.get(cacheKey);
     if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL_MS) {
-        console.log(`[CACHE HIT] Returning fresh 60s memory cache for: "${query}"`);
+        console.log(`[CACHE HIT] Returning fresh memory cache for: "${query}"`);
         return cachedData.data;
     }
 
@@ -153,14 +151,14 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         // Fetch Page 1
         let baseUrl = getBaseUrl(apiSearchTerm);
         let firstPageHtml: string | null = await fetchPage(1, baseUrl);
-        let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) :[];
+        let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
         firstPageHtml = null;
 
         if (firstPageProducts.length === 0 && !isExactMatch) {
             apiSearchTerm = `"${query}"`;
             baseUrl = getBaseUrl(apiSearchTerm);
             firstPageHtml = await fetchPage(1, baseUrl);
-            firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) :[];
+            firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
             firstPageHtml = null;
         }
 
@@ -168,28 +166,22 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
 
         // ⏱️ TIME CHECK: Do we have enough time to fetch pages 2-7?
         const timeElapsedSoFar = Date.now() - START_TIME;
-        const timeRemainingForScrape = MAX_EXECUTION_TIME_MS - timeElapsedSoFar - 8000; // Leave 8s for AI
+        const timeRemainingForScrape = MAX_EXECUTION_TIME_MS - timeElapsedSoFar - 8000; 
 
         if (allProducts.length > 0 && timeRemainingForScrape > 0) {
             const MAX_PAGES = 7;
             const pagePromises = [];
             
-            console.log(`[SCRAPER] Fetching pages 2 through ${MAX_PAGES} concurrently with ${timeRemainingForScrape}ms left...`);
+            console.log(`[SCRAPER] Fetching deep pages with ${timeRemainingForScrape}ms left...`);
             
             for (let p = 2; p <= MAX_PAGES; p++) {
-                // ⏱️ STRICT RACE CONDITION: If Decodo takes too long, we drop the page to save the search.
                 const timeoutPromise = new Promise<null>((resolve) => 
-                    setTimeout(() => {
-                        console.log(`[TIMEOUT] Page ${p} dropped to prevent Vercel crash.`);
-                        resolve(null);
-                    }, timeRemainingForScrape)
+                    setTimeout(() => resolve(null), timeRemainingForScrape)
                 );
-                
                 pagePromises.push(Promise.race([fetchPage(p, baseUrl), timeoutPromise]));
             }
 
             const results = await Promise.allSettled(pagePromises);
-            
             results.forEach((result) => {
                 if (result.status === 'fulfilled' && result.value) {
                     allProducts = [...allProducts, ...parseAmazonHTML(result.value)];
@@ -198,27 +190,23 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             });
         }
 
-        // Ensure unique results
+        // Unique results
         const uniqueProductsMap = new Map<string, Product>();
         allProducts.forEach(product => {
             if (!uniqueProductsMap.has(product.id)) uniqueProductsMap.set(product.id, product);
         });
         let uniqueProducts = Array.from(uniqueProductsMap.values());
 
-        // --- AI TIE-BREAKER INTEGRATION ---
+        // --- AI TIE-BREAKER ---
         uniqueProducts.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
-        // 🛡️ SYNCED RATE LIMIT: Set to exactly 15.
-        // Because Upstash limits users to 15 searches/min, and we only process 15 items (1 Gemini chunk)
-        // per search, you are MATHEMATICALLY GUARANTEED to stay under Gemini's 15 Requests Per Minute limit!
+        // Sync with your Upstash rate limit (15 searches/min) to stay within Gemini free tier
         const AI_VERIFICATION_LIMIT = 15; 
         const highRisk = uniqueProducts.slice(0, AI_VERIFICATION_LIMIT);
         
-        // ⏱️ FINAL TIME CHECK: Only run AI if we haven't hit the 52s wall yet.
         if (highRisk.length > 0 && (Date.now() - START_TIME) < MAX_EXECUTION_TIME_MS) {
             console.log(`[AI TIE-BREAKER] Verifying top ${highRisk.length} products...`);
             const corrections = await verifyUnitsWithAI(highRisk);
-            
             const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
             
             uniqueProducts = uniqueProducts.map(p => {
@@ -237,11 +225,8 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                 }
                 return p;
             });
-        } else if (highRisk.length > 0) {
-            console.log(`[AI SKIP] Skipped AI to prevent Vercel 60s timeout.`);
         }
 
-        // Final sort and filter
         const filteredResults = uniqueProducts.filter(p => (p.rating ?? 0) >= 4 && p.price > 0);
         filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
@@ -250,13 +235,14 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             timestamp: Date.now()
         });
 
-        console.log(`✅ Search Complete in ${(Date.now() - START_TIME)/1000}s. Returning ${filteredResults.length} items.`);
+        console.log(`✅ Search Complete in ${(Date.now() - START_TIME)/1000}s.`);
         return filteredResults;
 
     } catch (error) {
         console.error('Search Error:', error);
         return [];
-        
+    }
+}
 
 // --- HTML PARSER ---
 function parseAmazonHTML(html: string): Product[] {
@@ -265,8 +251,6 @@ function parseAmazonHTML(html: string): Product[] {
 
     $('div[data-component-type="s-search-result"]').each((i, element) => {
         const item = $(element);
-        
-        // Use pre-compiled ASIN_REGEX
         const asin = item.attr('data-asin') || 
                      item.find('h2 a').attr('href')?.match(ASIN_REGEX)?.[1] || 
                      `idx-${i}`; 
@@ -279,21 +263,17 @@ function parseAmazonHTML(html: string): Product[] {
         if (priceText) price = parseFloat(priceText);
 
         const image = item.find('img.s-image').attr('src') || '';
-        
-        // Use pre-compiled RATING_REGEX
         const ratingText = item.find('i[data-cy="reviews-ratings-slot"] span.a-icon-alt, span[aria-label*="out of 5 stars"]').first().text();
         const ratingMatch = ratingText.match(RATING_REGEX);
         const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
 
         const reviewsText = item.find('span.a-size-base.s-underline-text').first().text().replace(/[,()]/g, '');
         const reviews = parseInt(reviewsText, 10) || 0;
-
         const link = getAmazonAffiliateLink(asin);
 
         let amazonPpu = 0;
         let amazonUnit = '';
         item.find('.a-size-base.a-color-secondary, .a-color-price').each((_, el) => {
-            // Use pre-compiled PPU_REGEX
             const match = $(el).text().trim().match(PPU_REGEX);
             if (match && !amazonPpu) {
                 amazonPpu = parseFloat(match[1]);
