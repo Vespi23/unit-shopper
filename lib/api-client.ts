@@ -245,10 +245,12 @@ function parseAmazonHTML(html: string): Product[] {
             ? { value: parseFloat((price / amazonPpu).toFixed(2)), unit: amazonUnit.replace(/\./g, ''), totalValue: parseFloat((price / amazonPpu).toFixed(2)), quantity: 1, formatted: `${parseFloat((price / amazonPpu).toFixed(2))} ${amazonUnit}` }
             : parseUnit(title);
 
-        if (unitInfo.unit.includes('fl oz')) unitInfo.unit = 'fl oz';
-        else if (unitInfo.unit.includes('oz')) unitInfo.unit = 'oz';
-        else if (unitInfo.unit.includes('lb')) unitInfo.unit = 'lb';
-        else if (unitInfo.unit.includes('count') || unitInfo.unit.includes('ct')) unitInfo.unit = 'ct';
+        if (unitInfo) {
+            if (unitInfo.unit.includes('fl oz')) unitInfo.unit = 'fl oz';
+            else if (unitInfo.unit.includes('oz')) unitInfo.unit = 'oz';
+            else if (unitInfo.unit.includes('lb')) unitInfo.unit = 'lb';
+            else if (unitInfo.unit.includes('count') || unitInfo.unit.includes('ct')) unitInfo.unit = 'ct';
+        }
 
         const totalValue = unitInfo?.totalValue || 0;
         const unit = unitInfo?.unit || 'unknown';
