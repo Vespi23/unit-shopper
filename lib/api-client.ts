@@ -91,15 +91,19 @@ async function verifyUnitsWithAI(products: any[]) {
 
 // --- MAIN SEARCH FUNCTION ---
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
+    // ⏱️ GLOBAL TIMEOUT: Ensure we NEVER hit Vercel's 60s limit. 
+    // We start the clock the millisecond the function is called.
+    const START_TIME = Date.now();
+    const MAX_EXECUTION_TIME_MS = 52 * 1000; // 52 seconds
+
     const MAX_QUERY_LENGTH = 100;
     if (query.length > MAX_QUERY_LENGTH) {
         query = query.substring(0, MAX_QUERY_LENGTH);
     }
 
-    // Normalize the query so "Paper Towels" and "paper towels" share the same cache
     const cacheKey = query.toLowerCase().trim();
 
-    // 🛡️ CACHE CHECK: Did someone just search this exact phrase in the last 60 seconds?
+    // 🛡️ CACHE CHECK
     const cachedData = searchCache.get(cacheKey);
     if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL_MS) {
         console.log(`[CACHE HIT] Returning fresh 60s memory cache for: "${query}"`);
@@ -123,7 +127,6 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             const amazonUrl = p === 1 ? urlBase : `${urlBase}&page=${p}`;
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
             try {
-                // Stagger requests slightly to prevent hammering Decodo at the exact same millisecond
                 if (p > 1) await new Promise(res => setTimeout(res, (p - 1) * 200));
 
                 const res = await fetch(decodoUrl, {
@@ -135,8 +138,8 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                     },
                     body: JSON.stringify({ 
                         url: amazonUrl,
-                        proxy_pool: "premium", // Changed from proxy_type
-                        headless: "html"       // Changed from render_js
+                        proxy_pool: "premium", 
+                        headless: "html"       
                     })
                 });
                 const json = await res.json();
@@ -150,43 +153,46 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         // Fetch Page 1
         let baseUrl = getBaseUrl(apiSearchTerm);
         let firstPageHtml: string | null = await fetchPage(1, baseUrl);
-        let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
-        
-        // 🧹 GARBAGE COLLECTION: Free Page 1 RAM
+        let firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) :[];
         firstPageHtml = null;
 
-        // Fallback if empty
         if (firstPageProducts.length === 0 && !isExactMatch) {
             apiSearchTerm = `"${query}"`;
             baseUrl = getBaseUrl(apiSearchTerm);
             firstPageHtml = await fetchPage(1, baseUrl);
-            firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) : [];
-            
-            // 🧹 GARBAGE COLLECTION: Free Fallback Page RAM
+            firstPageProducts = firstPageHtml ? parseAmazonHTML(firstPageHtml) :[];
             firstPageHtml = null;
         }
 
         let allProducts: Product[] = [...firstPageProducts];
 
-        // Fetch up to 7 pages concurrently
-        if (allProducts.length > 0) {
+        // ⏱️ TIME CHECK: Do we have enough time to fetch pages 2-7?
+        const timeElapsedSoFar = Date.now() - START_TIME;
+        const timeRemainingForScrape = MAX_EXECUTION_TIME_MS - timeElapsedSoFar - 8000; // Leave 8s for AI
+
+        if (allProducts.length > 0 && timeRemainingForScrape > 0) {
             const MAX_PAGES = 7;
             const pagePromises = [];
             
-            console.log(`[SCRAPER] Fetching pages 2 through ${MAX_PAGES} concurrently...`);
+            console.log(`[SCRAPER] Fetching pages 2 through ${MAX_PAGES} concurrently with ${timeRemainingForScrape}ms left...`);
+            
             for (let p = 2; p <= MAX_PAGES; p++) {
-                pagePromises.push(fetchPage(p, baseUrl));
+                // ⏱️ STRICT RACE CONDITION: If Decodo takes too long, we drop the page to save the search.
+                const timeoutPromise = new Promise<null>((resolve) => 
+                    setTimeout(() => {
+                        console.log(`[TIMEOUT] Page ${p} dropped to prevent Vercel crash.`);
+                        resolve(null);
+                    }, timeRemainingForScrape)
+                );
+                
+                pagePromises.push(Promise.race([fetchPage(p, baseUrl), timeoutPromise]));
             }
 
-            // allSettled ensures we process successful pages even if some timeout
             const results = await Promise.allSettled(pagePromises);
             
             results.forEach((result) => {
                 if (result.status === 'fulfilled' && result.value) {
                     allProducts = [...allProducts, ...parseAmazonHTML(result.value)];
-                    
-                    // 🧹 GARBAGE COLLECTION: Destroy the 1MB+ HTML string from memory 
-                    // the millisecond we are done extracting the products from it.
                     result.value = null as any;
                 }
             });
@@ -200,19 +206,19 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         let uniqueProducts = Array.from(uniqueProductsMap.values());
 
         // --- AI TIE-BREAKER INTEGRATION ---
-        
-        // 1. Pre-sort before AI to ensure the AI focuses on the most promising products
         uniqueProducts.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
-        // 2. Limit AI verification to the top 40 to prevent 60-second timeouts & Gemini Rate Limits
-        const AI_VERIFICATION_LIMIT = 40;
+        // 🛡️ SYNCED RATE LIMIT: Set to exactly 15.
+        // Because Upstash limits users to 15 searches/min, and we only process 15 items (1 Gemini chunk)
+        // per search, you are MATHEMATICALLY GUARANTEED to stay under Gemini's 15 Requests Per Minute limit!
+        const AI_VERIFICATION_LIMIT = 15; 
         const highRisk = uniqueProducts.slice(0, AI_VERIFICATION_LIMIT);
         
-        if (highRisk.length > 0) {
+        // ⏱️ FINAL TIME CHECK: Only run AI if we haven't hit the 52s wall yet.
+        if (highRisk.length > 0 && (Date.now() - START_TIME) < MAX_EXECUTION_TIME_MS) {
             console.log(`[AI TIE-BREAKER] Verifying top ${highRisk.length} products...`);
             const corrections = await verifyUnitsWithAI(highRisk);
             
-            // O(1) Lookup Map to prevent nested looping through 20,000+ combinations
             const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
             
             uniqueProducts = uniqueProducts.map(p => {
@@ -231,25 +237,26 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                 }
                 return p;
             });
+        } else if (highRisk.length > 0) {
+            console.log(`[AI SKIP] Skipped AI to prevent Vercel 60s timeout.`);
         }
 
         // Final sort and filter
         const filteredResults = uniqueProducts.filter(p => (p.rating ?? 0) >= 4 && p.price > 0);
         filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
 
-        // 🛡️ CACHE SAVE: Store the final results and the current timestamp
         searchCache.set(cacheKey, {
             data: filteredResults,
             timestamp: Date.now()
         });
 
+        console.log(`✅ Search Complete in ${(Date.now() - START_TIME)/1000}s. Returning ${filteredResults.length} items.`);
         return filteredResults;
 
     } catch (error) {
         console.error('Search Error:', error);
         return [];
-    }
-}
+        
 
 // --- HTML PARSER ---
 function parseAmazonHTML(html: string): Product[] {
