@@ -135,8 +135,8 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                     },
                     body: JSON.stringify({ 
                         url: amazonUrl,
-                        proxy_type: "premium", // 🛡️ Force Decodo to use the unblocked Premium IP pool
-                        render_js: false       // 🛡️ Explicitly disable JS to charge the cheaper $1.00 rate
+                        proxy_pool: "premium", // Changed from proxy_type
+                        headless: "html"       // Changed from render_js
                     })
                 });
                 const json = await res.json();
