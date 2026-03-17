@@ -15,6 +15,11 @@ const ASIN_REGEX = /\/dp\/([A-Z0-9]{10})/;
 const RATING_REGEX = /([0-9.]+) out of 5/;
 const PPU_REGEX = /\(?\$([0-9.]+)\s*\/\s*([a-zA-Z\s.]+)\)?/i;
 
+// 🛡️ THE 60-SECOND MEMORY CACHE
+// Stores the data and the exact millisecond it was fetched
+const searchCache = new Map<string, { data: Product[], timestamp: number }>();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
 // --- AI TIE-BREAKER HELPER ---
 async function verifyUnitsWithAI(products: any[]) {
     if (products.length === 0) return [];
@@ -91,6 +96,16 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         query = query.substring(0, MAX_QUERY_LENGTH);
     }
 
+    // Normalize the query so "Paper Towels" and "paper towels" share the same cache
+    const cacheKey = query.toLowerCase().trim();
+
+    // 🛡️ CACHE CHECK: Did someone just search this exact phrase in the last 60 seconds?
+    const cachedData = searchCache.get(cacheKey);
+    if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL_MS) {
+        console.log(`[CACHE HIT] Returning fresh 60s memory cache for: "${query}"`);
+        return cachedData.data;
+    }
+
     try {
         let apiSearchTerm = query;
         let isExactMatch = false;
@@ -118,7 +133,11 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                         'Content-Type': 'application/json',
                         'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`
                     },
-                    body: JSON.stringify({ url: amazonUrl })
+                    body: JSON.stringify({ 
+                        url: amazonUrl,
+                        proxy_type: "premium", // 🛡️ Force Decodo to use the unblocked Premium IP pool
+                        render_js: false       // 🛡️ Explicitly disable JS to charge the cheaper $1.00 rate
+                    })
                 });
                 const json = await res.json();
                 return json.results?.[0]?.content || json.content || json.body || null;
@@ -217,6 +236,12 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         // Final sort and filter
         const filteredResults = uniqueProducts.filter(p => (p.rating ?? 0) >= 4 && p.price > 0);
         filteredResults.sort((a, b) => (a.score ?? 999999) - (b.score ?? 999999));
+
+        // 🛡️ CACHE SAVE: Store the final results and the current timestamp
+        searchCache.set(cacheKey, {
+            data: filteredResults,
+            timestamp: Date.now()
+        });
 
         return filteredResults;
 
