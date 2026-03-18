@@ -268,7 +268,12 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             aria-label="Search products"
                         />
                         {loading ? (
-                            <Loader2 className="h-6 w-6 animate-spin text-primary mr-4" />
+                            <div className="flex items-center mr-4 shrink-0 select-none pointer-events-none">
+                                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2.5" />
+                                <span className="text-sm font-semibold text-primary animate-pulse hidden sm:inline-block">
+                                    Scanning pages...
+                                </span>
+                            </div>
                         ) : (
                             <button type="submit" disabled={!query} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed hidden sm:block">
                                 Search
@@ -447,8 +452,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
-                {/* Replace the h2 and grid div with this: */}
-
                 <h2 className="sr-only">Search Results</h2>
 
                 {/* Aggregated JSON-LD for SEO (prevents 40 separate script tags from choking the DOM) */}
@@ -463,9 +466,23 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
                 <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 ${isExtension ? 'xl:grid-cols-5 2xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4 lg:gap-6`}>
                     {loading ? (
-                        Array.from({ length: 10 }).map((_, i) => (
-                            <ProductCardSkeleton key={i} />
-                        ))
+                        <>
+                            {/* Contextual Loading Message */}
+                            <div className="col-span-full flex flex-col items-center justify-center py-12 text-center animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                    <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400">
+                                        Analyzing Price-Per-Unit Data...
+                                    </h3>
+                                </div>
+                                <p className="text-sm text-muted-foreground max-w-sm">
+                                    We're scanning hundreds of items across 7+ pages to find you the absolute best value.
+                                </p>
+                            </div>
+                            {Array.from({ length: 12 }).map((_, i) => (
+                                <ProductCardSkeleton key={i} />
+                            ))}
+                        </>
                     ) : (
                         paginatedDisplayResults.map((product, index) => (
                             <ProductCard
