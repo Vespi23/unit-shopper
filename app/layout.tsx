@@ -1,24 +1,27 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-
 import { CookieConsent } from '@/components/CookieConsent';
 import { FeedbackPrompt } from '@/components/FeedbackPrompt';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
+// 1. Explicitly added display: "swap" to ensure fallback fonts don't block rendering
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap", 
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -66,12 +69,16 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
-          <main className="flex-grow">
-            {children}
-          </main>
-          <Footer />
+          {/* 2. Grouped core visual layout together */}
+          <div className="flex flex-col min-h-screen relative w-full">
+            <Header />
+            <main className="flex-grow w-full">
+              {children}
+            </main>
+            <Footer />
+          </div>
 
+          {/* 3. Grouped non-flow overlay and script components at the bottom */}
           <Analytics />
           <SpeedInsights />
           <CookieConsent />

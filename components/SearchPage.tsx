@@ -24,7 +24,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    // Initialize state from URL
     const initialQuery = searchParams.get('q') || '';
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
@@ -40,13 +39,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [showComparison, setShowComparison] = useState(false);
     const [disabledUnits, setDisabledUnits] = useState<Set<string>>(new Set());
     
-    // Pagination state for local slicing
     const [page, setPage] = useState(1);
-
-    // Track if we successfully loaded `initialResults` for the current query
     const lastInitialResultsQuery = useRef<string | null>(null);
 
-    // Sync results from Server if they change (e.g. navigation)
     useEffect(() => {
         if (initialResults) {
             const activeQuery = new URLSearchParams(window.location.search).get('q');
@@ -57,10 +52,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     setSearched(false);
                     setSubmittedQuery('');
                 }
-                return; // Server Redis Cache missed, defer exclusively to client-side fetching
+                return; 
             }
 
-            console.log("Applying initialResults from server");
             setResults(initialResults);
             setSearched(true);
             setLoading(false);
@@ -85,7 +79,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             }
             router.push(`/?${params.toString()}`, { scroll: false });
         } else if (newQuery.length > 0) {
-            // Re-searching the exact same query resets pagination instantly
             setPage(1);
             return;
         }
@@ -105,24 +98,19 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         setDisabledUnits(new Set());
     }, [submittedQuery, selectedUnit]);
 
-    // Fetch results (Backend now returns all pages at once)
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
 
-            // Skip client fetch if SSR securely delivered non-empty results from cache
             if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery) {
-                console.log("Skipping client fetch, valid cached initialResults provided by SSR");
                 return;
             }
 
             setLoading(true);
             setSearched(true);
             try {
-                console.log(`Fetching client results for: ${submittedQuery}`);
                 const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}`);
                 const data = await res.json();
-
                 const newResults = Array.isArray(data) ? data : [];
                 setResults(newResults);
                 setPage(1);
@@ -132,22 +120,17 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 setLoading(false);
             }
         }
-
         fetchResults();
     }, [submittedQuery]); 
 
     const toggleCompare = useCallback((productId: string, selected: boolean) => {
         setCompareList(prev => {
             if (selected) {
-                if (prev.length < 4) {
-                    return [...prev, productId];
-                } else {
-                    alert("You can compare up to 4 products.");
-                    return prev;
-                }
-            } else {
-                return prev.filter(id => id !== productId);
+                if (prev.length < 4) return [...prev, productId];
+                alert("You can compare up to 4 products.");
+                return prev;
             }
+            return prev.filter(id => id !== productId);
         });
     }, []);
 
@@ -155,11 +138,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         setSelectedProduct(product);
     }, []);
 
-    // Apply Unit Conversion (Memoized)
     const convertedResults = useMemo(() => {
         return results.map(product => {
             if (!selectedUnit || !product.unitInfo) return product;
-
             const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
 
             if (convertedAmount !== null) {
@@ -173,20 +154,15 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     }
                 };
             }
-
             return {
                 ...product,
                 pricePerUnit: 'N/A',
                 score: 999999, 
-                unitInfo: {
-                    ...product.unitInfo,
-                    formatted: `Incompatible w/ ${selectedUnit}`
-                }
+                unitInfo: { ...product.unitInfo, formatted: `Incompatible w/ ${selectedUnit}` }
             };
         });
     }, [results, selectedUnit]);
 
-    // Sort Logic (Memoized)
     const sortedAndConvertedResults = useMemo(() => {
         return [...convertedResults].sort((a, b) => {
             if (sortBy === 'price_asc') return a.price - b.price;
@@ -203,48 +179,34 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     useEffect(() => {
         if (!selectedUnit && results.length > 0) {
             const firstValidUnit = results.find(p => p.unitInfo?.unit)?.unitInfo?.unit;
-            if (firstValidUnit) {
-                setSelectedUnit(firstValidUnit);
-            } else if (availableUnits.length > 0) {
-                setSelectedUnit(availableUnits[0]);
-            }
+            if (firstValidUnit) setSelectedUnit(firstValidUnit);
+            else if (availableUnits.length > 0) setSelectedUnit(availableUnits[0]);
         }
     }, [results, availableUnits, selectedUnit]);
 
-    // Filter by Disabled Units (Memoized)
     const displayResults = useMemo(() => {
         return sortedAndConvertedResults.filter(product => {
             return !product.unitInfo?.unit || !disabledUnits.has(product.unitInfo.unit);
         });
     }, [sortedAndConvertedResults, disabledUnits]);
 
-    // --- LOCAL PAGINATION SLICE ---
     const paginatedDisplayResults = useMemo(() => {
         return displayResults.slice(0, page * ITEMS_PER_PAGE);
     }, [displayResults, page]);
 
     return (
         <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{
-                    __html: JSON.stringify({
-                        "@context": "https://schema.org",
-                        "@type": "WebSite",
-                        "name": "BudgetLynx",
-                        "url": "https://www.budgetlynx.com",
-                        "potentialAction": {
-                            "@type": "SearchAction",
-                            "target": "https://www.budgetlynx.com/?q={search_term_string}",
-                            "query-input": "required name=search_term_string"
-                        }
-                    }).replace(/</g, '\\u003c')
-                }}
-            />
+            {!loading && paginatedDisplayResults.length > 0 && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(paginatedDisplayResults.map(p => generateProductSchema(p))) }}
+                />
+            )}
+            
             {/* Hero Section */}
             {!isExtension && (
             <section className="w-full bg-gradient-to-b from-emerald-50/50 via-background to-background pt-24 pb-4 px-4 flex flex-col items-center text-center">
-                <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground hover:bg-primary/80 mb-6 uppercase tracking-wider shadow-sm">
+                <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground mb-6 uppercase tracking-wider shadow-sm">
                     Beta
                 </div>
                 <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-br from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400">
@@ -257,7 +219,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 {/* Search Input */}
                 <div className="relative w-full max-w-2xl group z-10">
                     <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 opacity-20 blur-xl transition duration-500 group-hover:opacity-40 group-focus-within:opacity-50"></div>
-                    <form onSubmit={handleSearch} className="relative flex items-center bg-card rounded-2xl border border-border/50 shadow-lg shadow-emerald-900/5 p-2 transition-shadow duration-300 focus-within:shadow-xl focus-within:shadow-emerald-900/10">
+                    <form onSubmit={handleSearch} className="relative flex items-center bg-card rounded-2xl border border-border/50 shadow-lg p-2 transition-shadow focus-within:shadow-xl focus-within:shadow-emerald-900/10">
                         <Search className="h-6 w-6 text-muted-foreground ml-4 mr-3" />
                         <input
                             ref={inputRef}
@@ -270,21 +232,18 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             aria-label="Search products"
                         />
                         {loading ? (
-                            <div className="flex items-center mr-4 shrink-0 select-none pointer-events-none">
+                            <div className="flex items-center mr-4 shrink-0 pointer-events-none">
                                 <Loader2 className="h-6 w-6 animate-spin text-primary mr-2.5" />
-                                <span className="text-sm font-semibold text-primary animate-pulse hidden sm:inline-block">
-                                    Scanning pages...
-                                </span>
+                                <span className="text-sm font-semibold text-primary animate-pulse hidden sm:inline-block">Scanning...</span>
                             </div>
                         ) : (
-                            <button type="submit" className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors hidden sm:block">
+                            <button type="submit" className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 hidden sm:block">
                                 Search
                             </button>
                         )}
                     </form>
                 </div>
 
-                {/* Trending Categories */}
                 {!searched && (
                     <TrendingCategories onSelect={(q) => {
                         if (inputRef.current) inputRef.current.value = q;
@@ -299,198 +258,136 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             </section>
             )}
 
-            {!searched && !isExtension && (
-                <FeaturesSection />
-            )}
+            {!searched && !isExtension && <FeaturesSection />}
 
-            {/* Results Section */}
-            <section className="container px-4 mt-4 w-full max-w-7xl">
-                {searched && !loading && results.length === 0 && (
-                    <div className="text-center py-24">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
-                            <Search className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                        <h2 className="text-lg font-semibold">No results found</h2>
-                        <p className="text-muted-foreground">Try searching for generic terms like "Coffee" or "Paper Towels".</p>
+            {/* CLS SHOCK ABSORBER: min-h-[60vh] to stop footer jumping */}
+            <section className="container px-4 mt-4 w-full max-w-7xl min-h-[60vh]">
+                
+                {/* CLS SHOCK ABSORBER: Pre-reserve height for conditional headers */}
+                {searched && (
+                    <div className="w-full min-h-[140px] md:min-h-[100px] flex flex-col justify-end mb-6">
+                        {loading ? (
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-muted/30 rounded-2xl border border-border/40 animate-pulse w-full">
+                                <div className="h-4 w-24 bg-muted-foreground/20 rounded"></div>
+                                <div className="flex gap-2">
+                                    <div className="h-8 w-20 bg-muted-foreground/20 rounded-full"></div>
+                                    <div className="h-8 w-24 bg-muted-foreground/20 rounded-full"></div>
+                                    <div className="h-8 w-16 bg-muted-foreground/20 rounded-full"></div>
+                                </div>
+                            </div>
+                        ) : results.length === 0 ? (
+                            <div className="text-center py-8">
+                                <h2 className="text-lg font-semibold">No results found</h2>
+                                <p className="text-muted-foreground">Try searching for generic terms.</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-4 w-full animate-in fade-in duration-300">
+                                <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full">
+                                    <div className="text-sm text-muted-foreground font-medium">
+                                        Found {displayResults.length} results for <span className="text-foreground">"{submittedQuery}"</span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        {availableUnits.length > 0 && (
+                                            <div className="flex items-center gap-3">
+                                                <label htmlFor="unit-select" className="text-sm font-medium text-muted-foreground flex items-center">
+                                                    Units:
+                                                </label>
+                                                <div className="relative">
+                                                    <select
+                                                        id="unit-select"
+                                                        value={selectedUnit}
+                                                        onChange={(e) => setSelectedUnit(e.target.value as any)}
+                                                        className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer"
+                                                    >
+                                                        {availableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                                        <option disabled>──────</option>
+                                                        <option value="oz">oz (Weight)</option>
+                                                        <option value="lb">lb</option>
+                                                        <option value="fl oz">fl oz (Vol)</option>
+                                                        <option value="gal">gal</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
+                                        <div className="flex items-center gap-3">
+                                            <label htmlFor="sort-select" className="text-sm font-medium text-muted-foreground">Sort by:</label>
+                                            <div className="relative">
+                                                <select
+                                                    id="sort-select"
+                                                    value={sortBy}
+                                                    onChange={(e) => setSortBy(e.target.value as any)}
+                                                    className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer"
+                                                >
+                                                    <option value="score_asc">Lowest Unit Price</option>
+                                                    <option value="price_asc">Lowest Total Price</option>
+                                                    <option value="price_desc">Highest Total Price</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {availableUnits.length > 0 && (
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-muted/30 rounded-2xl border border-border/40 w-full">
+                                        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground min-w-fit">
+                                            <Filter className="w-4 h-4" />
+                                            <span>Filter Units:</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {availableUnits.map(unit => {
+                                                const isActive = !disabledUnits.has(unit);
+                                                return (
+                                                    <button
+                                                        key={unit}
+                                                        onClick={() => {
+                                                            const next = new Set(disabledUnits);
+                                                            if (next.has(unit)) next.delete(unit);
+                                                            else next.add(unit);
+                                                            setDisabledUnits(next);
+                                                        }}
+                                                        className={`group relative inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all duration-200 border select-none ${isActive ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:bg-accent'}`}
+                                                    >
+                                                        {unit}
+                                                        {isActive && <X className="w-3 h-3 opacity-50 group-hover:opacity-100" />}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {results.length > 0 && !loading && (
-                    <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
-                        <div className="text-sm text-muted-foreground font-medium">
-                            Found {displayResults.length} results for <span className="text-foreground">"{submittedQuery}"</span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-4">
-                            {availableUnits.length > 0 && (
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center mr-1">
-                                        <label htmlFor="unit-select" className="text-sm font-medium text-muted-foreground mr-1.5 flex items-center">Units:</label>
-                                        <div className="relative group/tooltip flex items-center">
-                                            <Info className="w-3.5 h-3.5 text-muted-foreground/50 hover:text-primary transition-colors cursor-help" />
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-60 p-3 bg-popover text-popover-foreground text-xs rounded-xl shadow-xl border border-border opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50 pointer-events-none text-left">
-                                                <p className="font-semibold mb-1.5 text-foreground">Unit Equivalents</p>
-                                                <p className="text-muted-foreground leading-relaxed mb-2">
-                                                    We use industry standard densities to allow price comparisons across brands:
-                                                </p>
-                                                <ul className="space-y-1 text-muted-foreground font-mono bg-muted/50 p-2 rounded-lg mix-blend-multiply dark:mix-blend-screen">
-                                                    <li>• 1 Load ≈ 1.5 fl oz</li>
-                                                    <li>• 1 Roll ≈ 40 sq ft</li>
-                                                    <li>• 1 Roll ≈ 300 sheets</li>
-                                                </ul>
-                                                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-popover border-b border-r border-border rotate-45"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="relative">
-                                        <select
-                                            id="unit-select"
-                                            value={selectedUnit}
-                                            onChange={(e) => setSelectedUnit(e.target.value as any)}
-                                            className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                                        >
-                                            {availableUnits.map(unit => (
-                                                <option key={unit} value={unit}>{unit}</option>
-                                            ))}
-                                            <option disabled>──────</option>
-                                            <option value="oz">oz (Weight)</option>
-                                            <option value="lb">lb</option>
-                                            <option value="g">g</option>
-                                            <option value="kg">kg</option>
-                                            <option value="fl oz">fl oz (Vol)</option>
-                                            <option value="gal">gal</option>
-                                            <option value="l">Liters</option>
-                                        </select>
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
-
-                            <div className="flex items-center gap-3">
-                                <label htmlFor="sort-select" className="text-sm font-medium text-muted-foreground">Sort by:</label>
-                                <div className="relative">
-                                    <select
-                                        id="sort-select"
-                                        value={sortBy}
-                                        onChange={(e) => setSortBy(e.target.value as any)}
-                                        className="appearance-none h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm transition-all hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                                    >
-                                        <option value="score_asc">Lowest Unit Price</option>
-                                        <option value="price_asc">Lowest Total Price</option>
-                                        <option value="price_desc">Highest Total Price</option>
-                                    </select>
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {loading && (
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-8 -mt-4 p-4 bg-muted/30 rounded-2xl border border-border/40 animate-pulse">
-                        <div className="h-4 w-24 bg-muted-foreground/20 rounded"></div>
-                        <div className="flex gap-2">
-                            <div className="h-8 w-20 bg-muted-foreground/20 rounded-full"></div>
-                            <div className="h-8 w-24 bg-muted-foreground/20 rounded-full"></div>
-                            <div className="h-8 w-16 bg-muted-foreground/20 rounded-full"></div>
-                        </div>
-                    </div>
-                )}
-
-                {!loading && results.length > 0 && availableUnits.length > 0 && (
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-8 -mt-4 p-4 bg-muted/30 rounded-2xl border border-border/40">
-                        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground min-w-fit">
-                            <Filter className="w-4 h-4" />
-                            <span>Filter Units:</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {availableUnits.map(unit => {
-                                const isActive = !disabledUnits.has(unit);
-                                return (
-                                    <button
-                                        key={unit}
-                                        onClick={() => {
-                                            const next = new Set(disabledUnits);
-                                            if (next.has(unit)) next.delete(unit);
-                                            else next.add(unit);
-                                            setDisabledUnits(next);
-                                        }}
-                                        className={`
-                                            group relative inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all duration-200 border select-none
-                                            ${isActive
-                                                ? 'bg-primary text-primary-foreground border-primary shadow-sm hover:bg-primary/90'
-                                                : 'bg-background text-muted-foreground border-border hover:border-border/80 hover:bg-accent'
-                                            }
-                                        `}
-                                    >
-                                        {unit}
-                                        {isActive && <X className="w-3 h-3 opacity-50 group-hover:opacity-100" />}
-                                    </button>
-                                );
-                            })}
-                            {disabledUnits.size > 0 && (
-                                <button
-                                    onClick={() => setDisabledUnits(new Set())}
-                                    className="text-xs font-medium text-muted-foreground hover:text-foreground underline underline-offset-4 ml-2 transition-colors"
-                                >
-                                    Reset
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {results.length > 0 && (
                     <div className="w-full text-center mb-6">
-                        <p className="text-xs text-muted-foreground">
-                            As an Amazon Associate I earn from qualifying purchases.
-                        </p>
+                        <p className="text-xs text-muted-foreground">As an Amazon Associate I earn from qualifying purchases.</p>
                     </div>
                 )}
 
                 <h2 className="sr-only">Search Results</h2>
 
-                {/* Aggregated JSON-LD for SEO */}
-                {!loading && paginatedDisplayResults.length > 0 && (
-                    <script
-                        type="application/ld+json"
-                        dangerouslySetInnerHTML={{
-                            __html: JSON.stringify(paginatedDisplayResults.map(p => generateProductSchema(p)))
-                        }}
-                    />
-                )}
-
                 <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 ${isExtension ? 'xl:grid-cols-5 2xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4 lg:gap-6`}>
                     {loading ? (
                         <>
-                            {/* Contextual Loading Message */}
-                            <div className="col-span-full flex flex-col items-center justify-center py-12 text-center animate-in fade-in slide-in-from-bottom-2 duration-500">
+                            <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
                                 <div className="flex items-center gap-3 mb-2">
                                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                    <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400">
+                                    <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600">
                                         Analyzing Price-Per-Unit Data...
                                     </h3>
                                 </div>
-                                <p className="text-sm text-muted-foreground max-w-sm">
-                                    We're scanning hundreds of items across 7+ pages to find you the absolute best value.
-                                </p>
                             </div>
-                            {Array.from({ length: 12 }).map((_, i) => (
-                                <ProductCardSkeleton key={i} />
-                            ))}
+                            {Array.from({ length: 12 }).map((_, i) => <ProductCardSkeleton key={i} />)}
                         </>
                     ) : (
                         paginatedDisplayResults.map((product, index) => (
                             <ProductCard
                                 key={product.id}
                                 product={product}
-                                index={index} 
+                                index={index}
                                 onClick={handleProductClick}
                                 onSelect={toggleCompare}
                                 isSelected={compareList.includes(product.id)}
@@ -499,43 +396,21 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     )}
                 </div>
                 
-                {/* Instant Local Pagination Load More Button */}
                 {!loading && displayResults.length > page * ITEMS_PER_PAGE && (
                     <div className="flex justify-center mt-16 mb-20">
                         <button
                             onClick={() => setPage(p => p + 1)}
-                            className="px-8 py-4 bg-card border border-border hover:border-primary/50 rounded-2xl shadow-sm text-base font-semibold transition-all hover:bg-accent flex items-center gap-3 group"
+                            className="px-8 py-4 bg-card border border-border hover:border-primary/50 rounded-2xl shadow-sm text-base font-semibold hover:bg-accent flex items-center gap-3 group"
                         >
                             Load More Results 
-                            <div className="bg-muted group-hover:bg-primary/20 p-1 rounded-md transition-colors">
-                                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" className="rotate-180 group-hover:text-primary transition-colors"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                            </div>
                         </button>
                     </div>
                 )}
             </section>
 
-            {selectedProduct && (
-                <ProductDetailModal
-                    product={selectedProduct}
-                    onClose={() => setSelectedProduct(null)}
-                />
-            )}
-
-            <ComparisonDrawer
-                selectedIds={compareList}
-                products={results} 
-                onRemove={(id) => setCompareList(coords => coords.filter(c => c !== id))}
-                onClear={() => setCompareList([])}
-                onCompare={() => setShowComparison(true)}
-            />
-
-            {showComparison && (
-                <ComparisonView
-                    products={results.filter(p => compareList.includes(p.id))}
-                    onClose={() => setShowComparison(false)}
-                />
-            )}
+            {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />}
+            <ComparisonDrawer selectedIds={compareList} products={results} onRemove={(id) => setCompareList(coords => coords.filter(c => c !== id))} onClear={() => setCompareList([])} onCompare={() => setShowComparison(true)} />
+            {showComparison && <ComparisonView products={results.filter(p => compareList.includes(p.id))} onClose={() => setShowComparison(false)} />}
         </div>
     );
 }
