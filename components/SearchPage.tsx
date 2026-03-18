@@ -28,7 +28,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const initialQuery = searchParams.get('q') || '';
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
-    const [query, setQuery] = useState(initialQuery);
+    const inputRef = useRef<HTMLInputElement>(null);
     const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
     const [results, setResults] = useState<Product[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
@@ -69,28 +69,31 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         }
     }, [initialResults]);
 
-    const handleSearch = (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
+    const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.currentTarget);
+        const newQuery = (formData.get('searchQuery') as string).trim();
 
-        if (query !== searchParams.get('q')) {
+        if (newQuery !== searchParams.get('q')) {
             setLoading(true);
             const params = new URLSearchParams(searchParams.toString());
-            if (query) {
-                params.set('q', query);
+            if (newQuery) {
+                params.set('q', newQuery);
             } else {
                 params.delete('q');
             }
             router.push(`/?${params.toString()}`, { scroll: false });
-        } else if (query.length > 0) {
+        } else if (newQuery.length > 0) {
             // Re-searching the exact same query resets pagination instantly
             setPage(1);
             return;
         }
 
-        if (query.length > 0) {
-            setSubmittedQuery(query);
+        if (newQuery.length > 0) {
+            setSubmittedQuery(newQuery);
             setPage(1);
-        } else if (query.length === 0) {
+        } else if (newQuery.length === 0) {
             setResults([]);
             setSearched(false);
             setPage(1);
@@ -117,13 +120,12 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             setSearched(true);
             try {
                 console.log(`Fetching client results for: ${submittedQuery}`);
-                // Notice we no longer pass page here. The backend does all the fetching.
                 const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}`);
                 const data = await res.json();
 
                 const newResults = Array.isArray(data) ? data : [];
                 setResults(newResults);
-                setPage(1); // Reset local pagination to first page
+                setPage(1);
             } catch (error) {
                 console.error("Search failed", error);
             } finally {
@@ -132,7 +134,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         }
 
         fetchResults();
-    }, [submittedQuery]); // Removed `page` from dependency array so "Load More" doesn't trigger API
+    }, [submittedQuery]); 
 
     const toggleCompare = useCallback((productId: string, selected: boolean) => {
         setCompareList(prev => {
@@ -155,7 +157,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
     // Apply Unit Conversion (Memoized)
     const convertedResults = useMemo(() => {
-        // Backend now handles deduplication, so we just run the conversion
         return results.map(product => {
             if (!selectedUnit || !product.unitInfo) return product;
 
@@ -255,13 +256,14 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
                 {/* Search Input */}
                 <div className="relative w-full max-w-2xl group z-10">
-                    <div className={`absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 opacity-20 blur-xl transition duration-500 group-hover:opacity-40 ${query ? 'opacity-50' : ''}`}></div>
+                    <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 opacity-20 blur-xl transition duration-500 group-hover:opacity-40 group-focus-within:opacity-50"></div>
                     <form onSubmit={handleSearch} className="relative flex items-center bg-card rounded-2xl border border-border/50 shadow-lg shadow-emerald-900/5 p-2 transition-shadow duration-300 focus-within:shadow-xl focus-within:shadow-emerald-900/10">
                         <Search className="h-6 w-6 text-muted-foreground ml-4 mr-3" />
                         <input
+                            ref={inputRef}
+                            name="searchQuery"
                             type="text"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
+                            defaultValue={initialQuery}
                             placeholder="Search for peanut butter, laundry detergent..."
                             className="flex-1 bg-transparent border-none outline-none text-xl placeholder:text-muted-foreground/70 h-12 ring-0 focus:ring-0"
                             autoFocus
@@ -275,7 +277,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                 </span>
                             </div>
                         ) : (
-                            <button type="submit" disabled={!query} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed hidden sm:block">
+                            <button type="submit" className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors hidden sm:block">
                                 Search
                             </button>
                         )}
@@ -285,7 +287,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                 {/* Trending Categories */}
                 {!searched && (
                     <TrendingCategories onSelect={(q) => {
-                        setQuery(q);
+                        if (inputRef.current) inputRef.current.value = q;
                         setLoading(true);
                         const params = new URLSearchParams(searchParams.toString());
                         params.set('q', q);
@@ -454,7 +456,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
                 <h2 className="sr-only">Search Results</h2>
 
-                {/* Aggregated JSON-LD for SEO (prevents 40 separate script tags from choking the DOM) */}
+                {/* Aggregated JSON-LD for SEO */}
                 {!loading && paginatedDisplayResults.length > 0 && (
                     <script
                         type="application/ld+json"
@@ -488,7 +490,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             <ProductCard
                                 key={product.id}
                                 product={product}
-                                index={index} // <-- Pass index here so the card knows if it's top-row
+                                index={index} 
                                 onClick={handleProductClick}
                                 onSelect={toggleCompare}
                                 isSelected={compareList.includes(product.id)}

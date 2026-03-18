@@ -1,3 +1,4 @@
+// app/page.tsx
 import { Suspense } from 'react';
 import { SearchPage } from '@/components/SearchPage';
 import { Loader2 } from 'lucide-react';
@@ -29,9 +30,6 @@ export async function generateMetadata(
     description: 'Stop overpaying on Amazon. Compare true unit prices (per oz, count, lb) instantly to find the best bulk deals and savings.',
   };
 }
-
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 export default async function Home() {
   return (
