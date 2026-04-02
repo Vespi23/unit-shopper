@@ -22,10 +22,16 @@ export async function GET(request: Request) {
 
         // FORCE-THROUGH FILTER: 
         // 1. Remove items below rating 4.0 (Performance/Quality optimization)
-        // 2. Ensure objects without ratings don't break the filter
+        // 2. Remove items under 100 reviews (Social Proof / Outlier removal)
+        // 3. Defensive sanitization to prevent server crashes on null nodes
         const filteredResults = results.filter((product: any) => {
             const rating = parseFloat(product.rating) || 0;
-            return rating >= 4.0;
+            
+            // Shield: Safely coerce to string, strip commas, convert to base-10 integer
+            const rawReviews = String(product.reviews || '0').replace(/,/g, '');
+            const reviewCount = parseInt(rawReviews, 10) || 0;
+
+            return rating >= 4.0 && reviewCount >= 100;
         });
 
         return NextResponse.json(filteredResults, {
