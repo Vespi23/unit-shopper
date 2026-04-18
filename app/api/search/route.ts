@@ -3,46 +3,41 @@ import { searchProducts } from '@/lib/api-client';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 60;
+export const maxDuration = 60; 
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    // UPGRADE: Safely handle multi-hop IPs
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'unknown';
 
     if (!query) {
         return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
     }
 
     try {
-        console.log(`Searching for: ${query} (IP: ${ip})`);
+        console.log(`[EXECUTION START] Query: ${query} (IP: ${ip})`);
         
-        // Fetch up to 7 pages concurrently
+        // heavy lifting moved to lib/api-client.ts to stay within 54s safety window
         const results = await searchProducts(query);
 
-        // FORCE-THROUGH FILTER: 
-        // 1. Remove items below rating 4.0 (Performance/Quality optimization)
-        // 2. Remove items under 100 reviews (Social Proof / Outlier removal)
-        // 3. Defensive sanitization to prevent server crashes on null nodes
-        const filteredResults = results.filter((product: any) => {
-            const rating = parseFloat(product.rating) || 0;
-            
-            // Shield: Safely coerce to string, strip commas, convert to base-10 integer
-            const rawReviews = String(product.reviews || '0').replace(/,/g, '');
-            const reviewCount = parseInt(rawReviews, 10) || 0;
+        // FORCE-THROUGH WORKAROUND: Truncate to top 100 to prevent serialization timeout
+        const finalResults = results.slice(0, 100);
 
-            return rating >= 4.0 && reviewCount >= 100;
-        });
-
-        return NextResponse.json(filteredResults, {
+        return NextResponse.json(finalResults, {
             headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
                 'Pragma': 'no-cache',
                 'Expires': '0',
+                'X-Result-Count': finalResults.length.toString()
             }
         });
     } catch (error) {
-        console.error('Search error:', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        console.error('[FATAL SEARCH ERROR]:', error);
+        return NextResponse.json(
+            { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' }, 
+            { status: 500 }
+        );
     }
 }
