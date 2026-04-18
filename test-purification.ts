@@ -7,7 +7,9 @@ async function verifyPurification() {
     console.log("Testing search query: 'toilet paper'");
     console.log("Expecting 0 matches for /seat|cover|holder/i \n");
 
-    const results = await searchProducts('toilet paper', 1);
+    // FIX: Remove the second argument '1'. 
+    // The signature is now (query: string, targetUnit?: string)
+    const results = await searchProducts('toilet paper');
 
     let seatCoversFound = 0;
 
