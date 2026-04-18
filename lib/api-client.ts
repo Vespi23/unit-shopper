@@ -114,10 +114,18 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
             filteredResults = filteredResults.map(p => {
                 const correction = correctionMap.get(p.id);
                 if (correction) {
+                    // 1. Assign values to the object
                     p.totalAmount = correction.verifiedTotal;
                     p.unit = correction.unit;
                     p.aiVerified = true; 
-                    p.pricePerUnit = calculatePricePerUnit(p.price, p.totalAmount, p.unit);
+                    
+                    // 2. Use Nullish Coalescing to satisfy strict type checking
+                    // Fallback to 0 and 'unknown' ensures calculatePricePerUnit gets valid types
+                    p.pricePerUnit = calculatePricePerUnit(
+                        p.price, 
+                        p.totalAmount ?? 0, 
+                        p.unit ?? 'unknown'
+                    );
                 }
                 return p;
             });
