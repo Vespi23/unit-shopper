@@ -3,22 +3,31 @@ import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
 import { getAmazonAffiliateLink } from './affiliate';
 
+// --- CONSTANTS ---
 const EXACT_MATCH_QUERIES = new Set(['toilet paper', 'paper towel', 'paper towels']);
 const ASIN_REGEX = /\/dp\/([A-Z0-9]{10})/;
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 
+const searchCache = new Map<string, { data: Product[], timestamp: number }>();
+const CACHE_TTL_MS = 60 * 1000; 
+
+// --- AI TIE-BREAKER (PARALLELIZED & DYNAMIC) ---
 async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
     if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
+
     const CHUNK_SIZE = 7; 
     const chunks = [];
     for (let i = 0; i < products.length; i += CHUNK_SIZE) {
         chunks.push(products.slice(i, i + CHUNK_SIZE));
     }
+
     const chunkPromises = chunks.map(async (chunk, index) => {
         const prompt = `Task: Extract "Pack Size" and "Total Weight". Return ONLY JSON: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}] \nProducts: ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 18000); 
+
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                 method: 'POST',
@@ -36,14 +45,19 @@ async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
             return [];
         }
     });
+
     const results = await Promise.all(chunkPromises);
     return results.flat();
 }
 
+// --- MAIN SEARCH FUNCTION ---
 export async function searchProducts(query: string, page: number = 1): Promise<Product[]> {
     const START_TIME = Date.now();
-    const VERCEL_CUTOFF = 55000; 
+    const VERCEL_CUTOFF = 55000; // 55s ceiling
     const cacheKey = query.toLowerCase().trim().substring(0, 100);
+
+    const cachedData = searchCache.get(cacheKey);
+    if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL_MS) return cachedData.data;
 
     try {
         const apiSearchTerm = EXACT_MATCH_QUERIES.has(cacheKey) ? `"${cacheKey}"` : cacheKey;
@@ -67,7 +81,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         };
 
         const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
-        const SCRAPE_TIMEOUT = 32000; 
+        const SCRAPE_TIMEOUT = 32000; // Phase 1 Deadline
 
         const pagePromises = pageNumbers.map(p => {
             const delay = (p - 1) * 150; 
@@ -85,18 +99,27 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         settleResults.forEach(res => { if (res.status === 'fulfilled') products = [...products, ...res.value]; });
         products = Array.from(new Map(products.map(p => [p.id, p])).values());
 
-        let filtered = products.filter(p => (p.rating ?? 0) >= 3.8 && (p.reviews ?? 0) >= 50);
+        // --- TIERED QUALITY FILTERING ---
+        let filtered = products.filter(p => (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100);
+        
+        if (filtered.length === 0) {
+            filtered = products.filter(p => (p.rating ?? 0) >= 3.7 && (p.reviews ?? 0) >= 25);
+        }
+
         if (filtered.length === 0 && products.length > 0) {
             console.warn(`[WARNING] No results at floor. Returning raw data for: ${query}`);
             filtered = products.slice(0, 15);
         }
+        
         filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 
+        // --- ADAPTIVE AI PHASE ---
         const timeLeft = VERCEL_CUTOFF - (Date.now() - START_TIME);
         if (filtered.length > 0 && timeLeft > 18000) {
             const highRisk = filtered.slice(0, timeLeft > 28000 ? 15 : 8);
             const corrections = await verifyUnitsWithAI(highRisk);
             const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
+            
             filtered = filtered.map(p => {
                 const correction = correctionMap.get(p.id);
                 if (correction) {
@@ -108,6 +131,8 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                 return p;
             });
         }
+
+        searchCache.set(cacheKey, { data: filtered, timestamp: Date.now() });
         return filtered;
     } catch (error) { return []; }
 }
@@ -120,12 +145,15 @@ function parseAmazonHTML(html: string): Product[] {
         const asin = item.attr('data-asin') || `idx-${i}`; 
         const title = item.find('h2 a span, h2 span, span.a-text-normal').first().text().trim();
         if (!title || title.length < 5) return;
+
         const price = parseFloat(item.find('.a-price span.a-offscreen').first().text().replace(/[\$,]/g, '')) || 0;
         const ratingRaw = item.find('[aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt, i.a-icon-star .a-icon-alt').first().text();
         const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
         const reviewsRaw = item.find('span.a-size-base.s-underline-text, .a-size-small .a-size-base').first().text().replace(/[,()]/g, '');
         const reviews = parseInt(reviewsRaw.match(REVIEWS_REGEX)?.[1] || "0", 10) || 0;
+        
         const unitInfo = parseUnit(title);
+
         products.push({
             id: asin, title, price, source: 'Amazon', rating, reviews,
             image: item.find('img.s-image').attr('src') || '',

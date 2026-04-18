@@ -76,25 +76,21 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
-            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) return;
+            
+            // SHIELD: Only re-scrape if query changed. 
+            // Let the useMemo handle the unit conversion instantly on the client.
+            if (lastInitialResultsQuery.current === submittedQuery) return;
 
             setLoading(true);
-            setSearched(true);
             try {
-                // Pass target unit to API for AI Tie-Breaker accuracy
-                const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
-                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}${unitParam}`);
+                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}`);
                 const data = await res.json();
                 setResults(Array.isArray(data) ? data : []);
-                setPage(1);
-            } catch (error) {
-                console.error("Search failed", error);
-            } finally {
-                setLoading(false);
-            }
+                lastInitialResultsQuery.current = submittedQuery;
+            } catch (error) { console.error(error); } finally { setLoading(false); }
         }
         fetchResults();
-    }, [submittedQuery, selectedUnit]); // Re-fetch on unit change for AI accuracy
+    }, [submittedQuery]); // Removed selectedUnit from dependencies
 
     const convertedResults = useMemo(() => {
         return results.map(product => {
