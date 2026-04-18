@@ -1,3 +1,8 @@
+import { Product } from './types';
+import { parseUnit, calculatePricePerUnit, normalizeUnit } from './unit-parser';
+import * as cheerio from 'cheerio';
+import { getAmazonAffiliateLink } from './affiliate';
+
 // --- CONSTANTS ---
 const EXACT_MATCH_QUERIES = new Set(['toilet paper', 'paper towel', 'paper towels']);
 const RATING_REGEX = /([0-9.]+) out of 5|([0-9.]+)\sstars/i;
