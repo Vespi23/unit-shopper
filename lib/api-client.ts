@@ -11,45 +11,46 @@ const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 const searchCache = new Map<string, { data: Product[], timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000; 
 
-// --- AI TIE-BREAKER ---
-async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
-    if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
+// 1. IMPROVED AI PROMPT: Explicit Multi-Pack Instructions
+    async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
+        if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
 
-    const CHUNK_SIZE = 7; 
-    const chunks = [];
-    for (let i = 0; i < products.length; i += CHUNK_SIZE) {
-        chunks.push(products.slice(i, i + CHUNK_SIZE));
-    }
-
-    const chunkPromises = chunks.map(async (chunk) => {
-        const prompt = `Task: Verify "Pack Size" and "Total Weight/Count". 
-        Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb|rolls"}]
-        Products: ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000); 
-
-        try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-                signal: signal || controller.signal 
-            });
-            clearTimeout(timeoutId);
-            const data = await response.json();
-            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            const jsonMatch = rawText?.match(/\[[\s\S]*\]/);
-            return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-        } catch (error) {
-            clearTimeout(timeoutId);
-            return [];
+        const CHUNK_SIZE = 7; 
+        const chunks = [];
+        for (let i = 0; i < products.length; i += CHUNK_SIZE) {
+            chunks.push(products.slice(i, i + CHUNK_SIZE));
         }
-    });
 
-    const results = await Promise.all(chunkPromises);
-    return results.flat();
-}
+        const chunkPromises = chunks.map(async (chunk) => {
+            const prompt = `Task: Calculate the TOTAL quantity. 
+            Example: "2 Packs of 12 Rolls" = 24. "Case of 4 (15oz cans)" = 60.
+            Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|ct|lb|rolls|sheets"}]
+            Products: ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000); 
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+                    signal: signal || controller.signal 
+                });
+                clearTimeout(timeoutId);
+                const data = await response.json();
+                const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                const jsonMatch = rawText?.match(/\[[\s\S]*\]/);
+                return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+            } catch (error) {
+                clearTimeout(timeoutId);
+                return [];
+            }
+        });
+
+        const results = await Promise.all(chunkPromises);
+        return results.flat();
+    }
 
 // --- MAIN SEARCH ENGINE ---
 export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
@@ -122,24 +123,36 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         // PHASE 3: AI Re-Verification
         const timeLeft = VERCEL_CEILING - (Date.now() - START_TIME);
         if (topPerformers.length > 0 && timeLeft > 18000) {
-            const toVerify = topPerformers.slice(0, 15);
-            const corrections = await verifyUnitsWithAI(toVerify);
-            const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
-            
-            topPerformers = topPerformers.map(p => {
-                const correction = correctionMap.get(p.id);
-                if (correction) {
-                    p.totalAmount = correction.verifiedTotal;
-                    p.unit = correction.unit;
-                    p.aiVerified = true; 
-                    p.pricePerUnit = calculatePricePerUnit(p.price, p.totalAmount ?? 0, p.unit ?? 'unknown');
-                    p.score = p.price / (p.totalAmount || 1);
-                }
-                return p;
-            });
-            
-            topPerformers.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
-        }
+        const toVerify = topPerformers.slice(0, 15);
+        const corrections = await verifyUnitsWithAI(toVerify);
+        const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
+        
+        topPerformers = topPerformers.map(p => {
+            const correction = correctionMap.get(p.id);
+            if (correction) {
+                const newTotal = correction.verifiedTotal;
+                const newUnit = correction.unit;
+                
+                p.totalAmount = newTotal;
+                p.unit = newUnit;
+                p.aiVerified = true; 
+                
+                // CRITICAL FIX: Sync the unitInfo metadata so the frontend display matches
+                p.unitInfo = {
+                    unit: newUnit,
+                    value: newTotal, // For multi-packs, value and totalValue become the same
+                    totalValue: newTotal,
+                    formatted: `${newTotal} ${newUnit}`
+                };
+
+                p.pricePerUnit = calculatePricePerUnit(p.price, newTotal, newUnit);
+                p.score = p.price / (newTotal || 1);
+            }
+            return p;
+        });
+        
+        topPerformers.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
+    }
 
         searchCache.set(cacheKey, { data: topPerformers, timestamp: Date.now() });
         return topPerformers;
