@@ -18,6 +18,18 @@ interface SearchPageProps {
 
 const ITEMS_PER_PAGE = 40;
 
+// Canonical Mapping to combine duplicate unit variations
+const CANONICAL_UNITS: Record<string, string> = {
+    'ounce': 'oz', 'ounces': 'oz',
+    'pound': 'lb', 'pounds': 'lb', 'lbs': 'lb',
+    'count': 'count', 'counts': 'count', 'ct': 'count', 'pcs': 'count', 'ea': 'count',
+    'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz', 'fl. oz.': 'fl oz', 'fluid oz': 'fl oz',
+    'gallon': 'gal', 'gallons': 'gal',
+    'gram': 'g', 'grams': 'g',
+    'milliliter': 'ml', 'milliliters': 'ml',
+    'liter': 'l', 'liters': 'l'
+};
+
 export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -41,7 +53,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [page, setPage] = useState(1);
     const lastInitialResultsQuery = useRef<string | null>(null);
 
-    // Sync state with URL changes (back button support)
     useEffect(() => {
         const q = searchParams.get('q') || '';
         const u = searchParams.get('u') || '';
@@ -64,20 +75,19 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     };
 
     const handleUnitChange = (unit: string) => {
-        setSelectedUnit(unit);
+        // Standardize the unit before saving to state/URL
+        const canonical = CANONICAL_UNITS[unit.toLowerCase()] || unit;
+        setSelectedUnit(canonical);
+        
         const params = new URLSearchParams(searchParams.toString());
-        if (unit) params.set('u', unit); else params.delete('u');
+        if (canonical) params.set('u', canonical); else params.delete('u');
         router.push(`/?${params.toString()}`, { scroll: false });
     };
 
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
-
-            // Only skip if query is identical to last initial results AND unit is empty
-            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) {
-                return;
-            }
+            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) return;
 
             setLoading(true);
             setSearched(true);
@@ -107,10 +117,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     ...product,
                     pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit),
                     score: product.price / convertedAmount, 
-                    unitInfo: {
-                        ...product.unitInfo,
-                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}`
-                    }
+                    unitInfo: { ...product.unitInfo, formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}` }
                 };
             }
             return {
@@ -123,8 +130,15 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     }, [results, selectedUnit]);
 
     const availableUnits = useMemo(() => {
-        const units = Array.from(new Set(results.map(p => p.unitInfo?.unit).filter(Boolean))) as string[];
-        return units.sort();
+        // Map raw units to canonical forms to remove duplicates (e.g., ounce -> oz)
+        const units = results
+            .map(p => {
+                const raw = p.unitInfo?.unit?.toLowerCase();
+                return raw ? (CANONICAL_UNITS[raw] || raw) : null;
+            })
+            .filter(Boolean) as string[];
+        
+        return Array.from(new Set(units)).sort();
     }, [results]);
 
     const sortedAndConvertedResults = useMemo(() => {
@@ -169,12 +183,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             )}
                         </form>
 
-                        {/* LYNX VISION EXTENSION PROMO */}
                         <div className="mt-8 hidden sm:block animate-in fade-in zoom-in duration-700 delay-300">
                             <div className="glass dark:glass-dark rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl lynx-glow">
                                 <div className="flex items-center gap-4">
                                     <div className="relative h-10 w-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm border overflow-hidden">
-                                        <Image src="/extension-logo.png" alt="Lynx Vision Extension Icon" width={38} height={38} className="object-contain" />
+                                        <Image src="/extension-logo.png" alt="Lynx Vision" width={38} height={38} className="object-contain" />
                                     </div>
                                     <div className="text-left">
                                         <div className="flex items-center gap-2">
@@ -217,7 +230,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                     <option value="">Original Units</option>
                                     {availableUnits.length > 0 && (
                                         <optgroup label="Detected in Results">
-                                            {availableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                            {availableUnits.map(unit => (
+                                                <option key={unit} value={unit}>
+                                                    {unit === 'count' ? 'Count (ea)' : unit}
+                                                </option>
+                                            ))}
                                         </optgroup>
                                     )}
                                     <optgroup label="Generalize Weights">
