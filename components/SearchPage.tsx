@@ -10,7 +10,11 @@ import { ComparisonView } from '@/components/ComparisonView';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
-import { convertValue, calculatePricePerUnit, toCanonicalUnit } from '@/lib/unit-parser';
+import { 
+    convertValue, 
+    calculatePricePerUnit, 
+    toCanonicalUnit 
+} from '@/lib/unit-parser';
 
 interface SearchPageProps {
     initialResults?: Product[];
@@ -36,9 +40,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
-    const [disabledUnits, setDisabledUnits] = useState<Set<string>>(new Set());
+    const [disabledUnits] = useState<Set<string>>(new Set());
     
-    const [page, setPage] = useState(1);
+    const [page] = useState(1);
     const lastInitialResultsQuery = useRef<string | null>(null);
 
     // Sync state with URL (Back button support)
@@ -60,7 +64,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
         router.push(`/?${params.toString()}`, { scroll: false });
         setSubmittedQuery(newQuery);
-        setPage(1);
     };
 
     const handleUnitChange = (unit: string) => {
@@ -70,16 +73,16 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         const params = new URLSearchParams(searchParams.toString());
         if (canonical && canonical !== 'unknown') params.set('u', canonical); else params.delete('u');
         
-        // Pushing to URL keeps navigation history but does NOT trigger a new API search
+        // Push to URL for shareability, but does NOT trigger re-search
         router.push(`/?${params.toString()}`, { scroll: false });
     };
 
-    // SEARCH EFFECT: Strictly Network-Only
+    // SEARCH EFFECT: Strictly Network-Only (Decoupled from Unit Change)
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
 
-            // PRE-FLIGHT SHIELD: Skip if SSR already provided data for this specific query
+            // PRE-FLIGHT SHIELD: Skip if SSR already provided data
             if (initialResults.length > 0 && !lastInitialResultsQuery.current && submittedQuery === initialQuery) {
                 lastInitialResultsQuery.current = submittedQuery;
                 return;
@@ -88,12 +91,10 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             setLoading(true);
             setSearched(true);
             try {
-                // We pass current selectedUnit to the API to help AI disambiguation
                 const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
                 const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}${unitParam}`);
                 const data = await res.json();
                 setResults(Array.isArray(data) ? data : []);
-                setPage(1);
                 lastInitialResultsQuery.current = submittedQuery;
             } catch (error) {
                 console.error("Search failed", error);
@@ -102,11 +103,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             }
         }
         fetchResults();
-        
-        // CRITICAL: selectedUnit is removed from dependencies to prevent re-searching when changing units.
     }, [submittedQuery]);
 
-    // CONVERSION MEMO: Strictly Local-UI
+    // CONVERSION MEMO: Strictly Local-UI recalculation
     const convertedResults = useMemo(() => {
         return results.map(product => {
             if (!selectedUnit || selectedUnit === 'unknown' || !product.unitInfo) return product;
@@ -179,6 +178,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             )}
                         </form>
 
+                        {/* LYNX VISION EXTENSION PROMO */}
                         <div className="mt-8 hidden sm:block animate-in fade-in zoom-in duration-700 delay-300">
                             <div className="glass dark:glass-dark rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl lynx-glow">
                                 <div className="flex items-center gap-4">
@@ -188,7 +188,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                     <div className="text-left">
                                         <div className="flex items-center gap-2">
                                             <p className="text-sm font-bold text-foreground">Lynx Vision</p>
-                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">Official Tool</span>
+                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">Verified Tool</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground leading-none mt-1">
                                             Automatic unit price comparisons while you shop on Amazon.

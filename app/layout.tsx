@@ -41,12 +41,21 @@ export const metadata: Metadata = {
     title: "BudgetLynx - Find the True Best Deal on Amazon",
     description: "Don't get tricked by confusing package sizes. We calculate the REAL unit price so you save money on every shop.",
     siteName: "BudgetLynx",
+    images: [
+      {
+        url: "/logo.png", // SEO FIX: Direct mapping for social previews
+        width: 1200,
+        height: 630,
+        alt: "BudgetLynx - See What Others Miss",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "BudgetLynx - Unit Price Search",
     description: "Compare unit prices across Amazon per ounce, count, or pound.",
     creator: "@BudgetLynx",
+    images: ["/logo.png"], // SEO FIX: Twitter Card preview
   },
   other: {
     "impact-site-verification": "81bc5835-fc1d-41ed-94be-799749315bd0",
