@@ -23,7 +23,6 @@ async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
     }
 
     const chunkPromises = chunks.map(async (chunk, index) => {
-        // FIX: Using backticks for prompt interpolation
         const prompt = `Identify "Pack/Case" and "Total Weight" from titles. 
         Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb"}]
         Products: ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
@@ -84,7 +83,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         };
 
         const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
-        const SCRAPE_TIMEOUT_MS = 45000; // Expanded for "Toilet Paper" latency
+        const SCRAPE_TIMEOUT_MS = 45000; 
 
         const pagePromises = pageNumbers.map(p => {
             const delay = (p - 1) * 150; 
@@ -105,16 +104,19 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
         allProducts.forEach(product => { if (!uniqueProductsMap.has(product.id)) uniqueProductsMap.set(product.id, product); });
         let products = Array.from(uniqueProductsMap.values());
 
-        // MOVED FROM ROUTE: Filter and sort before AI phase
-        let filteredResults = products.filter(p => (p.rating ?? 0) >= 3.8 && (p.reviews ?? 0) >= 50);
-        if (filteredResults.length === 0) filteredResults = products.slice(0, 15);
+        // Initial filtering before AI Tie-Breaker
+        let filteredResults = products.filter(p => (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100);
+        
+        // Fallback for tight queries
+        if (filteredResults.length === 0 && products.length > 0) {
+            filteredResults = products.filter(p => (p.rating ?? 0) >= 3.5 && (p.reviews ?? 0) >= 50).slice(0, 15);
+        }
         
         filteredResults.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 
-        const timeElapsed = Date.now() - START_TIME;
-        const timeLeft = MAX_EXECUTION_TIME_MS - timeElapsed;
+        const timeLeft = MAX_EXECUTION_TIME_MS - (Date.now() - START_TIME);
 
-        // Adaptive AI Trigger: Need at least 15s remaining
+        // Adaptive Phase-Shift: skip AI if < 15s remains
         if (filteredResults.length > 0 && timeLeft > 15000) {
             const AI_VERIFICATION_LIMIT = timeLeft > 25000 ? 15 : 7;
             const highRisk = filteredResults.slice(0, AI_VERIFICATION_LIMIT);
@@ -128,7 +130,7 @@ export async function searchProducts(query: string, page: number = 1): Promise<P
                     p.totalAmount = correction.verifiedTotal;
                     p.unit = correction.unit;
                     p.aiVerified = true; 
-                    // TYPE SAFE FIX: Nullish coalescing for TS build
+                    // TYPE SAFE FIX: Satisfy Vercel TS check
                     p.pricePerUnit = calculatePricePerUnit(p.price, p.totalAmount ?? 0, p.unit ?? 'unknown');
                 }
                 return p;
@@ -152,7 +154,8 @@ function parseAmazonHTML(html: string): Product[] {
 
         const price = parseFloat(item.find('.a-price span.a-offscreen').first().text().replace(/[\$,]/g, '')) || 0;
         const ratingRaw = item.find('span[aria-label*="out of 5 stars"], i.a-icon-star span.a-icon-alt').first().text();
-        const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
+        const ratingMatch = ratingRaw.match(RATING_REGEX);
+        const rating = ratingMatch ? parseFloat(ratingMatch[1] || ratingMatch[2]) : 0;
         const reviews = parseInt(item.find('span.a-size-base.s-underline-text').first().text().replace(/[,()]/g, ''), 10) || 0;
         
         const unitInfo = parseUnit(title);
