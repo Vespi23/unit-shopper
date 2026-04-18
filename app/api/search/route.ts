@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { searchProducts } from '@/lib/api-client';
+import { convertValue, calculatePricePerUnit, UnitType } from '@/lib/unit-parser';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -8,36 +9,40 @@ export const maxDuration = 60;
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
-    // UPGRADE: Safely handle multi-hop IPs
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'unknown';
+    const targetUnit = searchParams.get('u') as UnitType | null; // e.g., ?u=lb
 
-    if (!query) {
-        return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
-    }
+    if (!query) return NextResponse.json({ error: 'Query required' }, { status: 400 });
 
     try {
-        console.log(`[EXECUTION START] Query: ${query} (IP: ${ip})`);
-        
-        // heavy lifting moved to lib/api-client.ts to stay within 54s safety window
-        const results = await searchProducts(query);
+        // searchProducts now handles the 56s ceiling internally
+        let results = await searchProducts(query);
 
-        // FORCE-THROUGH WORKAROUND: Truncate to top 100 to prevent serialization timeout
-        const finalResults = results.slice(0, 100);
+        // --- GENERALIZATION OVERRIDE ---
+        if (targetUnit && results.length > 0) {
+            results = results.map(p => {
+                const converted = convertValue(
+                    p.totalAmount ?? 0, 
+                    (p.unit as UnitType) || 'unknown', 
+                    targetUnit
+                );
+                
+                if (converted !== null && converted > 0) {
+                    return {
+                        ...p,
+                        totalAmount: converted,
+                        unit: targetUnit,
+                        pricePerUnit: calculatePricePerUnit(p.price, converted, targetUnit),
+                        generalized: true
+                    };
+                }
+                return { ...p, incompatible: true };
+            });
+        }
 
-        return NextResponse.json(finalResults, {
-            headers: {
-                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0',
-                'X-Result-Count': finalResults.length.toString()
-            }
+        return NextResponse.json(results.slice(0, 100), {
+            headers: { 'X-Execution-Ceiling': '56s' }
         });
     } catch (error) {
-        console.error('[FATAL SEARCH ERROR]:', error);
-        return NextResponse.json(
-            { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' }, 
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Search failed' }, { status: 500 });
     }
 }
