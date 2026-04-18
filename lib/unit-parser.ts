@@ -8,7 +8,6 @@ export interface UnitInfo {
     formatted: string;
 }
 
-// NEW: Centralized canonical mapping for the entire app
 export const CANONICAL_UNITS: Record<string, string> = {
     'ounce': 'oz', 'ounces': 'oz', 'oz.': 'oz',
     'pound': 'lb', 'pounds': 'lb', 'lbs': 'lb', 'lb.': 'lb',
@@ -20,7 +19,6 @@ export const CANONICAL_UNITS: Record<string, string> = {
     'liter': 'l', 'liters': 'l'
 };
 
-// NEW: Helper to standardize units
 export function toCanonicalUnit(unit: string): UnitType {
     if (!unit) return 'unknown';
     const lower = unit.toLowerCase().trim();
@@ -52,24 +50,15 @@ const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
 export function parseUnit(title: string): UnitInfo | null {
     let cleanTitle = title.toLowerCase();
-
-    if (cleanTitle.includes(',')) {
-        cleanTitle = cleanTitle.replace(/\b(\d+),(\d+)\b/g, '$1.$2');
-    }
-
+    if (cleanTitle.includes(',')) cleanTitle = cleanTitle.replace(/\b(\d+),(\d+)\b/g, '$1.$2');
     if (cleanTitle.includes('x')) {
         cleanTitle = cleanTitle
             .replace(/\b\d+(?:\.\d+)?\s?x\s?\d+(?:\.\d+)?\s?(?:mm|cm|in|inch|inches|ft|foot|feet|m|meter|meters|yd|yard|yards)\b/g, '')
             .replace(/\b\d+(?:\.\d+)?\s?x[\)\s-]*(?:power|concentrated|concentration|strength|stronger|action|cleaning|ultra|advanced|max|tough|deep|clean|plus|oxy|stain|grease|odor|scent|formula|performance|boost|lasting|wash|magnification|zoom)\b/g, '')
             .replace(/\(\d+(?:\.\d+)?\s?x\)/g, '');
     }
-
-    if (cleanTitle.includes('size')) {
-        cleanTitle = cleanTitle.replace(/\s\d+\s?sizes?/g, '');
-    }
-    if (cleanTitle.includes('serving')) {
-        cleanTitle = cleanTitle.replace(/\b\d+(?:\.\d+)?[-\s]?servings?\b/g, '');
-    }
+    if (cleanTitle.includes('size')) cleanTitle = cleanTitle.replace(/\s\d+\s?sizes?/g, '');
+    if (cleanTitle.includes('serving')) cleanTitle = cleanTitle.replace(/\b\d+(?:\.\d+)?[-\s]?servings?\b/g, '');
 
     cleanTitle = cleanTitle.trim();
     const lowerTitle = cleanTitle;
@@ -83,7 +72,6 @@ export function parseUnit(title: string): UnitInfo | null {
 
     let quantity = 1;
     let foundPackMultiplier = false;
-
     const packMatch = lowerTitle.match(PACK_REGEX);
     if (packMatch) {
         const q = packMatch[1] || packMatch[2] || packMatch[3];
@@ -117,26 +105,14 @@ export function parseUnit(title: string): UnitInfo | null {
                 unit = 'count';
             }
         }
-
         if (unit === 'unknown') {
             const unitOrder: { key: keyof typeof UNIT_REGEX, type: UnitType }[] = [
-                { key: 'fl_oz', type: 'fl oz' },
-                { key: 'gal', type: 'gal' },
-                { key: 'qt', type: 'qt' },
-                { key: 'pt', type: 'pt' },
-                { key: 'oz', type: 'oz' },
-                { key: 'lb', type: 'lb' },
-                { key: 'ml', type: 'ml' },
-                { key: 'l', type: 'l' },
-                { key: 'mg', type: 'mg' },
-                { key: 'kg', type: 'kg' },
-                { key: 'g', type: 'g' },
-                { key: 'sq_ft', type: 'sq ft' },
-                { key: 'loads', type: 'loads' },
-                { key: 'sheets', type: 'sheets' },
-                { key: 'rolls', type: 'rolls' }
+                { key: 'fl_oz', type: 'fl oz' }, { key: 'gal', type: 'gal' }, { key: 'qt', type: 'qt' },
+                { key: 'pt', type: 'pt' }, { key: 'oz', type: 'oz' }, { key: 'lb', type: 'lb' },
+                { key: 'ml', type: 'ml' }, { key: 'l', type: 'l' }, { key: 'mg', type: 'mg' },
+                { key: 'kg', type: 'kg' }, { key: 'g', type: 'g' }, { key: 'sq_ft', type: 'sq ft' },
+                { key: 'loads', type: 'loads' }, { key: 'sheets', type: 'sheets' }, { key: 'rolls', type: 'rolls' }
             ];
-
             for (const u of unitOrder) {
                 const match = lowerTitle.match(UNIT_REGEX[u.key]);
                 if (match) {
@@ -157,14 +133,10 @@ export function parseUnit(title: string): UnitInfo | null {
                 if (potentialQuantity > value && value >= 1) {
                     const ratio = potentialQuantity / value;
                     if (Number.isInteger(ratio) && ratio !== value && ratio !== potentialQuantity) {
-                        if (new RegExp(`\\b${ratio}\\b`).test(lowerTitle)) {
-                            isActuallyTotal = true;
-                        }
+                        if (new RegExp(`\\b${ratio}\\b`).test(lowerTitle)) isActuallyTotal = true;
                     }
                 }
-                if (!isActuallyTotal) {
-                    quantity = potentialQuantity;
-                }
+                if (!isActuallyTotal) quantity = potentialQuantity;
             }
         }
     } else {
@@ -183,13 +155,10 @@ export function parseUnit(title: string): UnitInfo | null {
 
     if ((unit === 'sheets' || unit === 'sq ft') && !foundPackMultiplier) {
         const secondaryCountMatch = lowerTitle.match(UNIT_REGEX.count);
-        if (secondaryCountMatch) {
-            quantity = parseInt(secondaryCountMatch[1], 10);
-        } else {
+        if (secondaryCountMatch) quantity = parseInt(secondaryCountMatch[1], 10);
+        else {
             const secondaryRollsMatch = lowerTitle.match(UNIT_REGEX.rolls);
-            if (secondaryRollsMatch) {
-                quantity = parseInt(secondaryRollsMatch[1], 10);
-            }
+            if (secondaryRollsMatch) quantity = parseInt(secondaryRollsMatch[1], 10);
         }
     }
 
@@ -200,15 +169,8 @@ export function parseUnit(title: string): UnitInfo | null {
     }
 
     if (unit === 'unknown' || value <= 0) return null;
-
-    if (explicitTotalValue !== null) {
-        value = explicitTotalValue;
-        quantity = 1;
-    }
-
-    if ((unit === 'rolls' || unit === 'count' || unit === 'loads') && value === quantity && value > 2) {
-        quantity = 1;
-    }
+    if (explicitTotalValue !== null) { value = explicitTotalValue; quantity = 1; }
+    if ((unit === 'rolls' || unit === 'count' || unit === 'loads') && value === quantity && value > 2) quantity = 1;
 
     const valueStr = value.toString();
     const isExplicitTotal = lowerTitle.includes(`total of ${valueStr}`) || 
@@ -232,77 +194,35 @@ export function parseUnit(title: string): UnitInfo | null {
             }
         }
     }
-
-    if ((isExplicitTotal || isImplicitTotal) && quantity > 1) {
-        quantity = 1;
-    }
+    if ((isExplicitTotal || isImplicitTotal) && quantity > 1) quantity = 1;
 
     let totalValue = value * (quantity || 1);
-
     return {
-        value,
-        unit,
-        quantity,
-        totalValue,
+        value, unit, quantity, totalValue,
         formatted: `${parseFloat(totalValue.toFixed(2))} ${unit === 'count' ? 'count' : unit}`
     };
 }
 
 export function normalizeUnit(info: UnitInfo): UnitInfo {
     const copy = { ...info };
-
-    if (copy.unit === 'lb') {
-        copy.value *= 16;
-        copy.unit = 'oz';
-        copy.totalValue *= 16;
-    } else if (copy.unit === 'kg') {
-        copy.value *= 35.274;
-        copy.unit = 'oz';
-        copy.totalValue *= 35.274;
-    } else if (copy.unit === 'g') {
-        copy.value *= 0.035274;
-        copy.unit = 'oz';
-        copy.totalValue *= 0.035274;
-    } else if (copy.unit === 'mg') {
-        copy.value *= 0.000035274;
-        copy.unit = 'oz';
-        copy.totalValue *= 0.000035274;
-    }
-    else if (copy.unit === 'gal') {
-        copy.value *= 128;
-        copy.unit = 'fl oz';
-        copy.totalValue *= 128;
-    } else if (copy.unit === 'qt') {
-        copy.value *= 32;
-        copy.unit = 'fl oz';
-        copy.totalValue *= 32;
-    } else if (copy.unit === 'pt') {
-        copy.value *= 16;
-        copy.unit = 'fl oz';
-        copy.totalValue *= 16;
-    } else if (copy.unit === 'l') {
-        copy.value *= 33.814;
-        copy.unit = 'fl oz';
-        copy.totalValue *= 33.814;
-    } else if (copy.unit === 'ml') {
-        copy.value *= 0.033814;
-        copy.unit = 'fl oz';
-        copy.totalValue *= 0.033814;
-    }
+    if (copy.unit === 'lb') { copy.value *= 16; copy.unit = 'oz'; copy.totalValue *= 16; }
+    else if (copy.unit === 'kg') { copy.value *= 35.274; copy.unit = 'oz'; copy.totalValue *= 35.274; }
+    else if (copy.unit === 'g') { copy.value *= 0.035274; copy.unit = 'oz'; copy.totalValue *= 0.035274; }
+    else if (copy.unit === 'mg') { copy.value *= 0.000035274; copy.unit = 'oz'; copy.totalValue *= 0.000035274; }
+    else if (copy.unit === 'gal') { copy.value *= 128; copy.unit = 'fl oz'; copy.totalValue *= 128; }
+    else if (copy.unit === 'qt') { copy.value *= 32; copy.unit = 'fl oz'; copy.totalValue *= 32; }
+    else if (copy.unit === 'pt') { copy.value *= 16; copy.unit = 'fl oz'; copy.totalValue *= 16; }
+    else if (copy.unit === 'l') { copy.value *= 33.814; copy.unit = 'fl oz'; copy.totalValue *= 33.814; }
+    else if (copy.unit === 'ml') { copy.value *= 0.033814; copy.unit = 'fl oz'; copy.totalValue *= 0.033814; }
     else if (copy.unit === 'sheets') {
-        copy.value /= 300; 
-        copy.unit = 'rolls';
-        copy.totalValue /= 300;
+        const isPaperTowel = /towel|napkin/i.test(info.formatted); 
+        const divisor = isPaperTowel ? 100 : 300; // DYNAMIC MATH FIX
+        copy.value /= divisor; copy.unit = 'rolls'; copy.totalValue /= divisor;
     } else if (copy.unit === 'sq ft') {
-        copy.value /= 40; 
-        copy.unit = 'rolls';
-        copy.totalValue /= 40;
+        copy.value /= 40; copy.unit = 'rolls'; copy.totalValue /= 40;
     } else if (copy.unit === 'loads') {
-        copy.value *= 1.5; 
-        copy.unit = 'fl oz';
-        copy.totalValue *= 1.5;
+        copy.value *= 1.5; copy.unit = 'fl oz'; copy.totalValue *= 1.5;
     }
-
     copy.formatted = `${parseFloat(copy.totalValue.toFixed(2))} ${copy.unit}`;
     return copy;
 }
@@ -310,48 +230,29 @@ export function normalizeUnit(info: UnitInfo): UnitInfo {
 export function calculatePricePerUnit(price: number, totalValue: number, unit: string): string {
     if (!totalValue || totalValue === 0) return 'N/A';
     const ppu = price / totalValue;
-
-    // Use standardized units for labels
     const standardized = toCanonicalUnit(unit);
     let unitLabel = standardized === 'unknown' ? unit : standardized;
-    
     if (standardized === 'count') unitLabel = 'ea';
     if (standardized === 'loads') unitLabel = 'load';
     if (standardized === 'rolls') unitLabel = 'roll';
     if (standardized === 'sheets') unitLabel = 'sheet';
     if (standardized === 'sq ft') unitLabel = 'sq ft';
     if (standardized === 'fl oz') unitLabel = 'fl oz';
-
     return `$${ppu.toFixed(2)}/${unitLabel}`;
 }
 
 export function convertValue(value: number, from: string, to: string): number | null {
-    // UPDATED: Standardize inputs before conversion math
     const cFrom = toCanonicalUnit(from);
     const cTo = toCanonicalUnit(to);
-
     if (cFrom === cTo) return value;
     if (value <= 0) return null;
-
-    const weightToBase: Record<string, number> = {
-        'g': 1, 'kg': 1000, 'mg': 0.001, 'lb': 453.592, 'oz': 28.3495,
-    };
-
+    const weightToBase: Record<string, number> = { 'g': 1, 'kg': 1000, 'mg': 0.001, 'lb': 453.592, 'oz': 28.3495 };
     const volumeToBase: Record<string, number> = {
         'ml': 1, 'l': 1000, 'fl oz': 29.5735, 'gal': 3785.41, 'qt': 946.353, 'pt': 473.176,
         'loads': 29.5735 * 1.5, 'rolls': 1, 'sheets': 1 / 300, 'sq ft': 1 / 40,
     };
-
-    if (weightToBase[cFrom] && weightToBase[cTo]) {
-        const valueInGrams = value * weightToBase[cFrom];
-        return valueInGrams / weightToBase[cTo];
-    }
-
-    if (volumeToBase[cFrom] && volumeToBase[cTo]) {
-        const valueInMl = value * volumeToBase[cFrom];
-        return valueInMl / volumeToBase[cTo];
-    }
-
+    if (weightToBase[cFrom] && weightToBase[cTo]) return (value * weightToBase[cFrom]) / weightToBase[cTo];
+    if (volumeToBase[cFrom] && volumeToBase[cTo]) return (value * volumeToBase[cFrom]) / volumeToBase[cTo];
     if (cFrom === 'count' && cTo === 'count') return value;
     return null;
 }
