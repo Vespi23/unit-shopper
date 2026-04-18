@@ -42,7 +42,7 @@
   --border: oklch(1 0 0 / 10%);
 }
 
-/* TOP-LEVEL UTILITIES (Tailwind v4 Style) */
+/* TOP-LEVEL UTILITIES */
 @utility text-balance { text-wrap: balance; }
 @utility scrollbar-hide { 
   -ms-overflow-style: none; 
@@ -88,7 +88,7 @@
 }
 
 @layer base {
-  * { @apply border-border outline-ring/50; }
+  * { @apply border-border; }
   body { 
     @apply bg-background text-foreground; 
     font-family: var(--font-sans, sans-serif);
