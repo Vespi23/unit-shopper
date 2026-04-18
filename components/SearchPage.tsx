@@ -75,17 +75,22 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
-            // Only skip if query AND unit match initial load
-            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) return;
+
+            // SHIELD: Only skip if query is identical to last initial results AND unit is empty
+            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) {
+                return;
+            }
 
             setLoading(true);
             setSearched(true);
             try {
+                // We still pass selectedUnit for the INITIAL fetch to help the AI
                 const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
                 const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}${unitParam}`);
                 const data = await res.json();
                 setResults(Array.isArray(data) ? data : []);
                 setPage(1);
+                lastInitialResultsQuery.current = submittedQuery;
             } catch (error) {
                 console.error("Search failed", error);
             } finally {
@@ -93,7 +98,8 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             }
         }
         fetchResults();
-    }, [submittedQuery, selectedUnit]);
+        // REMOVE 'selectedUnit' from the array below:
+    }, [submittedQuery]);
 
     const convertedResults = useMemo(() => {
         return results.map(product => {
