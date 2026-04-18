@@ -10,7 +10,7 @@ import { ComparisonView } from '@/components/ComparisonView';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
-import { convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
+import { convertValue, calculatePricePerUnit, toCanonicalUnit } from '@/lib/unit-parser';
 
 interface SearchPageProps {
     initialResults?: Product[];
@@ -18,24 +18,12 @@ interface SearchPageProps {
 
 const ITEMS_PER_PAGE = 40;
 
-// Canonical Mapping to combine duplicate unit variations
-const CANONICAL_UNITS: Record<string, string> = {
-    'ounce': 'oz', 'ounces': 'oz',
-    'pound': 'lb', 'pounds': 'lb', 'lbs': 'lb',
-    'count': 'count', 'counts': 'count', 'ct': 'count', 'pcs': 'count', 'ea': 'count',
-    'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz', 'fl. oz.': 'fl oz', 'fluid oz': 'fl oz',
-    'gallon': 'gal', 'gallons': 'gal',
-    'gram': 'g', 'grams': 'g',
-    'milliliter': 'ml', 'milliliters': 'ml',
-    'liter': 'l', 'liters': 'l'
-};
-
 export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
     const initialQuery = searchParams.get('q') || '';
-    const initialUnit = searchParams.get('u') || '';
+    const initialUnit = toCanonicalUnit(searchParams.get('u') || '');
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
     const inputRef = useRef<HTMLInputElement>(null);
@@ -53,12 +41,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [page, setPage] = useState(1);
     const lastInitialResultsQuery = useRef<string | null>(null);
 
+    // Sync state with URL (Back button support)
     useEffect(() => {
         const q = searchParams.get('q') || '';
-        const u = searchParams.get('u') || '';
+        const u = toCanonicalUnit(searchParams.get('u') || '');
         if (q !== submittedQuery) setSubmittedQuery(q);
         if (u !== selectedUnit) setSelectedUnit(u);
-    }, [searchParams, submittedQuery, selectedUnit]);
+    }, [searchParams]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -75,23 +64,31 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     };
 
     const handleUnitChange = (unit: string) => {
-        // Standardize the unit before saving to state/URL
-        const canonical = CANONICAL_UNITS[unit.toLowerCase()] || unit;
+        const canonical = toCanonicalUnit(unit);
         setSelectedUnit(canonical);
         
         const params = new URLSearchParams(searchParams.toString());
-        if (canonical) params.set('u', canonical); else params.delete('u');
+        if (canonical && canonical !== 'unknown') params.set('u', canonical); else params.delete('u');
+        
+        // Pushing to URL keeps navigation history but does NOT trigger a new API search
         router.push(`/?${params.toString()}`, { scroll: false });
     };
 
+    // SEARCH EFFECT: Strictly Network-Only
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
-            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) return;
+
+            // PRE-FLIGHT SHIELD: Skip if SSR already provided data for this specific query
+            if (initialResults.length > 0 && !lastInitialResultsQuery.current && submittedQuery === initialQuery) {
+                lastInitialResultsQuery.current = submittedQuery;
+                return;
+            }
 
             setLoading(true);
             setSearched(true);
             try {
+                // We pass current selectedUnit to the API to help AI disambiguation
                 const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
                 const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}${unitParam}`);
                 const data = await res.json();
@@ -105,11 +102,15 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             }
         }
         fetchResults();
-    }, [submittedQuery, selectedUnit, initialResults]);
+        
+        // CRITICAL: selectedUnit is removed from dependencies to prevent re-searching when changing units.
+    }, [submittedQuery]);
 
+    // CONVERSION MEMO: Strictly Local-UI
     const convertedResults = useMemo(() => {
         return results.map(product => {
-            if (!selectedUnit || !product.unitInfo) return product;
+            if (!selectedUnit || selectedUnit === 'unknown' || !product.unitInfo) return product;
+            
             const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
 
             if (convertedAmount !== null && convertedAmount > 0) {
@@ -130,14 +131,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     }, [results, selectedUnit]);
 
     const availableUnits = useMemo(() => {
-        // Map raw units to canonical forms to remove duplicates (e.g., ounce -> oz)
         const units = results
-            .map(p => {
-                const raw = p.unitInfo?.unit?.toLowerCase();
-                return raw ? (CANONICAL_UNITS[raw] || raw) : null;
-            })
-            .filter(Boolean) as string[];
-        
+            .map(p => toCanonicalUnit(p.unitInfo?.unit || ''))
+            .filter(u => u !== 'unknown') as string[];
         return Array.from(new Set(units)).sort();
     }, [results]);
 
@@ -232,22 +228,22 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                         <optgroup label="Detected in Results">
                                             {availableUnits.map(unit => (
                                                 <option key={unit} value={unit}>
-                                                    {unit === 'count' ? 'Count (ea)' : unit}
+                                                    {unit === 'count' ? 'Each (ea)' : unit}
                                                 </option>
                                             ))}
                                         </optgroup>
                                     )}
-                                    <optgroup label="Generalize Weights">
+                                    <optgroup label="Force Weights">
                                         <option value="oz">Ounces (oz)</option>
                                         <option value="lb">Pounds (lb)</option>
                                         <option value="g">Grams (g)</option>
                                     </optgroup>
-                                    <optgroup label="Generalize Volume">
+                                    <optgroup label="Force Volume">
                                         <option value="fl oz">Fluid Oz (fl oz)</option>
                                         <option value="gal">Gallons (gal)</option>
                                         <option value="ml">Milliliters (ml)</option>
                                     </optgroup>
-                                    <optgroup label="Generalize Household">
+                                    <optgroup label="Force Household">
                                         <option value="count">Each (ea)</option>
                                         <option value="rolls">Rolls</option>
                                         <option value="sheets">Sheets</option>
