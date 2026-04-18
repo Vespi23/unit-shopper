@@ -11,7 +11,7 @@ const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 const searchCache = new Map<string, { data: Product[], timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000; 
 
-// --- AI TIE-BREAKER (PARALLELIZED CHUNKING) ---
+// --- AI TIE-BREAKER (PARALLELIZED) ---
 async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
     if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
 
@@ -22,7 +22,7 @@ async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
     }
 
     const chunkPromises = chunks.map(async (chunk) => {
-        const prompt = `Task: Identify "Pack Size" and "Total Weight/Count". 
+        const prompt = `Task: Verify "Pack Size" and "Total Weight/Count". 
         Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|fl oz|ct|lb|rolls"}]
         Products: ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
@@ -51,7 +51,7 @@ async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
     return results.flat();
 }
 
-// --- MAIN SEARCH FUNCTION ---
+// --- MAIN SEARCH ENGINE ---
 export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
     const START_TIME = Date.now();
     const VERCEL_CEILING = 55000; 
@@ -68,15 +68,8 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
             try {
                 const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
                     method: 'POST',
-                    headers: { 
-                        'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`,
-                        'Content-Type': 'application/json' 
-                    },
-                    body: JSON.stringify({ 
-                        url: p === 1 ? baseUrl : `${baseUrl}&page=${p}`, 
-                        proxy_pool: "premium", 
-                        headless: "html" 
-                    })
+                    headers: { 'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: p === 1 ? baseUrl : `${baseUrl}&page=${p}`, proxy_pool: "premium", headless: "html" })
                 });
                 const json = await res.json();
                 const html = json.results?.[0]?.content || json.content || null;
@@ -84,12 +77,12 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
             } catch (err) { return []; }
         };
 
-        // Phase 1: Parallel Scrape (5 Pages for stability)
-        const pageNumbers = [1, 2, 3, 4, 5];
-        const SCRAPE_TIMEOUT = 32000; 
+        // PHASE 1: Parallel Scrape of 7 Pages
+        const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
+        const SCRAPE_TIMEOUT = 35000; 
 
         const pagePromises = pageNumbers.map(p => {
-            const delay = (p - 1) * 150; 
+            const delay = (p - 1) * 100; 
             return new Promise<Product[]>(async (resolve) => {
                 await new Promise(r => setTimeout(r, delay));
                 const timeout = setTimeout(() => resolve([]), SCRAPE_TIMEOUT);
@@ -100,45 +93,59 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         });
 
         const settleResults = await Promise.allSettled(pagePromises);
-        let products: Product[] = [];
-        settleResults.forEach(res => { if (res.status === 'fulfilled') products = [...products, ...res.value]; });
+        let masterPool: Product[] = [];
+        settleResults.forEach(res => { if (res.status === 'fulfilled') masterPool = [...masterPool, ...res.value]; });
         
-        // Deduplicate by ASIN
-        products = Array.from(new Map(products.map(p => [p.id, p])).values());
+        // Deduplicate entire master pool (~140 items)
+        masterPool = Array.from(new Map(masterPool.map(p => [p.id, p])).values());
 
-        // Phase 2: Tiered Quality Filtering
-        let filtered = products.filter(p => (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100);
+        // PHASE 2: Tiered Filtering & Pool-Wide Sorting
+        // TIER 1: High Quality (4.0/100)
+        let filtered = masterPool.filter(p => (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100);
+        
+        // TIER 2: Moderate Quality (3.7/40) - Fallback if Tier 1 is too small
+        if (filtered.length < 10) {
+            filtered = masterPool.filter(p => (p.rating ?? 0) >= 3.7 && (p.reviews ?? 0) >= 40);
+        }
+
+        // TIER 3: Raw Fallback (Everything)
         if (filtered.length === 0) {
-            filtered = products.filter(p => (p.rating ?? 0) >= 3.7 && (p.reviews ?? 0) >= 40);
-        }
-        if (filtered.length === 0 && products.length > 0) {
-            console.warn(`[FALLBACK] Returning raw data for: ${query}`);
-            filtered = products.slice(0, 15);
+            console.warn(`[LOG] Returning raw data fallback for: ${query}`);
+            filtered = masterPool;
         }
 
+        // CRITICAL: Sort the WHOLE pool by value before slicing
         filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 
-        // Phase 3: Adaptive AI Tie-Breaker
+        // Now we take the top 40 "Value Winners" of the entire 7-page scrape
+        let topPerformers = filtered.slice(0, 40);
+
+        // PHASE 3: Adaptive AI Re-Verification
         const timeLeft = VERCEL_CEILING - (Date.now() - START_TIME);
-        if (filtered.length > 0 && timeLeft > 18000) {
-            const highRisk = filtered.slice(0, timeLeft > 28000 ? 15 : 8);
-            const corrections = await verifyUnitsWithAI(highRisk);
+        if (topPerformers.length > 0 && timeLeft > 18000) {
+            // Verify top 15 (The most likely winners)
+            const toVerify = topPerformers.slice(0, 15);
+            const corrections = await verifyUnitsWithAI(toVerify);
             const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
             
-            filtered = filtered.map(p => {
+            topPerformers = topPerformers.map(p => {
                 const correction = correctionMap.get(p.id);
                 if (correction) {
                     p.totalAmount = correction.verifiedTotal;
                     p.unit = correction.unit;
                     p.aiVerified = true; 
                     p.pricePerUnit = calculatePricePerUnit(p.price, p.totalAmount ?? 0, p.unit ?? 'unknown');
+                    p.score = p.price / (p.totalAmount || 1);
                 }
                 return p;
             });
+            
+            // Re-sort after AI corrections to ensure #1 is still accurate
+            topPerformers.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
         }
 
-        searchCache.set(cacheKey, { data: filtered, timestamp: Date.now() });
-        return filtered;
+        searchCache.set(cacheKey, { data: topPerformers, timestamp: Date.now() });
+        return topPerformers;
     } catch (error) { return []; }
 }
 
@@ -173,7 +180,7 @@ function parseAmazonHTML(html: string): Product[] {
             unit: unitInfo?.unit || 'unknown',
             amount: unitInfo?.value || 0,
             totalAmount: unitInfo?.totalValue || 0,
-            unitInfo: unitInfo || undefined, // CRITICAL: Includes metadata for frontend conversion
+            unitInfo: unitInfo || undefined, // Metadata for frontend
             pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
             link: getAmazonAffiliateLink(asin),
             currency: 'USD',
