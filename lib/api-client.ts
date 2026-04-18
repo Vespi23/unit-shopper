@@ -11,7 +11,7 @@ const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 const searchCache = new Map<string, { data: Product[], timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000; 
 
-// --- AI TIE-BREAKER (PARALLELIZED) ---
+// --- AI TIE-BREAKER ---
 async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
     if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
 
@@ -77,7 +77,7 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
             } catch (err) { return []; }
         };
 
-        // PHASE 1: Parallel Scrape of 7 Pages
+        // PHASE 1: Parallel Scrape
         const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
         const SCRAPE_TIMEOUT = 35000; 
 
@@ -93,37 +93,35 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         });
 
         const settleResults = await Promise.allSettled(pagePromises);
-        let masterPool: Product[] = [];
-        settleResults.forEach(res => { if (res.status === 'fulfilled') masterPool = [...masterPool, ...res.value]; });
+        let rawPool: Product[] = [];
+        settleResults.forEach(res => { if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; });
         
-        // Deduplicate entire master pool (~140 items)
-        masterPool = Array.from(new Map(masterPool.map(p => [p.id, p])).values());
+        // 1. Deduplicate
+        let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
 
-        // PHASE 2: Tiered Filtering & Pool-Wide Sorting
-        // TIER 1: High Quality (4.0/100)
+        // 2. PURIFICATION: Remove items with no price (unavailable)
+        masterPool = masterPool.filter(p => p.price > 0);
+
+        // PHASE 2: Tiered Filtering
         let filtered = masterPool.filter(p => (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100);
         
-        // TIER 2: Moderate Quality (3.7/40) - Fallback if Tier 1 is too small
         if (filtered.length < 10) {
             filtered = masterPool.filter(p => (p.rating ?? 0) >= 3.7 && (p.reviews ?? 0) >= 40);
         }
 
-        // TIER 3: Raw Fallback (Everything)
         if (filtered.length === 0) {
-            console.warn(`[LOG] Returning raw data fallback for: ${query}`);
             filtered = masterPool;
         }
 
-        // CRITICAL: Sort the WHOLE pool by value before slicing
+        // Pool-wide Sort
         filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 
-        // Now we take the top 40 "Value Winners" of the entire 7-page scrape
+        // Winner's Circle
         let topPerformers = filtered.slice(0, 40);
 
-        // PHASE 3: Adaptive AI Re-Verification
+        // PHASE 3: AI Re-Verification
         const timeLeft = VERCEL_CEILING - (Date.now() - START_TIME);
         if (topPerformers.length > 0 && timeLeft > 18000) {
-            // Verify top 15 (The most likely winners)
             const toVerify = topPerformers.slice(0, 15);
             const corrections = await verifyUnitsWithAI(toVerify);
             const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
@@ -140,7 +138,6 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
                 return p;
             });
             
-            // Re-sort after AI corrections to ensure #1 is still accurate
             topPerformers.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
         }
 
@@ -170,21 +167,15 @@ function parseAmazonHTML(html: string): Product[] {
         const unitInfo = parseUnit(title);
 
         products.push({
-            id: asin,
-            title,
-            price,
-            source: 'Amazon',
-            rating,
-            reviews,
+            id: asin, title, price, source: 'Amazon', rating, reviews,
             image: item.find('img.s-image').attr('src') || '',
             unit: unitInfo?.unit || 'unknown',
             amount: unitInfo?.value || 0,
             totalAmount: unitInfo?.totalValue || 0,
-            unitInfo: unitInfo || undefined, // Metadata for frontend
+            unitInfo: unitInfo || undefined,
             pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
             link: getAmazonAffiliateLink(asin),
-            currency: 'USD',
-            originalPrice: 0,
+            currency: 'USD', originalPrice: 0,
             score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
         });
     });
