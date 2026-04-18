@@ -152,15 +152,20 @@ function parseAmazonHTML(html: string): Product[] {
         const reviewsRaw = item.find('span.a-size-base.s-underline-text, .a-size-small .a-size-base').first().text().replace(/[,()]/g, '');
         const reviews = parseInt(reviewsRaw.match(REVIEWS_REGEX)?.[1] || "0", 10) || 0;
         
+        // Inside parseAmazonHTML loop:
         const unitInfo = parseUnit(title);
 
         products.push({
             id: asin, title, price, source: 'Amazon', rating, reviews,
             image: item.find('img.s-image').attr('src') || '',
-            unit: unitInfo?.unit || 'unknown', amount: unitInfo?.value || 0,
+            unit: unitInfo?.unit || 'unknown',
+            amount: unitInfo?.value || 0,
             totalAmount: unitInfo?.totalValue || 0,
+            unitInfo: unitInfo || undefined, // CRITICAL: ADD THIS LINE
             pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
-            link: getAmazonAffiliateLink(asin), currency: 'USD', originalPrice: 0,
+            link: getAmazonAffiliateLink(asin),
+            currency: 'USD',
+            originalPrice: 0,
             score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
         });
     });

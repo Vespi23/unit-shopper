@@ -25,14 +25,14 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const searchParams = useSearchParams();
 
     const initialQuery = searchParams.get('q') || '';
-    const initialUnit = searchParams.get('u') || ''; //
+    const initialUnit = searchParams.get('u') || '';
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
     const inputRef = useRef<HTMLInputElement>(null);
     const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
     const [results, setResults] = useState<Product[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
-    const [selectedUnit, setSelectedUnit] = useState<string>(initialUnit); //
+    const [selectedUnit, setSelectedUnit] = useState<string>(initialUnit);
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(!!initialQuery);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -43,7 +43,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [page, setPage] = useState(1);
     const lastInitialResultsQuery = useRef<string | null>(null);
 
-    // Sync state with URL
+    // Sync state with URL changes (back button support)
     useEffect(() => {
         const q = searchParams.get('q') || '';
         const u = searchParams.get('u') || '';
@@ -58,14 +58,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
         const params = new URLSearchParams(searchParams.toString());
         if (newQuery) params.set('q', newQuery); else params.delete('q');
-        if (selectedUnit) params.set('u', selectedUnit); //
+        if (selectedUnit) params.set('u', selectedUnit);
 
         router.push(`/?${params.toString()}`, { scroll: false });
         setSubmittedQuery(newQuery);
         setPage(1);
     };
 
-    // Update URL when unit changes
     const handleUnitChange = (unit: string) => {
         setSelectedUnit(unit);
         const params = new URLSearchParams(searchParams.toString());
@@ -76,31 +75,35 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
-            
-            // SHIELD: Only re-scrape if query changed. 
-            // Let the useMemo handle the unit conversion instantly on the client.
-            if (lastInitialResultsQuery.current === submittedQuery) return;
+            // Only skip if query AND unit match initial load
+            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) return;
 
             setLoading(true);
+            setSearched(true);
             try {
-                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}`);
+                const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
+                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}${unitParam}`);
                 const data = await res.json();
                 setResults(Array.isArray(data) ? data : []);
-                lastInitialResultsQuery.current = submittedQuery;
-            } catch (error) { console.error(error); } finally { setLoading(false); }
+                setPage(1);
+            } catch (error) {
+                console.error("Search failed", error);
+            } finally {
+                setLoading(false);
+            }
         }
         fetchResults();
-    }, [submittedQuery]); // Removed selectedUnit from dependencies
+    }, [submittedQuery, selectedUnit]);
 
     const convertedResults = useMemo(() => {
         return results.map(product => {
             if (!selectedUnit || !product.unitInfo) return product;
-            const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any); //
+            const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
 
             if (convertedAmount !== null && convertedAmount > 0) {
                 return {
                     ...product,
-                    pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit), //
+                    pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit),
                     score: product.price / convertedAmount, 
                     unitInfo: {
                         ...product.unitInfo,
@@ -118,7 +121,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     }, [results, selectedUnit]);
 
     const availableUnits = useMemo(() => {
-        // Base available units on raw results to avoid circular filtering
         const units = Array.from(new Set(results.map(p => p.unitInfo?.unit).filter(Boolean))) as string[];
         return units.sort();
     }, [results]);
@@ -145,19 +147,23 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         Shop by True Value.
                     </h1>
                     <div className="relative w-full max-w-2xl group z-10">
-                        <form onSubmit={handleSearch} className="relative flex items-center bg-card rounded-2xl border border-border/50 shadow-lg p-2">
+                        <form onSubmit={handleSearch} className="relative flex items-center bg-card rounded-2xl border border-border/50 shadow-lg p-2 transition-all focus-within:ring-2 focus-within:ring-primary/20">
                             <Search className="h-6 w-6 text-muted-foreground ml-4 mr-3" />
                             <input
                                 ref={inputRef}
                                 name="searchQuery"
                                 type="text"
                                 defaultValue={submittedQuery}
-                                placeholder="Search products..."
+                                placeholder="Search products (e.g. Toilet Paper)..."
                                 className="flex-1 bg-transparent border-none outline-none text-xl h-12 ring-0 focus:ring-0"
                             />
-                            <button type="submit" className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium">
-                                Search
-                            </button>
+                            {loading ? (
+                                <Loader2 className="h-6 w-6 animate-spin text-primary mr-4" />
+                            ) : (
+                                <button type="submit" className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90">
+                                    Search
+                                </button>
+                            )}
                         </form>
                     </div>
                 </section>
@@ -165,7 +171,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
             <section className="container px-4 mt-4 w-full max-w-7xl min-h-[60vh]">
                 {searched && results.length > 0 && (
-                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full mb-6">
+                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full mb-6 animate-in fade-in slide-in-from-top-2">
                         <div className="text-sm text-muted-foreground">
                             Found {results.length} results for <span className="text-foreground">"{submittedQuery}"</span>
                         </div>
@@ -174,34 +180,40 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                 <label className="text-sm font-medium text-muted-foreground">Generalize To:</label>
                                 <select
                                     value={selectedUnit}
-                                    onChange={(e) => handleUnitChange(e.target.value)} //
-                                    className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium cursor-pointer"
+                                    onChange={(e) => handleUnitChange(e.target.value)}
+                                    className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer"
                                 >
                                     <option value="">Original Units</option>
-                                    <optgroup label="Detected in Results">
-                                        {availableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                                    </optgroup>
+                                    {availableUnits.length > 0 && (
+                                        <optgroup label="Detected in Results">
+                                            {availableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                        </optgroup>
+                                    )}
                                     <optgroup label="Generalize Weights">
                                         <option value="oz">Ounces (oz)</option>
                                         <option value="lb">Pounds (lb)</option>
+                                        <option value="g">Grams (g)</option>
                                     </optgroup>
                                     <optgroup label="Generalize Volume">
-                                        <option value="fl oz">Fluid Ounces (fl oz)</option>
+                                        <option value="fl oz">Fluid Oz (fl oz)</option>
                                         <option value="gal">Gallons (gal)</option>
+                                        <option value="ml">Milliliters (ml)</option>
                                     </optgroup>
                                     <optgroup label="Generalize Household">
                                         <option value="count">Each (ea)</option>
                                         <option value="rolls">Rolls</option>
+                                        <option value="sheets">Sheets</option>
                                     </optgroup>
                                 </select>
                             </div>
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value as any)}
-                                className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium cursor-pointer"
+                                className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent cursor-pointer"
                             >
                                 <option value="score_asc">Best Unit Value</option>
-                                <option value="price_asc">Lowest Price</option>
+                                <option value="price_asc">Lowest Total Price</option>
+                                <option value="price_desc">Highest Total Price</option>
                             </select>
                         </div>
                     </div>
