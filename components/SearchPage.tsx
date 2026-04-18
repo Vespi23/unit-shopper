@@ -41,6 +41,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [page, setPage] = useState(1);
     const lastInitialResultsQuery = useRef<string | null>(null);
 
+    // Sync state with URL changes (back button support)
     useEffect(() => {
         const q = searchParams.get('q') || '';
         const u = searchParams.get('u') || '';
@@ -72,7 +73,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
-            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) return;
+
+            // Only skip if query is identical to last initial results AND unit is empty
+            if (initialResults.length > 0 && lastInitialResultsQuery.current === submittedQuery && !selectedUnit) {
+                return;
+            }
 
             setLoading(true);
             setSearched(true);
@@ -102,7 +107,10 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     ...product,
                     pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit),
                     score: product.price / convertedAmount, 
-                    unitInfo: { ...product.unitInfo, formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}` }
+                    unitInfo: {
+                        ...product.unitInfo,
+                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}`
+                    }
                 };
             }
             return {
@@ -165,13 +173,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         <div className="mt-8 hidden sm:block animate-in fade-in zoom-in duration-700 delay-300">
                             <div className="glass dark:glass-dark rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl lynx-glow">
                                 <div className="flex items-center gap-4">
-                                    <div className="relative h-10 w-10 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm border overflow-hidden">
-                                        <Image src="/logo.png" alt="Lynx Vision Logo" width={32} height={32} className="object-contain" />
+                                    <div className="relative h-10 w-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm border overflow-hidden">
+                                        <Image src="/extension-logo.png" alt="Lynx Vision Extension Icon" width={38} height={38} className="object-contain" />
                                     </div>
                                     <div className="text-left">
                                         <div className="flex items-center gap-2">
                                             <p className="text-sm font-bold text-foreground">Lynx Vision</p>
-                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">Verified</span>
+                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">Official Tool</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground leading-none mt-1">
                                             Automatic unit price comparisons while you shop on Amazon.
@@ -184,7 +192,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                     rel="noopener noreferrer"
                                     className="bg-primary text-white text-xs font-bold px-5 py-2.5 rounded-lg hover:bg-emerald-700 transition-all hover:scale-105 active:scale-95 shadow-md"
                                 >
-                                    Install Free
+                                    Add to Chrome
                                 </a>
                             </div>
                         </div>
