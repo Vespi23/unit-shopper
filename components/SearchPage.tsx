@@ -15,6 +15,7 @@ import {
     calculatePricePerUnit, 
     toCanonicalUnit 
 } from '@/lib/unit-parser';
+import { generateProductSchema } from '@/lib/schema';
 
 interface SearchPageProps {
     initialResults?: Product[];
@@ -73,16 +74,16 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         const params = new URLSearchParams(searchParams.toString());
         if (canonical && canonical !== 'unknown') params.set('u', canonical); else params.delete('u');
         
-        // Push to URL for shareability, but does NOT trigger re-search
+        // Instant local update, push to URL for sharing
         router.push(`/?${params.toString()}`, { scroll: false });
     };
 
-    // SEARCH EFFECT: Strictly Network-Only (Decoupled from Unit Change)
+    // SEARCH EFFECT: Strictly Network-Only
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
 
-            // PRE-FLIGHT SHIELD: Skip if SSR already provided data
+            // Skip if SSR already provided data for this specific query
             if (initialResults.length > 0 && !lastInitialResultsQuery.current && submittedQuery === initialQuery) {
                 lastInitialResultsQuery.current = submittedQuery;
                 return;
@@ -105,7 +106,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         fetchResults();
     }, [submittedQuery]);
 
-    // CONVERSION MEMO: Strictly Local-UI recalculation
+    // CONVERSION MEMO: Instant local recalculation
     const convertedResults = useMemo(() => {
         return results.map(product => {
             if (!selectedUnit || selectedUnit === 'unknown' || !product.unitInfo) return product;
@@ -152,6 +153,26 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
 
     return (
         <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
+            
+            {/* GLOBAL WEBSITE SEARCH SCHEMA (FOR GOOGLE RICH RESULTS) */}
+            {!isExtension && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{
+                        __html: JSON.stringify({
+                            "@context": "https://schema.org",
+                            "@type": "WebSite",
+                            "url": "https://www.budgetlynx.com/",
+                            "potentialAction": {
+                                "@type": "SearchAction",
+                                "target": "https://www.budgetlynx.com/?q={search_term_string}",
+                                "query-input": "required name=search_term_string"
+                            }
+                        })
+                    }}
+                />
+            )}
+
             {!isExtension && (
                 <section className="w-full bg-gradient-to-b from-emerald-50/50 via-background to-background pt-24 pb-12 px-4 flex flex-col items-center text-center">
                     <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight mb-6 precision-header">
@@ -178,7 +199,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             )}
                         </form>
 
-                        {/* LYNX VISION EXTENSION PROMO */}
+                        {/* EXTENSION PROMO */}
                         <div className="mt-8 hidden sm:block animate-in fade-in zoom-in duration-700 delay-300">
                             <div className="glass dark:glass-dark rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl lynx-glow">
                                 <div className="flex items-center gap-4">
@@ -268,14 +289,22 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />)
                     ) : (
                         paginatedDisplayResults.map((product, index) => (
-                            <ProductCard
-                                key={product.id}
-                                product={product}
-                                index={index}
-                                onClick={(p) => setSelectedProduct(p)}
-                                onSelect={(id, sel) => setCompareList(prev => sel ? [...prev, id] : prev.filter(i => i !== id))}
-                                isSelected={compareList.includes(product.id)}
-                            />
+                            <div key={product.id}>
+                                {/* INDIVIDUAL PRODUCT SCHEMA FOR RICH SNIPPETS */}
+                                <script
+                                    type="application/ld+json"
+                                    dangerouslySetInnerHTML={{ 
+                                        __html: JSON.stringify(generateProductSchema(product)) 
+                                    }}
+                                />
+                                <ProductCard
+                                    product={product}
+                                    index={index}
+                                    onClick={(p) => setSelectedProduct(p)}
+                                    onSelect={(id, sel) => setCompareList(prev => sel ? [...prev, id] : prev.filter(i => i !== id))}
+                                    isSelected={compareList.includes(product.id)}
+                                />
+                            </div>
                         ))
                     )}
                 </div>
