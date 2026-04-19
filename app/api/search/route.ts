@@ -41,9 +41,9 @@ export async function GET(request: Request) {
 
             return {
                 ...p,
-                price: typeof p.price === 'string' ? parseFloat(p.price.replace(/[^0-9.]/g, '')) : p.price,
+                // price is already a number from api-client.ts
+                price: p.price,
                 currency: p.currency || 'USD',
-                // FIX: Added 'value' and 'quantity' to satisfy the Product type
                 unitInfo: {
                     value: finalAmount, 
                     unit: finalUnit,
