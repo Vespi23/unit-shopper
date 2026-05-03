@@ -37,7 +37,7 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
             proxy_pool: "premium", 
             headless: "html" 
           }),
-          signal: controller.signal // CRITICAL: Stop the network call at 7s
+          signal: controller.signal
         });
         clearTimeout(timeoutId);
         const json = await res.json();
@@ -45,16 +45,13 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         return html ? parseAmazonHTML(html) : [];
       } catch (err) { 
         clearTimeout(timeoutId);
-        // Silently return empty on timeout/error so other pages can still succeed
         return []; 
       }
     };
 
-    // Parallel breadth scrape (7 pages)
     const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
     const pagePromises = pageNumbers.map(p => fetchPage(p));
     
-    // Return whatever pages finished before the 7s cutoff
     const settleResults = await Promise.allSettled(pagePromises);
     
     let rawPool: Product[] = [];
@@ -62,10 +59,10 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; 
     });
 
-    // Deduplicate by ASIN
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     
-    // PHASE 2: STRICT QUALITY FILTER (4.0+ Stars AND 100+ Reviews)
+    // PHASE 2: STRICT QUALITY FILTER (4.0+ Stars AND 100+ Reviews ONLY)
+    // No tiered fallback is applied here per your instructions.
     const filtered = masterPool.filter(p => 
         p.price > 0 && 
         (p.rating ?? 0) >= 4.0 && 
@@ -84,7 +81,6 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
 
 /**
  * PARSING LOGIC
- * Extracts data using resilient selectors to prevent rating/review data loss.
  */
 function parseAmazonHTML(html: string): Product[] {
   const $ = cheerio.load(html);
@@ -99,7 +95,6 @@ function parseAmazonHTML(html: string): Product[] {
     const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
 
-    // Attribute-based selectors for better resilience against class rotation
     const ratingRaw = item.find('i[class*="a-star-"], [aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt').first().text();
     const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
 
