@@ -1,37 +1,28 @@
 import { NextResponse } from 'next/server';
 import { searchProducts } from '@/lib/api-client';
-import { 
-    convertValue, 
-    calculatePricePerUnit, 
-    toCanonicalUnit 
-} from '@/lib/unit-parser';
+import { toCanonicalUnit, convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 10; 
+export const maxDuration = 60; // Requested limit (Ignored by Vercel Hobby)
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
-    
-    const rawUnit = searchParams.get('u') || '';
-    const targetUnit = toCanonicalUnit(rawUnit);
+    const targetUnit = toCanonicalUnit(searchParams.get('u') || '');
 
-    if (!query) {
-        return NextResponse.json([]);
-    }
+    if (!query) return NextResponse.json([]);
 
     try {
         let results = await searchProducts(query);
-
+        
         results = results.map(p => {
             const currentUnit = toCanonicalUnit(p.unit || '');
             const currentAmount = p.totalAmount || 0;
-
             let finalAmount = currentAmount;
             let finalUnit = currentUnit;
 
-            if (targetUnit && targetUnit !== 'unknown' && currentUnit !== 'unknown') {
+            if (targetUnit !== 'unknown' && currentUnit !== 'unknown') {
                 const converted = convertValue(currentAmount, currentUnit, targetUnit);
                 if (converted) {
                     finalAmount = converted;
@@ -41,9 +32,6 @@ export async function GET(request: Request) {
 
             return {
                 ...p,
-                // price is already a number from api-client.ts
-                price: p.price,
-                currency: p.currency || 'USD',
                 unitInfo: {
                     value: finalAmount, 
                     unit: finalUnit,
@@ -57,7 +45,6 @@ export async function GET(request: Request) {
 
         return NextResponse.json(results);
     } catch (error) {
-        console.error("API Route Error:", error);
         return NextResponse.json({ error: "Search failed" }, { status: 500 });
     }
 }
