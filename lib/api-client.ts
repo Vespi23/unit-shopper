@@ -5,8 +5,9 @@ import { getAmazonAffiliateLink } from './affiliate';
 
 // --- CONSTANTS ---
 const EXACT_MATCH_QUERIES = new Set(['toilet paper', 'paper towel', 'paper towels']);
+// IMPROVED REGEX: Captures decimal ratings and handles "k/m" in reviews
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
-const REVIEWS_REGEX = /(\d+[,.\d]*)/;
+const REVIEWS_REGEX = /(\d+\.?\d*)\s*k?/; // Supports "1.2k" or "500"
 
 /**
  * MAIN SEARCH ENGINE
@@ -102,26 +103,60 @@ function parseAmazonHTML(html: string): Product[] {
     const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
 
-    const ratingRaw = item.find('i[class*="a-star-"], [aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt').first().text();
-    const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
+    // --- RESILIENT RATING EXTRACTION ---
+    // Looks at icon alt text, aria-labels, and specific star classes
+    const ratingRaw = item.find([
+        'i[class*="a-star-"] span.a-icon-alt',
+        '[aria-label*="out of 5 stars"]',
+        '.a-icon-star-small .a-icon-alt',
+        '.a-star-small-4-5',
+        '.a-icon-star'
+    ].join(',')).first().attr('aria-label') || item.find('i[class*="a-star-"]').text();
+    
+    const ratingMatch = ratingRaw.match(RATING_REGEX);
+    const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
 
-    const reviewsRaw = item.find('span.a-size-base.s-underline-text, [aria-label*="reviews"], .a-size-small .a-size-base').first().text();
-    const reviews = parseInt(reviewsRaw.replace(/[^0-9]/g, '').match(REVIEWS_REGEX)?.[1] || "0", 10) || 0;
+    // --- RESILIENT REVIEW EXTRACTION ---
+    // Handles "1,234", "1.2k+", and hidden underline text
+    const reviewsText = item.find([
+        'span.a-size-base.s-underline-text',
+        '[aria-label*="ratings"]',
+        '.a-size-small .a-size-base',
+        'a.a-link-normal.s-underline-text'
+    ].join(',')).first().text().toLowerCase().replace(/,/g, '');
+
+    let reviews = 0;
+    const reviewMatch = reviewsText.match(/(\d+\.?\d*)\s*([km])?/);
+    if (reviewMatch) {
+        reviews = parseFloat(reviewMatch[1]);
+        if (reviewMatch[2] === 'k') reviews *= 1000;
+        if (reviewMatch[2] === 'm') reviews *= 1000000;
+    }
 
     const unitInfo = parseUnit(title);
 
-    products.push({
-      id: asin, title, price, source: 'Amazon', rating, reviews,
-      image: item.find('img.s-image').attr('src') || '',
-      unit: unitInfo?.unit || 'unknown',
-      amount: unitInfo?.value || 0,
-      totalAmount: unitInfo?.totalValue || 0,
-      unitInfo: unitInfo || undefined,
-      pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
-      link: getAmazonAffiliateLink(asin),
-      currency: 'USD', originalPrice: 0,
-      score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
-    });
+    // Only push if we actually found a price (prevents empty "Sponsored" tiles)
+    if (price > 0) {
+        products.push({
+            id: asin,
+            title,
+            price,
+            source: 'Amazon',
+            rating: rating || 0,
+            reviews: Math.floor(reviews) || 0,
+            image: item.find('img.s-image').attr('src') || '',
+            unit: unitInfo?.unit || 'count', // Default to 'count' for sheets/sets
+            amount: unitInfo?.value || 1,
+            totalAmount: unitInfo?.totalValue || 1,
+            unitInfo: unitInfo || undefined,
+            pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 1, unitInfo?.unit || 'count'),
+            link: getAmazonAffiliateLink(asin),
+            currency: 'USD',
+            originalPrice: 0,
+            score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
+        });
+    }
   });
+  
   return products;
 }
