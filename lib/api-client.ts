@@ -3,7 +3,6 @@ import { parseUnit, calculatePricePerUnit, toCanonicalUnit } from './unit-parser
 import * as cheerio from 'cheerio';
 import { getAmazonAffiliateLink } from './affiliate';
 
-// --- CONSTANTS ---
 const EXACT_MATCH_QUERIES = new Set(['toilet paper', 'paper towel', 'paper towels']);
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 const REVIEWS_REGEX = /(\d+[,.\d]*)/;
@@ -11,63 +10,8 @@ const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 const searchCache = new Map<string, { data: Product[], timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000;
 
-/**
- * PHASE 3: AI Verification
- * Uses Gemini 1.5 Flash to verify complex unit logic for the top candidates.
- * Limited to a small batch to stay within Vercel's 60s execution limit.
- */
-async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
-  if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
-
-  const CHUNK_SIZE = 7;
-  const chunks = [];
-  for (let i = 0; i < products.length; i += CHUNK_SIZE) {
-    chunks.push(products.slice(i, i + CHUNK_SIZE));
-  }
-
-  const chunkPromises = chunks.map(async (chunk) => {
-    const prompt = `Task: Calculate the TOTAL quantity for unit price comparison. 
-      Rules:
-      1. Multiply packs (e.g., "Pack of 4 (12oz)" = 48).
-      2. Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|count|lb|rolls|sheets|fl oz|gal"}]
-      3. Use 'count' for each/ct/pcs.
-      4. Use canonical units only.
-      Products: ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-        signal: signal || controller.signal
-      });
-      clearTimeout(timeoutId);
-      const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      const jsonMatch = rawText?.match(/\[[\s\S]*\]/);
-      return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-    } catch (error) {
-      clearTimeout(timeoutId);
-      return [];
-    }
-  });
-
-  const results = await Promise.all(chunkPromises);
-  return results.flat();
-}
-
-/**
- * MAIN SEARCH ENGINE
- * Orchestrates multi-page scraping via Decodo and applies strict filtering logic.
- */
 export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
-  const START_TIME = Date.now();
-  const VERCEL_CEILING = 55000; // 55s safety cutoff for Vercel functions
   const cacheKey = `${query.toLowerCase().trim()}_${targetUnit || 'none'}`.substring(0, 100);
-
   const cachedData = searchCache.get(cacheKey);
   if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL_MS) return cachedData.data;
 
@@ -95,90 +39,39 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
       } catch (err) { return []; }
     };
 
-    // Scrape 7 pages for breadth
+    // 7 Pages Scraped concurrently to maximize breadth within 10s window
     const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
-    const SCRAPE_TIMEOUT = 35000;
+    const SCRAPE_TIMEOUT = 7500; // 8s timeout for the fetch phase
 
-    const pagePromises = pageNumbers.map(p => {
-      const delay = (p - 1) * 100;
-      return new Promise<Product[]>(async (resolve) => {
-        await new Promise(r => setTimeout(r, delay));
-        const timeout = setTimeout(() => resolve([]), SCRAPE_TIMEOUT);
-        const results = await fetchPage(p);
-        clearTimeout(timeout);
-        resolve(results);
-      });
+    const pagePromises = pageNumbers.map(p => fetchPage(p));
+    const settleResults = await Promise.allSettled(pagePromises);
+    
+    let rawPool: Product[] = [];
+    settleResults.forEach(res => { 
+        if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; 
     });
 
-    const settleResults = await Promise.allSettled(pagePromises);
-    let rawPool: Product[] = [];
-    settleResults.forEach(res => { if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; });
-
-    // Deduplicate items
+    // Deduplicate and apply quality floor
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
-    masterPool = masterPool.filter(p => p.price > 0);
-
-    // PHASE 2: STRICT FILTERING (4.0+ Stars AND 100+ Reviews)
+    
+    // STRICT QUALITY FILTER (4.0+ Stars, 100+ Reviews)
     const filtered = masterPool.filter(p => 
+        p.price > 0 && 
         (p.rating ?? 0) >= 4.0 && 
         (p.reviews ?? 0) >= 100
     );
 
-    // Sort by unit price score (price / total quantity)
+    // Sort by final unit price score
     filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
-    
-    // Result Cap Removed: All qualified products are returned to the user
-    let topPerformers = filtered; 
 
-    // PHASE 3: AI RE-VERIFICATION (Restricted to top 15 for sub-60s performance)
-    const VERCEL_SAFE_BUFFER = 15000; 
-    const timeLeft = VERCEL_CEILING - (Date.now() - START_TIME);
-
-    if (topPerformers.length > 0 && timeLeft > VERCEL_SAFE_BUFFER) {
-      const toVerify = topPerformers.slice(0, 15);
-      const corrections = await verifyUnitsWithAI(toVerify);
-      const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
-
-      topPerformers = topPerformers.map(p => {
-        const correction = correctionMap.get(p.id);
-        if (correction) {
-          const canonicalUnit = toCanonicalUnit(correction.unit);
-          const newTotal = correction.verifiedTotal;
-
-          p.totalAmount = newTotal;
-          p.unit = canonicalUnit;
-          p.aiVerified = true;
-          p.unitInfo = {
-            unit: canonicalUnit,
-            quantity: 1,
-            value: newTotal,
-            totalValue: newTotal,
-            formatted: `${newTotal} ${canonicalUnit}`
-          };
-
-          p.pricePerUnit = calculatePricePerUnit(p.price, newTotal, canonicalUnit);
-          p.score = p.price / (newTotal || 1);
-        }
-        return p;
-      });
-
-      // Re-sort after potential AI corrections
-      topPerformers.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
-    }
-
-    searchCache.set(cacheKey, { data: topPerformers, timestamp: Date.now() });
-    return topPerformers;
+    searchCache.set(cacheKey, { data: filtered, timestamp: Date.now() });
+    return filtered;
   } catch (error) { 
-    console.error("Critical Search Error:", error);
+    console.error("Search failure:", error);
     return []; 
   }
 }
 
-/**
- * PARSING LOGIC
- * Extracts structured data from raw Amazon HTML.
- * Uses resilient selectors to prevent rating/review data loss.
- */
 function parseAmazonHTML(html: string): Product[] {
   const $ = cheerio.load(html);
   const products: Product[] = [];
@@ -192,7 +85,7 @@ function parseAmazonHTML(html: string): Product[] {
     const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
 
-    // Resilient Selectors for Rating and Reviews
+    // RESILIENT SELECTORS: Capturing rating/reviews even if Amazon rotates classes
     const ratingRaw = item.find('i[class*="a-star-"], [aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt').first().text();
     const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
 

@@ -8,7 +8,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 60; 
+export const maxDuration = 10; 
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
