@@ -3,23 +3,28 @@ import { parseUnit, calculatePricePerUnit, toCanonicalUnit } from './unit-parser
 import * as cheerio from 'cheerio';
 import { getAmazonAffiliateLink } from './affiliate';
 
+// --- CONSTANTS ---
 const EXACT_MATCH_QUERIES = new Set(['toilet paper', 'paper towel', 'paper towels']);
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 
-const searchCache = new Map<string, { data: Product[], timestamp: number }>();
-const CACHE_TTL_MS = 60 * 1000;
-
+/**
+ * MAIN SEARCH ENGINE
+ * Optimized for Vercel Hobby (10s limit). 
+ * Scrapes 7 pages but force-aborts at 7s to ensure the function can finish.
+ */
 export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
-  const cacheKey = `${query.toLowerCase().trim()}_${targetUnit || 'none'}`.substring(0, 100);
-  const cachedData = searchCache.get(cacheKey);
-  if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL_MS) return cachedData.data;
-
   try {
     const apiSearchTerm = EXACT_MATCH_QUERIES.has(query.toLowerCase()) ? `"${query}"` : query;
     const baseUrl = `https://www.amazon.com/s?k=${encodeURIComponent(apiSearchTerm)}`;
 
+    // ACTIVE ABORT: Kill network requests at 7s to leave a 3s buffer for processing
+    const SCRAPE_TIMEOUT = 7000; 
+
     const fetchPage = async (p: number): Promise<Product[]> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT);
+
       try {
         const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
           method: 'POST',
@@ -31,19 +36,25 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
             url: p === 1 ? baseUrl : `${baseUrl}&page=${p}`, 
             proxy_pool: "premium", 
             headless: "html" 
-          })
+          }),
+          signal: controller.signal // CRITICAL: Stop the network call at 7s
         });
+        clearTimeout(timeoutId);
         const json = await res.json();
         const html = json.results?.[0]?.content || json.content || null;
         return html ? parseAmazonHTML(html) : [];
-      } catch (err) { return []; }
+      } catch (err) { 
+        clearTimeout(timeoutId);
+        // Silently return empty on timeout/error so other pages can still succeed
+        return []; 
+      }
     };
 
-    // 7 Pages Scraped concurrently to maximize breadth within 10s window
+    // Parallel breadth scrape (7 pages)
     const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
-    const SCRAPE_TIMEOUT = 7500; // 8s timeout for the fetch phase
-
     const pagePromises = pageNumbers.map(p => fetchPage(p));
+    
+    // Return whatever pages finished before the 7s cutoff
     const settleResults = await Promise.allSettled(pagePromises);
     
     let rawPool: Product[] = [];
@@ -51,27 +62,30 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; 
     });
 
-    // Deduplicate and apply quality floor
+    // Deduplicate by ASIN
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     
-    // STRICT QUALITY FILTER (4.0+ Stars, 100+ Reviews)
+    // PHASE 2: STRICT QUALITY FILTER (4.0+ Stars AND 100+ Reviews)
     const filtered = masterPool.filter(p => 
         p.price > 0 && 
         (p.rating ?? 0) >= 4.0 && 
         (p.reviews ?? 0) >= 100
     );
 
-    // Sort by final unit price score
+    // Final sort by best unit price score
     filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 
-    searchCache.set(cacheKey, { data: filtered, timestamp: Date.now() });
     return filtered;
   } catch (error) { 
-    console.error("Search failure:", error);
+    console.error("Critical Search Error:", error);
     return []; 
   }
 }
 
+/**
+ * PARSING LOGIC
+ * Extracts data using resilient selectors to prevent rating/review data loss.
+ */
 function parseAmazonHTML(html: string): Product[] {
   const $ = cheerio.load(html);
   const products: Product[] = [];
@@ -85,7 +99,7 @@ function parseAmazonHTML(html: string): Product[] {
     const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
 
-    // RESILIENT SELECTORS: Capturing rating/reviews even if Amazon rotates classes
+    // Attribute-based selectors for better resilience against class rotation
     const ratingRaw = item.find('i[class*="a-star-"], [aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt').first().text();
     const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
 
