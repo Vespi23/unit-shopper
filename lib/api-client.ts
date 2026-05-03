@@ -3,23 +3,17 @@ import { parseUnit, calculatePricePerUnit, toCanonicalUnit } from './unit-parser
 import * as cheerio from 'cheerio';
 import { getAmazonAffiliateLink } from './affiliate';
 
-// --- CONSTANTS ---
 const EXACT_MATCH_QUERIES = new Set(['toilet paper', 'paper towel', 'paper towels']);
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 
-/**
- * MAIN SEARCH ENGINE
- * Optimized for Vercel Hobby (10s limit). 
- * Scrapes 7 pages but force-aborts at 7s to ensure the function can finish.
- */
 export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
   try {
     const apiSearchTerm = EXACT_MATCH_QUERIES.has(query.toLowerCase()) ? `"${query}"` : query;
     const baseUrl = `https://www.amazon.com/s?k=${encodeURIComponent(apiSearchTerm)}`;
 
-    // ACTIVE ABORT: Kill network requests at 7s to leave a 3s buffer for processing
-    const SCRAPE_TIMEOUT = 7000; 
+    // INCREASED TO 9 SECONDS: The absolute max for Vercel Hobby
+    const SCRAPE_TIMEOUT = 9000; 
 
     const fetchPage = async (p: number): Promise<Product[]> => {
       const controller = new AbortController();
@@ -49,7 +43,8 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
       }
     };
 
-    const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
+    // REDUCED TO 5 PAGES: To ensure we finish under the 10s limit
+    const pageNumbers = [1, 2, 3, 4, 5];
     const pagePromises = pageNumbers.map(p => fetchPage(p));
     
     const settleResults = await Promise.allSettled(pagePromises);
@@ -61,20 +56,17 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
 
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     
-    // PHASE 2: STRICT QUALITY FILTER (4.0+ Stars AND 100+ Reviews ONLY)
-    // No tiered fallback is applied here per your instructions.
+    // STRICT QUALITY FILTER (4.0+ Stars AND 100+ Reviews ONLY)
     const filtered = masterPool.filter(p => 
         p.price > 0 && 
         (p.rating ?? 0) >= 4.0 && 
         (p.reviews ?? 0) >= 100
     );
 
-    // Final sort by best unit price score
     filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 
     return filtered;
   } catch (error) { 
-    console.error("Critical Search Error:", error);
     return []; 
   }
 }
