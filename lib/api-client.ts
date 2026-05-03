@@ -11,7 +11,7 @@ const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 const searchCache = new Map<string, { data: Product[], timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000;
 
-// 1. IMPROVED AI PROMPT: Instructions aligned with Canonical Units
+// 1. AI VERIFICATION: Optimized for strict canonical units
 async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
   if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
 
@@ -22,19 +22,18 @@ async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
   }
 
   const chunkPromises = chunks.map(async (chunk) => {
-    // Instruction: Use 'count' instead of 'ct' for consistency
     const prompt = `Task: Calculate the TOTAL quantity for unit price comparison. 
       Rules:
       1. Multiply packs (e.g., "Pack of 4 (12oz)" = 48).
       2. Return ONLY a JSON array: [{"id": "string", "verifiedTotal": number, "unit": "oz|count|lb|rolls|sheets|fl oz|gal"}]
       3. Use 'count' for each/ct/pcs.
+      4. Use canonical units only.
       Products: ${chunk.map(p => `ID: ${p.id} | Title: ${p.title}`).join('\n')}`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
-      // Corrected to gemini-1.5-flash
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -59,7 +58,7 @@ async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
 // --- MAIN SEARCH ENGINE ---
 export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
   const START_TIME = Date.now();
-  const VERCEL_CEILING = 55000;
+  const VERCEL_CEILING = 55000; // Safety limit for Vercel functions
   const cacheKey = `${query.toLowerCase().trim()}_${targetUnit || 'none'}`.substring(0, 100);
 
   const cachedData = searchCache.get(cacheKey);
@@ -107,23 +106,28 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
     let rawPool: Product[] = [];
     settleResults.forEach(res => { if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; });
 
-    // Deduplicate & Filter
+    // Deduplicate items by ASIN
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     masterPool = masterPool.filter(p => p.price > 0);
 
-    // Tiered Filtering for quality
-    let filtered = masterPool.filter(p => (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100);
-    if (filtered.length < 10) {
-      filtered = masterPool.filter(p => (p.rating ?? 0) >= 3.7 && (p.reviews ?? 0) >= 40);
-    }
-    if (filtered.length === 0) filtered = masterPool;
+    // PHASE 2: STRICT FILTERING (4.0+ Stars AND 100+ Reviews)
+    const filtered = masterPool.filter(p => 
+        (p.rating ?? 0) >= 4.0 && 
+        (p.reviews ?? 0) >= 100
+    );
 
+    // Initial sort by best unit price score
     filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
-    let topPerformers = filtered.slice(0, 40);
+    
+    // Result Cap Removed: All qualifying products are returned
+    let topPerformers = filtered; 
 
-    // PHASE 3: AI Re-Verification
+    // PHASE 3: AI RE-VERIFICATION (Limited to top 15 for Vercel performance)
+    const VERCEL_SAFE_BUFFER = 15000; 
     const timeLeft = VERCEL_CEILING - (Date.now() - START_TIME);
-    if (topPerformers.length > 0 && timeLeft > 18000) {
+    
+    if (topPerformers.length > 0 && timeLeft > VERCEL_SAFE_BUFFER) {
+      // We only verify the most competitive deals to ensure high accuracy where it matters
       const toVerify = topPerformers.slice(0, 15);
       const corrections = await verifyUnitsWithAI(toVerify);
       const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
@@ -131,14 +135,12 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
       topPerformers = topPerformers.map(p => {
         const correction = correctionMap.get(p.id);
         if (correction) {
-          // Standardization: Ensure AI unit is canonical
           const canonicalUnit = toCanonicalUnit(correction.unit);
           const newTotal = correction.verifiedTotal;
 
           p.totalAmount = newTotal;
           p.unit = canonicalUnit;
           p.aiVerified = true;
-
           p.unitInfo = {
             unit: canonicalUnit,
             quantity: 1,
@@ -153,6 +155,7 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         return p;
       });
 
+      // Final sort after AI corrections
       topPerformers.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
     }
 
@@ -171,7 +174,6 @@ function parseAmazonHTML(html: string): Product[] {
     if (!asin || asin.length !== 10) return;
 
     const title = item.find('h2 a span, h2 span, span.a-text-normal').first().text().trim();
-    // Sanitization: Remove currency symbols and commas before parsing
     const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
 
