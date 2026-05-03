@@ -11,7 +11,11 @@ const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 const searchCache = new Map<string, { data: Product[], timestamp: number }>();
 const CACHE_TTL_MS = 60 * 1000;
 
-// 1. AI VERIFICATION: Optimized for strict canonical units
+/**
+ * PHASE 3: AI Verification
+ * Uses Gemini 1.5 Flash to verify complex unit logic for the top candidates.
+ * Limited to a small batch to stay within Vercel's 60s execution limit.
+ */
 async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
   if (products.length === 0 || !process.env.GEMINI_API_KEY) return [];
 
@@ -55,10 +59,13 @@ async function verifyUnitsWithAI(products: any[], signal?: AbortSignal) {
   return results.flat();
 }
 
-// --- MAIN SEARCH ENGINE ---
+/**
+ * MAIN SEARCH ENGINE
+ * Orchestrates multi-page scraping via Decodo and applies strict filtering logic.
+ */
 export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
   const START_TIME = Date.now();
-  const VERCEL_CEILING = 55000; // Safety limit for Vercel functions
+  const VERCEL_CEILING = 55000; // 55s safety cutoff for Vercel functions
   const cacheKey = `${query.toLowerCase().trim()}_${targetUnit || 'none'}`.substring(0, 100);
 
   const cachedData = searchCache.get(cacheKey);
@@ -88,6 +95,7 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
       } catch (err) { return []; }
     };
 
+    // Scrape 7 pages for breadth
     const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
     const SCRAPE_TIMEOUT = 35000;
 
@@ -106,7 +114,7 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
     let rawPool: Product[] = [];
     settleResults.forEach(res => { if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; });
 
-    // Deduplicate items by ASIN
+    // Deduplicate items
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     masterPool = masterPool.filter(p => p.price > 0);
 
@@ -116,18 +124,17 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         (p.reviews ?? 0) >= 100
     );
 
-    // Initial sort by best unit price score
+    // Sort by unit price score (price / total quantity)
     filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
     
-    // Result Cap Removed: All qualifying products are returned
+    // Result Cap Removed: All qualified products are returned to the user
     let topPerformers = filtered; 
 
-    // PHASE 3: AI RE-VERIFICATION (Limited to top 15 for Vercel performance)
+    // PHASE 3: AI RE-VERIFICATION (Restricted to top 15 for sub-60s performance)
     const VERCEL_SAFE_BUFFER = 15000; 
     const timeLeft = VERCEL_CEILING - (Date.now() - START_TIME);
-    
+
     if (topPerformers.length > 0 && timeLeft > VERCEL_SAFE_BUFFER) {
-      // We only verify the most competitive deals to ensure high accuracy where it matters
       const toVerify = topPerformers.slice(0, 15);
       const corrections = await verifyUnitsWithAI(toVerify);
       const correctionMap = new Map(corrections.map((c: any) => [c.id, c]));
@@ -155,15 +162,23 @@ export async function searchProducts(query: string, targetUnit?: string): Promis
         return p;
       });
 
-      // Final sort after AI corrections
+      // Re-sort after potential AI corrections
       topPerformers.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
     }
 
     searchCache.set(cacheKey, { data: topPerformers, timestamp: Date.now() });
     return topPerformers;
-  } catch (error) { return []; }
+  } catch (error) { 
+    console.error("Critical Search Error:", error);
+    return []; 
+  }
 }
 
+/**
+ * PARSING LOGIC
+ * Extracts structured data from raw Amazon HTML.
+ * Uses resilient selectors to prevent rating/review data loss.
+ */
 function parseAmazonHTML(html: string): Product[] {
   const $ = cheerio.load(html);
   const products: Product[] = [];
@@ -177,10 +192,11 @@ function parseAmazonHTML(html: string): Product[] {
     const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
 
-    const ratingRaw = item.find('[aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt').first().text();
+    // Resilient Selectors for Rating and Reviews
+    const ratingRaw = item.find('i[class*="a-star-"], [aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt').first().text();
     const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
 
-    const reviewsRaw = item.find('span.a-size-base.s-underline-text, .a-size-small .a-size-base').first().text();
+    const reviewsRaw = item.find('span.a-size-base.s-underline-text, [aria-label*="reviews"], .a-size-small .a-size-base').first().text();
     const reviews = parseInt(reviewsRaw.replace(/[^0-9]/g, '').match(REVIEWS_REGEX)?.[1] || "0", 10) || 0;
 
     const unitInfo = parseUnit(title);
