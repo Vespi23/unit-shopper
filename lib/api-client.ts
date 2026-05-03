@@ -7,12 +7,15 @@ const EXACT_MATCH_QUERIES = new Set(['toilet paper', 'paper towel', 'paper towel
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 const REVIEWS_REGEX = /(\d+[,.\d]*)/;
 
-export async function searchProducts(query: string): Promise<Product[]> {
+export async function searchProducts(query: string, targetUnit?: string): Promise<Product[]> {
   try {
     const apiSearchTerm = EXACT_MATCH_QUERIES.has(query.toLowerCase()) ? `"${query}"` : query;
     const baseUrl = `https://www.amazon.com/s?k=${encodeURIComponent(apiSearchTerm)}`;
 
-    const fetchPage = async (p: number): Promise<Product[]> => {
+    const fetchPage = async (p: number, delay: number): Promise<Product[]> => {
+      // STAGGER: Wait for the assigned delay before firing
+      await new Promise(resolve => setTimeout(resolve, delay));
+
       try {
         const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
           method: 'POST',
@@ -26,14 +29,23 @@ export async function searchProducts(query: string): Promise<Product[]> {
             headless: "html" 
           })
         });
+
+        // ERROR CHECK: If Decodo blocks us, log it!
+        if (res.status === 429) {
+          console.error(`[DECODO] Rate Limited (429) on page ${p}`);
+          return [];
+        }
+
         const json = await res.json();
         const html = json.results?.[0]?.content || json.content || null;
         return html ? parseAmazonHTML(html) : [];
       } catch (err) { return []; }
     };
 
-    const pageNumbers = [1, 2, 3, 4, 5, 6, 7]; // Full 7-page breadth
-    const pagePromises = pageNumbers.map(p => fetchPage(p));
+    // Use 5 pages to be safe, with a 250ms stagger between each
+    const pageNumbers = [1, 2, 3, 4, 5];
+    const pagePromises = pageNumbers.map((p, index) => fetchPage(p, index * 250));
+    
     const settleResults = await Promise.allSettled(pagePromises);
     
     let rawPool: Product[] = [];
@@ -43,7 +55,6 @@ export async function searchProducts(query: string): Promise<Product[]> {
 
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     
-    // STRICT FILTER
     const filtered = masterPool.filter(p => 
         p.price > 0 && (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100
     );
