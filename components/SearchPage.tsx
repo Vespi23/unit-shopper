@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, AlertCircle } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
@@ -74,39 +74,50 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         const params = new URLSearchParams(searchParams.toString());
         if (canonical && canonical !== 'unknown') params.set('u', canonical); else params.delete('u');
         
-        // Instant local update, push to URL for sharing
         router.push(`/?${params.toString()}`, { scroll: false });
     };
 
-    // SEARCH EFFECT: Strictly Network-Only
+    // --- REFACTORED SEARCH EFFECT ---
     useEffect(() => {
         async function fetchResults() {
             if (!submittedQuery) return;
 
-            // Skip if SSR already provided data for this specific query
+            // Handle SSR Hydration
             if (initialResults.length > 0 && !lastInitialResultsQuery.current && submittedQuery === initialQuery) {
                 lastInitialResultsQuery.current = submittedQuery;
+                setSearched(true);
                 return;
             }
 
+            // 1. Preparation Phase: Reset UI to neutral loading state
             setLoading(true);
-            setSearched(true);
+            setSearched(false); // Hide result counts and "No Results" messages
+            setResults([]);     // Clear stale data immediately
+
             try {
                 const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
                 const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}${unitParam}`);
+                
+                if (!res.ok) throw new Error('Network response was not ok');
+                
                 const data = await res.json();
+                
+                // 2. Data Arrival Phase
                 setResults(Array.isArray(data) ? data : []);
                 lastInitialResultsQuery.current = submittedQuery;
             } catch (error) {
                 console.error("Search failed", error);
+                setResults([]);
             } finally {
+                // 3. Completion Phase: Unlock the UI to show results (or empty state)
                 setLoading(false);
+                setSearched(true);
             }
         }
         fetchResults();
     }, [submittedQuery]);
 
-    // CONVERSION MEMO: Instant local recalculation
+    // Conversion Logic
     const convertedResults = useMemo(() => {
         return results.map(product => {
             if (!selectedUnit || selectedUnit === 'unknown' || !product.unitInfo) return product;
@@ -154,7 +165,7 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     return (
         <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
             
-            {/* GLOBAL WEBSITE SEARCH SCHEMA (FOR GOOGLE RICH RESULTS) */}
+            {/* SEARCH SCHEMA */}
             {!isExtension && (
                 <script
                     type="application/ld+json"
@@ -191,7 +202,10 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                 className="flex-1 bg-transparent border-none outline-none text-xl h-12 ring-0 focus:ring-0"
                             />
                             {loading ? (
-                                <Loader2 className="h-6 w-6 animate-spin text-primary mr-4" />
+                                <div className="flex items-center gap-2 mr-4">
+                                    <span className="text-xs font-bold text-primary animate-pulse hidden sm:block">Deep Scraping...</span>
+                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                </div>
                             ) : (
                                 <button type="submit" className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-500/10">
                                     Search
@@ -231,7 +245,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
             )}
 
             <section className="container px-4 mt-4 w-full max-w-7xl min-h-[60vh]">
-                {searched && results.length > 0 && (
+                
+                {/* Result Header - ONLY shows when data is ready */}
+                {!loading && searched && results.length > 0 && (
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full mb-6 animate-in fade-in slide-in-from-top-2">
                         <div className="text-sm text-muted-foreground">
                             Found {results.length} results for <span className="text-foreground font-semibold">"{submittedQuery}"</span>
@@ -254,20 +270,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                             ))}
                                         </optgroup>
                                     )}
-                                    <optgroup label="Force Weights">
+                                    <optgroup label="Weights/Volume">
                                         <option value="oz">Ounces (oz)</option>
                                         <option value="lb">Pounds (lb)</option>
-                                        <option value="g">Grams (g)</option>
-                                    </optgroup>
-                                    <optgroup label="Force Volume">
                                         <option value="fl oz">Fluid Oz (fl oz)</option>
                                         <option value="gal">Gallons (gal)</option>
-                                        <option value="ml">Milliliters (ml)</option>
-                                    </optgroup>
-                                    <optgroup label="Force Household">
-                                        <option value="count">Each (ea)</option>
-                                        <option value="rolls">Rolls</option>
-                                        <option value="sheets">Sheets</option>
                                     </optgroup>
                                 </select>
                             </div>
@@ -284,13 +291,14 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
+                {/* Main Results Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     {loading ? (
+                        // Display Skeletons while scraping is in progress
                         Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />)
                     ) : (
                         paginatedDisplayResults.map((product, index) => (
                             <div key={product.id}>
-                                {/* INDIVIDUAL PRODUCT SCHEMA FOR RICH SNIPPETS */}
                                 <script
                                     type="application/ld+json"
                                     dangerouslySetInnerHTML={{ 
@@ -308,6 +316,20 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                         ))
                     )}
                 </div>
+
+                {/* DEFINITIVE EMPTY STATE - Only shows after search finishes with 0 items */}
+                {!loading && searched && results.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in zoom-in duration-500">
+                        <div className="bg-muted rounded-full p-6 mb-4">
+                            <AlertCircle className="h-10 w-10 text-muted-foreground opacity-20" />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">No qualifying results found</h3>
+                        <p className="text-muted-foreground max-w-xs mx-auto">
+                            We couldn't find any products with 4+ stars and 100+ reviews for "{submittedQuery}". 
+                            Try a broader search term.
+                        </p>
+                    </div>
+                )}
             </section>
 
             {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />}
