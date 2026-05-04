@@ -6,7 +6,8 @@ import { getAmazonAffiliateLink } from './affiliate';
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 
 export async function searchProducts(query: string): Promise<Product[]> {
-  const GLOBAL_DEADLINE = 50000; // 50 seconds total for the whole operation
+  // We push to 55s. If it's not done by then, we HAVE to return what we have to avoid a 504.
+  const GLOBAL_DEADLINE = 55000; 
 
   try {
     const apiSearchTerm = query;
@@ -28,24 +29,30 @@ export async function searchProducts(query: string): Promise<Product[]> {
             proxy_pool: "premium", 
             headless: "html" 
           }),
-          signal // Responds to the 50s global stop
+          signal // Listens to the 55s Global Deadline
         });
         
         const json = await res.json();
         const html = json.results?.[0]?.content || json.content || null;
         return html ? parseAmazonHTML(html) : [];
-      } catch (err) { return []; }
+      } catch (err) { 
+        // If aborted, we'll see this in your Vercel logs
+        if (err instanceof Error && err.name === 'AbortError') {
+            console.log(`[TIMEOUT] Page ${p} was aborted by Global Deadline.`);
+        }
+        return []; 
+      }
     };
 
     const globalController = new AbortController();
     const timeoutId = setTimeout(() => globalController.abort(), GLOBAL_DEADLINE);
 
     const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
+    // Increased stagger to 400ms to improve proxy stability
     const pagePromises = pageNumbers.map((p, index) => 
-      fetchPage(p, index * 200, globalController.signal)
+      fetchPage(p, index * 400, globalController.signal)
     );
     
-    // Process results as they settle
     const settleResults = await Promise.allSettled(pagePromises);
     clearTimeout(timeoutId);
     
@@ -54,9 +61,10 @@ export async function searchProducts(query: string): Promise<Product[]> {
         if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; 
     });
 
+    console.log(`[RESULTS] Found ${rawPool.length} raw products before filtering.`);
+
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     
-    // QUALITY FILTER
     const filtered = masterPool.filter(p => 
         p.price > 0 && (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100
     );
