@@ -48,9 +48,10 @@ const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]+(?:c
 const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
-// Pre-emptive filters for products where specified weight or volume is almost always the global package total
-const TOTAL_WEIGHT_PRODUCT_THEMES = /\b(?:bar|bars|granola|snack|snacks|pouch|pouches|variety\s?pack|assortment|cereal|cookie|cookies)\b/i;
-const EXPLICIT_EACH_INDICATORS = /\b(?:each|per|bars\s+at|ea\.?)\b/i;
+// Expanded to cover oatmeals, cereals, and standard dry-pantry portioned items
+const TOTAL_WEIGHT_PRODUCT_THEMES = /\b(?:bar|bars|granola|snack|snacks|pouch|pouches|variety\s?pack|assortment|cereal|oat|oats|oatmeal|packet|packets|porridge|grits)\b/i;
+const EXPLICIT_EACH_INDICATORS = /\b(?:each|per|bars\s+at|ea\.?|per\s+pouch|per\s+packet)\b/i;
+const BULK_CONTAINER_INDICATORS = /\b(?:canister|canisters|tub|tubs|jar|jars|case|cases|pack\s+of\s+\d+\s+boxes)\b/i;
 
 export function parseUnit(title: string): UnitInfo | null {
     let cleanTitle = title.toLowerCase();
@@ -200,13 +201,14 @@ export function parseUnit(title: string): UnitInfo | null {
         }
     }
 
-    // Force-Through Guard Strategy for Granola Bars and Snack-packs
+    // Advanced Pantry Safeguard: Handles Oatmeal pouch/packet count double-multiplication bugs
     if (quantity > 1 && (unit === 'oz' || unit === 'g' || unit === 'fl oz')) {
         const isPackageTotalTheme = TOTAL_WEIGHT_PRODUCT_THEMES.test(lowerTitle);
         const hasEachMarker = EXPLICIT_EACH_INDICATORS.test(lowerTitle);
+        const isBulkContainer = BULK_CONTAINER_INDICATORS.test(lowerTitle);
 
-        if (isPackageTotalTheme && !hasEachMarker) {
-            // Treat the extracted mass/volume as the package absolute total rather than sub-item size
+        // If it matches a pantry archetype, lacks an explicit per-unit label, and is not a genuine pack of massive canisters
+        if (isPackageTotalTheme && !hasEachMarker && !isBulkContainer) {
             isImplicitTotal = true;
         }
     }
