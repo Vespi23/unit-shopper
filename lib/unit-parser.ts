@@ -48,6 +48,10 @@ const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]+(?:c
 const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
+// Pre-emptive filters for products where specified weight or volume is almost always the global package total
+const TOTAL_WEIGHT_PRODUCT_THEMES = /\b(?:bar|bars|granola|snack|snacks|pouch|pouches|variety\s?pack|assortment|cereal|cookie|cookies)\b/i;
+const EXPLICIT_EACH_INDICATORS = /\b(?:each|per|bars\s+at|ea\.?)\b/i;
+
 export function parseUnit(title: string): UnitInfo | null {
     let cleanTitle = title.toLowerCase();
     if (cleanTitle.includes(',')) cleanTitle = cleanTitle.replace(/\b(\d+),(\d+)\b/g, '$1.$2');
@@ -63,7 +67,7 @@ export function parseUnit(title: string): UnitInfo | null {
     cleanTitle = cleanTitle.trim();
     const lowerTitle = cleanTitle;
 
-    const explicitTotalMatch = lowerTitle.match(/\b(?:\d+.*)?total\s(?:of\s)?(\d+)\b|\b(\d+)\s?(?:total|in\s?total)\b/i);
+    const explicitTotalMatch = lowerTitle.match(/\b(?:\d+.*)?total\s(?:of\s)?(\d+(?:\.\d+)?)\b|\b(\d+(?:\.\d+)?)\s?(?:total|in\s?total|net\s?wt)\b/i);
     let explicitTotalValue: number | null = null;
     if (explicitTotalMatch) {
         const t = explicitTotalMatch[1] || explicitTotalMatch[2];
@@ -175,7 +179,8 @@ export function parseUnit(title: string): UnitInfo | null {
     const valueStr = value.toString();
     const isExplicitTotal = lowerTitle.includes(`total of ${valueStr}`) || 
                             lowerTitle.includes(`total ${valueStr}`) || 
-                            lowerTitle.includes(`${valueStr} total`);
+                            lowerTitle.includes(`${valueStr} total`) ||
+                            lowerTitle.includes(`net wt ${valueStr}`);
 
     let isImplicitTotal = false;
     if (quantity > 1 && value > 1) {
@@ -194,6 +199,18 @@ export function parseUnit(title: string): UnitInfo | null {
             }
         }
     }
+
+    // Force-Through Guard Strategy for Granola Bars and Snack-packs
+    if (quantity > 1 && (unit === 'oz' || unit === 'g' || unit === 'fl oz')) {
+        const isPackageTotalTheme = TOTAL_WEIGHT_PRODUCT_THEMES.test(lowerTitle);
+        const hasEachMarker = EXPLICIT_EACH_INDICATORS.test(lowerTitle);
+
+        if (isPackageTotalTheme && !hasEachMarker) {
+            // Treat the extracted mass/volume as the package absolute total rather than sub-item size
+            isImplicitTotal = true;
+        }
+    }
+
     if ((isExplicitTotal || isImplicitTotal) && quantity > 1) quantity = 1;
 
     let totalValue = value * (quantity || 1);
@@ -216,7 +233,7 @@ export function normalizeUnit(info: UnitInfo): UnitInfo {
     else if (copy.unit === 'ml') { copy.value *= 0.033814; copy.unit = 'fl oz'; copy.totalValue *= 0.033814; }
     else if (copy.unit === 'sheets') {
         const isPaperTowel = /towel|napkin/i.test(info.formatted); 
-        const divisor = isPaperTowel ? 100 : 300; // DYNAMIC MATH FIX
+        const divisor = isPaperTowel ? 100 : 300; 
         copy.value /= divisor; copy.unit = 'rolls'; copy.totalValue /= divisor;
     } else if (copy.unit === 'sq ft') {
         copy.value /= 40; copy.unit = 'rolls'; copy.totalValue /= 40;
