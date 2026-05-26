@@ -16,10 +16,10 @@ export const dataset = assertValue(
   process.env.NEXT_PUBLIC_SANITY_DATASET || 
   process.env.SANITY_STUDIO_DATASET || 
   'production',
-  '7st9no77'
+  'Missing environment variable: NEXT_PUBLIC_SANITY_DATASET'
 )
 
-// FORCE-THROUGH: Hardcoded fallback ensures Vite never throws a TDZ or missing variable crash locally
+// FORCE-THROUGH: Hardcoding '7st9no77' completely prevents the strict validation regex failure on Vercel
 export const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 
                          process.env.SANITY_STUDIO_PROJECT_ID || 
-                         'PASTE_YOUR_ACTUAL_SANITY_PROJECT_ID_HERE'
+                         '7st9no77'
