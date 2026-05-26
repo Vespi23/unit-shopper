@@ -1,0 +1,6 @@
+# sanity/.gitignore
+.env
+.env.local
+.env.*
+dist
+.sanity
