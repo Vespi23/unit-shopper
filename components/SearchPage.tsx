@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
-import { Search, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+import { Search, Loader2, AlertCircle, ChevronDown, Terminal, ArrowUpRight } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 
 import { 
     convertValue, 
@@ -22,6 +23,35 @@ interface SearchPageProps {
 }
 
 const ITEMS_PER_PAGE = 40;
+
+// INLINE HIGH-CONVERSION EDITORIAL PROMOTION ENGINE
+function LedgerPromo() {
+    return (
+        <div className="w-full my-6 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 font-sans shadow-sm animate-in fade-in zoom-in duration-500">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="space-y-1.5 text-left">
+                    <div className="inline-flex items-center gap-1.5 text-[10px] font-mono font-black tracking-widest text-rose-500 uppercase">
+                        <Terminal className="h-3.5 w-3.5" /> // SYSTEM WIRE // INTEL BROADCAST
+                    </div>
+                    <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
+                        Deep Compliance Reviews & Financial Engineering Transcripts
+                    </h3>
+                    <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
+                        Access raw metadata summaries, podcast audio logs, and dynamic technical writeups inside the immersive **Lynx Ledger** engine at budgetlynx.com/ledger.
+                    </p>
+                </div>
+                
+                <Link 
+                    href="/ledger"
+                    className="w-full md:w-auto px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-zinc-800 dark:border-zinc-750 rounded-lg text-xs font-mono font-bold tracking-wider text-rose-400 hover:text-rose-300 uppercase transition-all flex items-center justify-center gap-1.5 group"
+                >
+                    <span>Open Ledger</span>
+                    <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </Link>
+            </div>
+        </div>
+    );
+}
 
 export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const router = useRouter();
@@ -43,17 +73,14 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const [showComparison, setShowComparison] = useState(false);
     const [disabledUnits] = useState<Set<string>>(new Set());
     
-    // UPDATED: Allow page state to change
     const [page, setPage] = useState(1);
     
     const lastInitialResultsQuery = useRef<string | null>(null);
 
-    // Reset pagination when a new search is submitted
     useEffect(() => {
         setPage(1);
     }, [submittedQuery]);
 
-    // Sync state with URL (Back button support)
     useEffect(() => {
         const q = searchParams.get('q') || '';
         const u = toCanonicalUnit(searchParams.get('u') || '');
@@ -82,10 +109,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         router.push(`/?${params.toString()}`, { scroll: false });
     };
 
-    // SEARCH EFFECT
     useEffect(() => {
         async function fetchResults() {
-            if (!submittedQuery) return;
+            if (!submittedQuery) {
+                setResults([]);
+                setSearched(false);
+                return;
+            }
             if (initialResults.length > 0 && !lastInitialResultsQuery.current && submittedQuery === initialQuery) {
                 lastInitialResultsQuery.current = submittedQuery;
                 setSearched(true);
@@ -114,7 +144,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         fetchResults();
     }, [submittedQuery]);
 
-    // Conversion Logic
     const convertedResults = useMemo(() => {
         return results.map(product => {
             if (!selectedUnit || selectedUnit === 'unknown' || !product.unitInfo) return product;
@@ -151,7 +180,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
         });
     }, [convertedResults, sortBy]);
 
-    // PAGINATION LOGIC
     const filteredResults = useMemo(() => {
         return sortedAndConvertedResults.filter(p => !p.unitInfo?.unit || !disabledUnits.has(p.unitInfo.unit));
     }, [sortedAndConvertedResults, disabledUnits]);
@@ -165,7 +193,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
     return (
         <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
             
-            {/* SEARCH SCHEMA */}
             {!isExtension && (
                 <script
                     type="application/ld+json"
@@ -212,6 +239,13 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                 </button>
                             )}
                         </form>
+
+                        {/* INTERCEPT ELEMENT FOR THE PRIMARY HOME / LANDING VIEW PATHWAY */}
+                        {!submittedQuery && !loading && (
+                            <div className="mt-8 text-left">
+                                <LedgerPromo />
+                            </div>
+                        )}
 
                         <div className="mt-8 hidden sm:block animate-in fade-in zoom-in duration-700 delay-300">
                             <div className="glass dark:glass-dark rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl lynx-glow">
@@ -311,7 +345,6 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     )}
                 </div>
 
-                {/* UPDATED: LOAD MORE BUTTON */}
                 {!loading && searched && hasMore && (
                     <div className="flex justify-center mt-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         <button 
@@ -324,15 +357,21 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
+                {/* INTERCEPT COMPONENT FOR UNMATCHED RECORD PHASES */}
                 {!loading && searched && results.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in zoom-in duration-500">
+                    <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
                         <div className="bg-muted rounded-full p-6 mb-4">
                             <AlertCircle className="h-10 w-10 text-muted-foreground opacity-20" />
                         </div>
                         <h3 className="text-xl font-bold mb-2">No qualifying results found</h3>
-                        <p className="text-muted-foreground max-w-xs mx-auto">
-                            We couldn't find any products with 4+ stars and 100+ reviews for "{submittedQuery}". 
+                        <p className="text-muted-foreground max-w-sm mx-auto mb-8">
+                            We couldn't find any products with 4+ stars and 100+ reviews for "{submittedQuery}".
                         </p>
+                        
+                        {/* FALLBACK SYSTEM ACCESS TRIGGER LINK */}
+                        <div className="w-full max-w-2xl text-left">
+                            <LedgerPromo />
+                        </div>
                     </div>
                 )}
             </section>
