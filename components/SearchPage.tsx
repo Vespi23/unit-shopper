@@ -24,30 +24,43 @@ interface SearchPageProps {
 
 const ITEMS_PER_PAGE = 40;
 
-// INLINE HIGH-CONVERSION EDITORIAL PROMOTION ENGINE
+// components/SearchPage.tsx - Replace or Remake the LedgerPromo function block
 function LedgerPromo() {
     return (
-        <div className="w-full my-6 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 font-sans shadow-sm animate-in fade-in zoom-in duration-500">
+        <div className="w-full mt-6 p-5 sm:p-6 rounded-2xl border border-border/50 bg-card/65 dark:bg-zinc-950/40 backdrop-blur-md font-sans shadow-xl shadow-black/5 animate-in fade-in zoom-in duration-500">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div className="space-y-1.5 text-left">
-                    <div className="inline-flex items-center gap-1.5 text-[10px] font-mono font-black tracking-widest text-rose-500 uppercase">
-                        <Terminal className="h-3.5 w-3.5" /> // SYSTEM WIRE // INTEL BROADCAST
+                
+                {/* SYSTEM SPECIFICATION VECTOR BLOCK */}
+                <div className="space-y-2 text-left flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono font-black tracking-widest text-rose-500 bg-rose-500/5 dark:bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/10 uppercase">
+                            <Terminal className="h-3 w-3" /> // WIRE OPERATIONAL
+                        </span>
+                        <span className="text-[10px] font-mono font-bold tracking-wider text-muted-foreground/80 uppercase">
+                          • Articles • Audio Transcripts • Media Logs
+                        </span>
                     </div>
-                    <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
-                        Deep Compliance Reviews & Financial Engineering Transcripts
+                    
+                    <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight leading-tight">
+                        See past the pricing math. Read the full investigation.
                     </h3>
-                    <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
-                        Access raw metadata summaries, podcast audio logs, and dynamic technical writeups inside the immersive **Lynx Ledger** engine at budgetlynx.com/ledger.
+                    
+                    <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl leading-relaxed">
+                        When quick size sorting lookups aren't enough, access the **Lynx Ledger**. We publish deep editorial reviews, 45-minute broadcast transcripts, and 12-minute media preview logs covering bulk deal manipulation and financial optimization vectors across major suppliers.
                     </p>
                 </div>
                 
-                <Link 
-                    href="/ledger"
-                    className="w-full md:w-auto px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-zinc-800 dark:border-zinc-750 rounded-lg text-xs font-mono font-bold tracking-wider text-rose-400 hover:text-rose-300 uppercase transition-all flex items-center justify-center gap-1.5 group"
-                >
-                    <span>Open Ledger</span>
-                    <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                </Link>
+                {/* SYSTEM INTERCEPT LINK ACTION AREA */}
+                <div className="w-full md:w-auto shrink-0 self-stretch md:self-center flex items-center">
+                    <Link 
+                        href="/ledger"
+                        className="w-full md:w-auto px-5 py-3 md:py-2.5 bg-zinc-900 hover:bg-zinc-850 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-zinc-800 dark:border-zinc-750 text-rose-400 hover:text-rose-300 font-mono text-xs font-bold tracking-wider rounded-xl uppercase transition-all flex items-center justify-center gap-2 shadow-lg shadow-black/20 group active:scale-95"
+                    >
+                        <span>Access Wire Transcripts</span>
+                        <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </Link>
+                </div>
+                
             </div>
         </div>
     );
