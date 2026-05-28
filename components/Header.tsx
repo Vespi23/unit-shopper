@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ModeToggle } from './ThemeToggle';
 import Image from 'next/image';
+import { BookOpen } from 'lucide-react';
 
 export function Header() {
     return (
@@ -16,7 +17,15 @@ export function Header() {
                         BudgetLynx
                     </span>
                 </Link>
-                <nav className="flex items-center gap-4 text-sm font-medium">
+                <nav className="flex items-center gap-5 text-sm font-medium">
+                    {/* EDITORIAL LYNX LEDGER LINK ACCESS VECTOR */}
+                    <Link 
+                        href="/ledger" 
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold tracking-tight text-rose-500 hover:text-rose-400 bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 rounded-md transition-colors uppercase"
+                    >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        <span>Lynx Ledger</span>
+                    </Link>
                     <ModeToggle />
                 </nav>
             </div>
