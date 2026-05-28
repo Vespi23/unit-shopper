@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
-import { Search, Loader2, AlertCircle, ChevronDown, Terminal, ArrowUpRight } from 'lucide-react';
+import { Search, Loader2, AlertCircle, ChevronDown, ArrowRight, BookOpen } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
@@ -24,43 +24,37 @@ interface SearchPageProps {
 
 const ITEMS_PER_PAGE = 40;
 
-// components/SearchPage.tsx - Replace or Remake the LedgerPromo function block
+// CLEANED FINTECH-STYLE EDITORIAL PROMOTION BANNER
 function LedgerPromo() {
     return (
-        <div className="w-full mt-6 p-5 sm:p-6 rounded-2xl border border-border/50 bg-card/65 dark:bg-zinc-950/40 backdrop-blur-md font-sans shadow-xl shadow-black/5 animate-in fade-in zoom-in duration-500">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                
-                {/* SYSTEM SPECIFICATION VECTOR BLOCK */}
-                <div className="space-y-2 text-left flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-mono font-black tracking-widest text-rose-500 bg-rose-500/5 dark:bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/10 uppercase">
-                            <Terminal className="h-3 w-3" /> // WIRE OPERATIONAL
+        <div className="w-full mt-4 p-5 sm:p-6 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-md shadow-sm hover:shadow-md hover:border-primary/20 dark:hover:border-rose-500/20 transition-all duration-300 animate-in fade-in slide-in-from-top-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-bold tracking-wider text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded uppercase">
+                            Lynx Ledger
                         </span>
-                        <span className="text-[10px] font-mono font-bold tracking-wider text-muted-foreground/80 uppercase">
-                          • Articles • Audio Transcripts • Media Logs
+                        <span className="text-[11px] text-muted-foreground font-medium">
+                            Deep-dive insights & analysis
                         </span>
                     </div>
-                    
-                    <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight leading-tight">
-                        See past the pricing math. Read the full investigation.
-                    </h3>
-                    
-                    <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl leading-relaxed">
-                        When quick size sorting lookups aren't enough, access the **Lynx Ledger**. We publish deep editorial reviews, 45-minute broadcast transcripts, and 12-minute media preview logs covering bulk deal manipulation and financial optimization vectors across major suppliers.
+                    <p className="text-sm font-semibold text-foreground tracking-tight">
+                        Looking for a breakdown on wholesale pricing games and shopping logic?
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
+                        Explore our clean, data-backed companion blog for detailed editorial reports, audio analysis logs, and clear media breakdowns tracking how suppliers construct bulk pricing metrics.
                     </p>
                 </div>
                 
-                {/* SYSTEM INTERCEPT LINK ACTION AREA */}
-                <div className="w-full md:w-auto shrink-0 self-stretch md:self-center flex items-center">
+                <div className="shrink-0 flex items-center pt-2 sm:pt-0">
                     <Link 
                         href="/ledger"
-                        className="w-full md:w-auto px-5 py-3 md:py-2.5 bg-zinc-900 hover:bg-zinc-850 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-zinc-800 dark:border-zinc-750 text-rose-400 hover:text-rose-300 font-mono text-xs font-bold tracking-wider rounded-xl uppercase transition-all flex items-center justify-center gap-2 shadow-lg shadow-black/20 group active:scale-95"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition-colors group"
                     >
-                        <span>Access Wire Transcripts</span>
-                        <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                        <span>Browse the ledger articles</span>
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                 </div>
-                
             </div>
         </div>
     );
@@ -253,14 +247,9 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                             )}
                         </form>
 
-                        {/* INTERCEPT ELEMENT FOR THE PRIMARY HOME / LANDING VIEW PATHWAY */}
-                        {!submittedQuery && !loading && (
-                            <div className="mt-8 text-left">
-                                <LedgerPromo />
-                            </div>
-                        )}
-
+                        {/* EXTENSION PROMO AND PROMOTIONAL BANNERS ORDER FIXED AS PER IMAGE_9DF24A.PNG REQUIREMENT */}
                         <div className="mt-8 hidden sm:block animate-in fade-in zoom-in duration-700 delay-300">
+                            {/* 1. LYNX VISION EXTENSION ROW CARD */}
                             <div className="glass dark:glass-dark rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl lynx-glow">
                                 <div className="flex items-center gap-4">
                                     <div className="relative h-10 w-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm border overflow-hidden">
@@ -284,6 +273,11 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                                     Add to Chrome
                                 </a>
                             </div>
+
+                            {/* 2. LYNX LEDGER EDITORIAL MARQUEE CARD INJECTED DIRECTLY UNDERNEATH LYNX VISION CONTAINER BORDERS */}
+                            {!submittedQuery && !loading && (
+                                <LedgerPromo />
+                            )}
                         </div>
                     </div>
                 </section>
@@ -370,18 +364,16 @@ export function SearchPage({ initialResults = [] }: SearchPageProps) {
                     </div>
                 )}
 
-                {/* INTERCEPT COMPONENT FOR UNMATCHED RECORD PHASES */}
                 {!loading && searched && results.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
                         <div className="bg-muted rounded-full p-6 mb-4">
                             <AlertCircle className="h-10 w-10 text-muted-foreground opacity-20" />
                         </div>
                         <h3 className="text-xl font-bold mb-2">No qualifying results found</h3>
-                        <p className="text-muted-foreground max-w-sm mx-auto mb-8">
+                        <p className="text-muted-foreground max-w-sm mx-auto mb-6">
                             We couldn't find any products with 4+ stars and 100+ reviews for "{submittedQuery}".
                         </p>
                         
-                        {/* FALLBACK SYSTEM ACCESS TRIGGER LINK */}
                         <div className="w-full max-w-2xl text-left">
                             <LedgerPromo />
                         </div>
