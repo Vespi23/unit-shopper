@@ -2,8 +2,9 @@
 import Link from 'next/link';
 import { client } from '@/sanity/lib/client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// FIXED: Removed un-cached runtime configurations to prevent Vercel computation load spikes
+// UPDATED: Set strict background validation loop to cache the index page for exactly 5 minutes
+export const revalidate = 300;
 
 interface LedgerPost {
   title: string;
