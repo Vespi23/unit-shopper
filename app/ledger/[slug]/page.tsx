@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { cache } from 'react';
 import { PortableText } from '@portabletext/react';
 import { client } from '@/sanity/lib/client';
 import { urlForImage } from '@/sanity/lib/image';
@@ -25,7 +26,8 @@ export async function generateStaticParams() {
   }
 }
 
-async function getPost(slug: string) {
+// React Request Memoization Engine: Protects the execution environment against duplicate network hits
+const getPost = cache(async (slug: string) => {
   const query = `*[_type == "post" && slug.current == $slug][0] {
     title,
     contentType,
@@ -33,10 +35,12 @@ async function getPost(slug: string) {
     videoUrl,
     "audioUrl": audioFile.asset->url,
     publishedAt,
-    body
+    _createdAt,
+    body,
+    "excerpt": array::join(body[_type == "block" && style == "normal"].children[].text, " ")
   }`;
   return await client.fetch(query, { slug });
-}
+});
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { slug } = await props.params;
@@ -44,8 +48,33 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   
   if (!post) return { title: 'Entry Not Found - BudgetLynx' };
   
+  const seoDescription = post.excerpt 
+    ? `${post.excerpt.substring(0, 155).trim()}...`
+    : `Read the latest ${post.contentType || 'entry'} breakdown on the Lynx Ledger.`;
+
+  const ogImage = post.mainImage ? urlForImage(post.mainImage).url() : 'https://budgetlynx.com/logo.png';
+
   return {
     title: `${post.title} | Lynx Ledger`,
+    description: seoDescription,
+    alternates: {
+      canonical: `https://budgetlynx.com/ledger/${slug}`,
+    },
+    openGraph: {
+      title: post.title,
+      description: seoDescription,
+      url: `https://budgetlynx.com/ledger/${slug}`,
+      siteName: 'BudgetLynx',
+      type: 'article',
+      publishedTime: post.publishedAt || post._createdAt,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: post.title }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description: seoDescription,
+      images: [ogImage],
+    },
   };
 }
 
@@ -62,10 +91,25 @@ export default async function PostPage(props: Props) {
   if (!post) return notFound();
 
   const embedVideoUrl = formatYouTubeEmbed(post.videoUrl);
-  const postDate = post.publishedAt ? new Date(post.publishedAt) : new Date();
+  const postDate = post.publishedAt ? new Date(post.publishedAt) : new Date(post._createdAt);
   const formattedDate = postDate.toISOString().split('T')[0];
 
-  // Locked Typographic Engine Mappers for Sanity Rich Text Content Blocks
+  // Structural Schema Object Creation (JSON-LD)
+  const jsonLdSchema = {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": post.title,
+    "image": post.mainImage ? urlForImage(post.mainImage).url() : 'https://budgetlynx.com/logo.png',
+    "datePublished": post.publishedAt || post._createdAt,
+    "author": { "@type": "Organization", "name": "BudgetLynx" },
+    "publisher": {
+      "@type": "Organization",
+      "name": "BudgetLynx",
+      "logo": { "@type": "ImageObject", "url": "https://budgetlynx.com/logo.png" }
+    },
+    "description": post.excerpt ? post.excerpt.substring(0, 160).trim() : ""
+  };
+
   const portableTextComponents = {
     block: {
       h2: ({ children }: any) => <h2 className="text-xl font-extrabold text-zinc-100 tracking-tight mt-10 mb-4 font-sans text-left">{children}</h2>,
@@ -94,8 +138,14 @@ export default async function PostPage(props: Props) {
         const imgUrl = urlForImage(value)?.url();
         if (!imgUrl) return null;
         return (
-          <div className="relative w-full aspect-video my-8 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900---">
-            <Image src={imgUrl} alt="Article imagery block" fill className="object-cover" sizes="(max-w: 768px) 100vw, 700px" />
+          <div className="relative w-full aspect-video my-8 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
+            <Image 
+              src={imgUrl} 
+              alt={value.alt || post.title || "Lynx Ledger Processing Graphic"} 
+              fill 
+              className="object-cover" 
+              sizes="(max-w: 768px) 100vw, 700px" 
+            />
           </div>
         );
       },
@@ -110,11 +160,12 @@ export default async function PostPage(props: Props) {
 
   return (
     <div className="w-full min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-rose-500 selection:text-black">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSchema) }}
+      />
       
-      {/* SEAMLESS CONTENT LAYOUT WRAPPER */}
       <div className="max-w-2xl mx-auto px-6 pt-32 pb-24">
-        
-        {/* RETRO-NAVIGATION SYSTEM TRIGGER */}
         <Link 
           href="/ledger" 
           className="inline-flex items-center gap-1 text-xs font-mono font-bold tracking-wider text-zinc-500 hover:text-rose-400 transition-colors uppercase mb-8 group"
@@ -122,7 +173,6 @@ export default async function PostPage(props: Props) {
           <ChevronLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" /> Back to wire
         </Link>
 
-        {/* MAIN STORY TITLES & HEADER STACK */}
         <header className="mb-8">
           <div className="text-[10px] font-black font-mono tracking-widest text-rose-500 uppercase mb-2">
             // {headerLabel}
@@ -131,7 +181,6 @@ export default async function PostPage(props: Props) {
             {post.title}
           </h1>
           
-          {/* ARTICLE METADATA TICKER */}
           <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-zinc-900 font-mono text-xs text-zinc-500">
             <div className="flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5 text-zinc-600" />
@@ -146,7 +195,6 @@ export default async function PostPage(props: Props) {
           </div>
         </header>
 
-        {/* SECURE MEDIA EXECUTION AREA */}
         <div className="mb-8 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl">
           {post.contentType === 'video' && embedVideoUrl && (
             <div className="aspect-video w-full">
@@ -173,7 +221,6 @@ export default async function PostPage(props: Props) {
               )}
               <audio controls className="w-full accent-rose-500">
                 <source src={post.audioUrl} type="audio/mpeg" />
-                Your browser does not support the audio playback controls.
               </audio>
             </div>
           )}
@@ -191,7 +238,6 @@ export default async function PostPage(props: Props) {
           )}
         </div>
 
-        {/* CORE EDITORIAL WORKSPACE EXECUTION */}
         <main className="w-full overflow-x-auto">
           {post.body ? (
             <PortableText value={post.body} components={portableTextComponents} />
@@ -200,7 +246,6 @@ export default async function PostPage(props: Props) {
           )}
         </main>
 
-        {/* BOTTOM TERMINAL FOOTER LINKS */}
         <div className="mt-20 pt-8 border-t border-zinc-900">
           <Link href="/ledger" className="text-rose-400 font-mono text-xs uppercase font-bold hover:underline inline-flex items-center gap-1.5 group">
             <span className="transition-transform group-hover:-translate-x-0.5">←</span> Back to Lynx Ledger
