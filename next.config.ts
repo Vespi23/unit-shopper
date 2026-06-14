@@ -1,3 +1,4 @@
+// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -8,7 +9,6 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            // PATCHED: Broadened img-src to allow all secure images, data URIs, and blobs
             value: "frame-ancestors 'self' https://*.amazon.com; img-src 'self' https: data: blob:;"
           },
           {
@@ -35,6 +35,17 @@ const nextConfig: NextConfig = {
       }
     ];
   },
+  
+  // FORCED REWRITE LAYER: Intercepts Turbopack sitemap conflicts and routes to the API handler
+  async rewrites() {
+    return [
+      {
+        source: "/sitemap.xml",
+        destination: "/api/sitemap-index",
+      },
+    ];
+  },
+
   images: {
     unoptimized: true,
     remotePatterns: [
@@ -50,7 +61,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'i5.walmartimages.com' }
     ],
   },
-  // ADDED: This strips the 1,400+ unused icons from the client bundle!
+  
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
