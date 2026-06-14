@@ -8,7 +8,8 @@ const CALCULATOR_LINKS = [
     { label: 'Ounces to Pounds Calculator', slug: 'ounces-to-pounds-price-calculator' },
     { label: 'Grams to Kilograms Calculator', slug: 'grams-to-kilograms-price-calculator' },
     { label: 'Costco Toilet Paper Calculator', slug: 'costco-toilet-paper-value-calculator' },
-    { label: 'Laundry Detergent Load Calculator', slug: 'laundry-detergent-price-per-load-calculator' }
+    { label: 'Laundry Detergent Load Calculator', slug: 'laundry-detergent-price-per-load-calculator' },
+    { label: 'Costco Kirkland Coffee Pods Calculator', slug: 'costco-kirkland-coffee-pods-calculator'}
 ];
 
 export function Footer() {

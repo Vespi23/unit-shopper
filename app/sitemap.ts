@@ -16,7 +16,8 @@ const CALCULATOR_SLUGS = [
   "ounces-to-pounds-price-calculator",
   "grams-to-kilograms-price-calculator",
   "costco-toilet-paper-value-calculator",
-  "laundry-detergent-price-per-load-calculator"
+  "laundry-detergent-price-per-load-calculator",
+  "costco-kirkland-coffee-pods-calculator"
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

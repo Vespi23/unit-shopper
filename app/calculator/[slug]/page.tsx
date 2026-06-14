@@ -64,7 +64,18 @@ const PSEO_DATABASE: Record<string, PageData> = {
     unitAName: "Fluid Ounces (fl oz)",
     unitBName: "Standard Loads",
     ratio: 1.5 // Average ounces per load
-  }
+  },
+  "costco-kirkland-coffee-pods-calculator": {
+    title: "Costco Kirkland K-Cup Price Per Pod Calculator | BudgetLynx",
+    metaDescription: "Calculate the exact cost per pod of Costco Kirkland Signature K-Cups to find your true morning coffee budget metrics.",
+    heading: "Costco Kirkland Coffee Pod Value Calculator",
+    introText: "Bulk coffee pod sizes often mask the true cost per individual cup. Use our calculator to determine the raw breakdown.",
+    formulaLabel: "Price per individual pod formula",
+    formula: "Price per Pod = Total Package Price ÷ Total Pod Count",
+    unitAName: "Boxes",
+    unitBName: "Total Pods",
+    ratio: 120 // Standard warehouse pod count per pack
+  },
 };
 
 export async function generateStaticParams() {
