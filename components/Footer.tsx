@@ -4,6 +4,13 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { FeedbackModal } from './FeedbackModal';
 
+const CALCULATOR_LINKS = [
+    { label: 'Ounces to Pounds Calculator', slug: 'ounces-to-pounds-price-calculator' },
+    { label: 'Grams to Kilograms Calculator', slug: 'grams-to-kilograms-price-calculator' },
+    { label: 'Costco Toilet Paper Calculator', slug: 'costco-toilet-paper-value-calculator' },
+    { label: 'Laundry Detergent Load Calculator', slug: 'laundry-detergent-price-per-load-calculator' }
+];
+
 export function Footer() {
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
@@ -14,6 +21,23 @@ export function Footer() {
                     <p className="mb-4">
                         &copy; {new Date().getFullYear()} FinFlow LLC. All rights reserved.
                     </p>
+                    
+                    {/* Programmatic Internal Link Injection Block */}
+                    <div className="mb-6 max-w-2xl mx-auto border-b border-border/50 pb-4">
+                        <p className="text-xs font-semibold tracking-wider uppercase mb-2 text-foreground/70">Calculators</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                            {CALCULATOR_LINKS.map((calc) => (
+                                <Link 
+                                    key={calc.slug} 
+                                    href={`/calculator/${calc.slug}`} 
+                                    className="hover:underline transition-colors hover:text-foreground"
+                                >
+                                    {calc.label}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+
                     <div className="max-w-2xl mx-auto space-y-2 text-xs opacity-70">
                         <p>
                             <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
