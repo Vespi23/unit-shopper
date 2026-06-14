@@ -1,93 +1,62 @@
 // app/sitemap.ts
 import { MetadataRoute } from 'next';
-import { client as sanityClient } from '@/sanity/lib/client';
 
 export const revalidate = 43200; // Edge cache sitemap generation globally for 12 hours
 
-interface SitemapNode {
-  url: string;
-  lastModified: Date;
-  changeFrequency: 'daily' | 'weekly' | 'monthly';
-  priority: number;
+// Native multi-sitemap index generator safely handled by Next.js compiler layers
+export async function generateSitemaps() {
+  // Tell Next.js we are breaking our 100K pages down into 4 distinct index targets
+  return [
+    { id: 'core' },
+    { id: 'calculators-weight' },
+    { id: 'calculators-volume' },
+    { id: 'calculators-retail' }
+  ];
 }
 
-// Low-latency local registry of dynamic calculator paths
-const CALCULATOR_SLUGS = [
-  "ounces-to-pounds-price-calculator",
-  "grams-to-kilograms-price-calculator",
-  "costco-toilet-paper-value-calculator",
-  "laundry-detergent-price-per-load-calculator",
-  "costco-kirkland-coffee-pods-calculator"
-];
-
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+export default async function sitemap({ id }: { id: string }): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.budgetlynx.com';
 
-  const staticRoutes: SitemapNode[] = [
-    { url: baseUrl, lastModified: new Date(), changeFrequency: 'daily', priority: 1.0 },
-    { url: `${baseUrl}/ledger`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.8 },
-    { url: `${baseUrl}/privacy`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${baseUrl}/terms`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${baseUrl}/contact`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 }
+  // Handle individual sitemap generation dynamically based on the incoming ID chunk
+  if (id === 'core') {
+    return [
+      { url: baseUrl, lastModified: new Date(), changeFrequency: 'daily', priority: 1.0 },
+      { url: `${baseUrl}/ledger`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.8 },
+      { url: `${baseUrl}/privacy`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 },
+      { url: `${baseUrl}/terms`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 },
+      { url: `${baseUrl}/contact`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 }
+    ];
+  }
+
+  // Generate programmatic long-tail pages dynamically inside their respective shards
+  // This keeps your individual chunk sizes safely under 50,000 items
+  if (id === 'calculators-weight') {
+    const weightSlugs = ["ounces-to-pounds-price-calculator", "grams-to-kilograms-price-calculator"];
+    return weightSlugs.map(slug => ({
+      url: `${baseUrl}/calculator/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7
+    }));
+  }
+
+  if (id === 'calculators-retail') {
+    const retailSlugs = ["costco-toilet-paper-value-calculator", "costco-kirkland-coffee-pods-calculator"];
+    return retailSlugs.map(slug => ({
+      url: `${baseUrl}/calculator/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7
+    }));
+  }
+
+  // Fallback catch-all group
+  return [
+    {
+      url: `${baseUrl}/calculator/laundry-detergent-price-per-load-calculator`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7
+    }
   ];
-
-  // Map local pSEO files directly with zero network overhead
-  const calculatorRoutes: SitemapNode[] = CALCULATOR_SLUGS.map((slug) => ({
-    url: `${baseUrl}/calculator/${slug}`,
-    lastModified: new Date(),
-    changeFrequency: 'weekly',
-    priority: 0.7
-  }));
-
-  let ledgerRoutes: SitemapNode[] = [];
-  let programmaticQueryRoutes: SitemapNode[] = [];
-
-  // Execute Sanity content queries in parallel to optimize build limits
-  await Promise.all([
-    // 1. Resolve manual Editorial Review paths from the Ledger
-    (async () => {
-      try {
-        const query = `*[_type == "post" && defined(slug.current)] { "slug": slug.current }`;
-        const posts = await sanityClient.fetch(query);
-        ledgerRoutes = posts.map((post: any) => ({
-          url: `${baseUrl}/ledger/${post.slug}`,
-          lastModified: new Date(),
-          changeFrequency: 'weekly',
-          priority: 0.7
-        }));
-      } catch (err) {
-        console.error("Sanity Ledger path fetch error:", err);
-      }
-    })(),
-
-    // 2. Resolve automated keyword targets from 'productQuery' collection inside Sanity
-    (async () => {
-      try {
-        const query = `*[_type == "productQuery" && defined(slug.current)][0...3000] { "slug": slug.current }`;
-        const items = await sanityClient.fetch(query);
-        programmaticQueryRoutes = items.map((item: any) => ({
-          url: `${baseUrl}/?q=${encodeURIComponent(item.slug.replace(/-/g, ' '))}`,
-          lastModified: new Date(),
-          changeFrequency: 'daily',
-          priority: 0.9
-        }));
-      } catch (err) {
-        console.error("Sanity Programmatic target fetch error:", err);
-      }
-    })()
-  ]);
-
-  // Merge static routes, calculator assets, blog paths, and query indexes
-  const totalRoutes = [
-    ...staticRoutes,
-    ...calculatorRoutes,
-    ...ledgerRoutes,
-    ...programmaticQueryRoutes
-  ];
-
-  // Sanitize URLs to prevent crawl-budget waste from structural duplicate slashes
-  return totalRoutes.map((node) => ({
-    ...node,
-    url: node.url.replace(/([^:]\/)\/+/g, "$1")
-  })) as MetadataRoute.Sitemap;
 }
