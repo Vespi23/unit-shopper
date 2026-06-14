@@ -11,6 +11,14 @@ interface SitemapNode {
   priority: number;
 }
 
+// Low-latency local registry of dynamic calculator paths
+const CALCULATOR_SLUGS = [
+  "ounces-to-pounds-price-calculator",
+  "grams-to-kilograms-price-calculator",
+  "costco-toilet-paper-value-calculator",
+  "laundry-detergent-price-per-load-calculator"
+];
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.budgetlynx.com';
 
@@ -22,10 +30,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/contact`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 }
   ];
 
+  // Map local pSEO files directly with zero network overhead
+  const calculatorRoutes: SitemapNode[] = CALCULATOR_SLUGS.map((slug) => ({
+    url: `${baseUrl}/calculator/${slug}`,
+    lastModified: new Date(),
+    changeFrequency: 'weekly',
+    priority: 0.7
+  }));
+
   let ledgerRoutes: SitemapNode[] = [];
   let programmaticQueryRoutes: SitemapNode[] = [];
 
-  // Execute content gathering in parallel to optimize Vercel serverless build times
+  // Execute Sanity content queries in parallel to optimize build limits
   await Promise.all([
     // 1. Resolve manual Editorial Review paths from the Ledger
     (async () => {
@@ -43,13 +59,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
     })(),
 
-    // 2. Resolve automated keyword targets from a 'productQuery' collection inside Sanity
+    // 2. Resolve automated keyword targets from 'productQuery' collection inside Sanity
     (async () => {
       try {
         const query = `*[_type == "productQuery" && defined(slug.current)][0...3000] { "slug": slug.current }`;
         const items = await sanityClient.fetch(query);
         programmaticQueryRoutes = items.map((item: any) => ({
-          // Maps cleanly onto your index root parameters (?q=)
           url: `${baseUrl}/?q=${encodeURIComponent(item.slug.replace(/-/g, ' '))}`,
           lastModified: new Date(),
           changeFrequency: 'daily',
@@ -61,5 +76,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })()
   ]);
 
-  return [...staticRoutes, ...ledgerRoutes, ...programmaticQueryRoutes] as MetadataRoute.Sitemap;
+  // Merge static routes, calculator assets, blog paths, and query indexes
+  const totalRoutes = [
+    ...staticRoutes,
+    ...calculatorRoutes,
+    ...ledgerRoutes,
+    ...programmaticQueryRoutes
+  ];
+
+  // Sanitize URLs to prevent crawl-budget waste from structural duplicate slashes
+  return totalRoutes.map((node) => ({
+    ...node,
+    url: node.url.replace(/([^:]\/)\/+/g, "$1")
+  })) as MetadataRoute.Sitemap;
 }
