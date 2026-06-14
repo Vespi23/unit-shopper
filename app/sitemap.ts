@@ -4,7 +4,6 @@ import { MetadataRoute } from 'next';
 export const revalidate = 43200; // Edge cache sitemap generation globally for 12 hours
 
 export async function generateSitemaps() {
-  // Tell Next.js we are breaking our pages down into 4 distinct index targets
   return [
     { id: 'core' },
     { id: 'calculators-weight' },
@@ -16,7 +15,6 @@ export async function generateSitemaps() {
 export default async function sitemap({ id }: { id: string }): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.budgetlynx.com';
 
-  // Handle individual sitemap generation dynamically based on the incoming ID chunk
   if (id === 'core') {
     return [
       { url: baseUrl, lastModified: new Date(), changeFrequency: 'daily', priority: 1.0 },
@@ -27,7 +25,6 @@ export default async function sitemap({ id }: { id: string }): Promise<MetadataR
     ];
   }
 
-  // Generate programmatic long-tail pages dynamically inside their respective shards
   if (id === 'calculators-weight') {
     const weightSlugs = ["ounces-to-pounds-price-calculator", "grams-to-kilograms-price-calculator"];
     return weightSlugs.map(slug => ({
@@ -48,7 +45,6 @@ export default async function sitemap({ id }: { id: string }): Promise<MetadataR
     }));
   }
 
-  // Fallback catch-all group
   return [
     {
       url: `${baseUrl}/calculator/laundry-detergent-price-per-load-calculator`,
