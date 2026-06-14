@@ -3,9 +3,8 @@ import { MetadataRoute } from 'next';
 
 export const revalidate = 43200; // Edge cache sitemap generation globally for 12 hours
 
-// Native multi-sitemap index generator safely handled by Next.js compiler layers
 export async function generateSitemaps() {
-  // Tell Next.js we are breaking our 100K pages down into 4 distinct index targets
+  // Tell Next.js we are breaking our pages down into 4 distinct index targets
   return [
     { id: 'core' },
     { id: 'calculators-weight' },
@@ -29,7 +28,6 @@ export default async function sitemap({ id }: { id: string }): Promise<MetadataR
   }
 
   // Generate programmatic long-tail pages dynamically inside their respective shards
-  // This keeps your individual chunk sizes safely under 50,000 items
   if (id === 'calculators-weight') {
     const weightSlugs = ["ounces-to-pounds-price-calculator", "grams-to-kilograms-price-calculator"];
     return weightSlugs.map(slug => ({
