@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { FeedbackModal } from './FeedbackModal';
 
-const CALCULATOR_LINKS = [
-    { label: 'Ounces to Pounds Calculator', slug: 'ounces-to-pounds-price-calculator' },
-    { label: 'Grams to Kilograms Calculator', slug: 'grams-to-kilograms-price-calculator' },
-    { label: 'Costco Toilet Paper Calculator', slug: 'costco-toilet-paper-value-calculator' },
-    { label: 'Laundry Detergent Load Calculator', slug: 'laundry-detergent-price-per-load-calculator' },
-    { label: 'Costco Kirkland Coffee Pods Calculator', slug: 'costco-kirkland-coffee-pods-calculator'}
+// High-volume anchor pathways that act as clean category entry points for crawlers
+const FEATURED_CALCULATORS = [
+    { label: 'Ounces to Pounds', slug: 'ounces-to-pounds-price-calculator' },
+    { label: 'Grams to Kilograms', slug: 'grams-to-kilograms-price-calculator' },
+    { label: 'Costco Toilet Paper', slug: 'costco-toilet-paper-value-calculator' },
+    { label: 'Kirkland Coffee Pods', slug: 'costco-kirkland-coffee-pods-calculator' }
 ];
 
 export function Footer() {
@@ -23,11 +23,11 @@ export function Footer() {
                         &copy; {new Date().getFullYear()} FinFlow LLC. All rights reserved.
                     </p>
                     
-                    {/* Programmatic Internal Link Injection Block */}
+                    {/* Hardened Scalable Internal Link Architecture */}
                     <div className="mb-6 max-w-2xl mx-auto border-b border-border/50 pb-4">
                         <p className="text-xs font-semibold tracking-wider uppercase mb-2 text-foreground/70">Calculators</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                            {CALCULATOR_LINKS.map((calc) => (
+                        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
+                            {FEATURED_CALCULATORS.map((calc) => (
                                 <Link 
                                     key={calc.slug} 
                                     href={`/calculator/${calc.slug}`} 
@@ -36,6 +36,14 @@ export function Footer() {
                                     {calc.label}
                                 </Link>
                             ))}
+                            {/* The Master Discovery Point: Guides bots straight to all long-tail pages */}
+                            <span className="text-border">|</span>
+                            <Link 
+                                href="/calculator" 
+                                className="font-semibold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline"
+                            >
+                                All Tools &rarr;
+                            </Link>
                         </div>
                     </div>
 
