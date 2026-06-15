@@ -1,24 +1,19 @@
 // app/api/sitemap-index/route.ts
 import { NextResponse } from 'next/server';
+import { RETAILERS } from '@/lib/seo-matrix';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.budgetlynx.com';
 
-  const sitemaps = [
-    `${baseUrl}/sitemaps/core.xml`,
-    `${baseUrl}/sitemaps/calculators-weight.xml`,
-    `${baseUrl}/sitemaps/calculators-volume.xml`,
-    `${baseUrl}/sitemaps/calculators-retail.xml`,
-  ];
-
+  // Build out standard index maps pointing straight to our custom sub-sitemap routes
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  ${sitemaps
+  ${RETAILERS
     .map(
-      (url) => `  <sitemap>
-    <loc>${url}</loc>
+      (retailer) => `  <sitemap>
+    <loc>${baseUrl}/api/sitemap-shard/${retailer}</loc>
     <lastmod>${new Date().toISOString()}</lastmod>
   </sitemap>`
     )
