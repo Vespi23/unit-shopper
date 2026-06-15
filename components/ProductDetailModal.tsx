@@ -16,6 +16,7 @@ interface ProductDetailModalProps {
 
 export function ProductDetailModal({ product, onClose }: ProductDetailModalProps) {
     const { toast } = useToast();
+    
     // Prevent scrolling when modal is open
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -26,28 +27,57 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
     if (!product) return null;
 
+    const handleShareSavings = async () => {
+        const trackingUrl = `${window.location.origin}/?q=${encodeURIComponent(product.title)}&ref=sharesavings`;
+        const shareSnippet = `🎯 Deal Alert via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.pricePerUnit} (${product.unitInfo?.formatted || 'N/A'})\n💵 Total Cost: $${product.price.toFixed(2)}\n\nCheck the unit value calculation here:\n👇👇👇\n${trackingUrl}`;
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(shareSnippet);
+            } else {
+                // FORCE-THROUGH FALLBACK LOOP FOR SANDBOXED APPS/HTTP ENVIRONMENT COMPLIANCE
+                const element = document.createElement('textarea');
+                element.value = shareSnippet;
+                element.style.position = 'fixed';
+                element.style.opacity = '0';
+                element.style.left = '-9999px';
+                document.body.appendChild(element);
+                element.select();
+                element.setSelectionRange(0, 99999);
+                document.execCommand('copy');
+                document.body.removeChild(element);
+            }
+
+            toast({
+                title: "Savings Copied! 🔥",
+                description: "Viral text snippet copied to your clipboard. Ready to paste!",
+            });
+        } catch (err) {
+            toast({
+                variant: "destructive",
+                title: "Copy Execution Failed",
+                description: "Your platform or browser blocked auto-copy access.",
+            });
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="relative w-full max-w-4xl bg-background rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white/10">
                 {/* Action Buttons */}
                 <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
                     <button
-                        onClick={() => {
-                            const url = `${window.location.origin}/?q=${encodeURIComponent(product.title)}`;
-                            navigator.clipboard.writeText(url);
-                            toast({
-                                title: "Link Copied!",
-                                description: "Product link copied to clipboard.",
-                            });
-                        }}
+                        onClick={handleShareSavings}
                         className="p-2 rounded-full bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-colors group"
-                        title="Copy Link to Product"
+                        title="Share Savings Text"
+                        type="button"
                     >
                         <Share2 className="w-6 h-6 group-active:scale-95" />
                     </button>
                     <button
                         onClick={onClose}
                         className="p-2 rounded-full bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 transition-colors"
+                        type="button"
                     >
                         <X className="w-6 h-6" />
                     </button>
@@ -114,15 +144,24 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                         {/* Price History Chart */}
                         <PriceHistoryChart product={product} />
 
-                        {/* CTA */}
-                        <a
-                            href={getAffiliateLink(product)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full py-4 bg-primary text-primary-foreground font-bold text-lg rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all mt-auto"
-                        >
-                            View Deal on Amazon <ExternalLink className="w-5 h-5" />
-                        </a>
+                        {/* Split Action Footers for Virality Optimization */}
+                        <div className="mt-auto flex flex-col sm:flex-row gap-3">
+                            <button
+                                onClick={handleShareSavings}
+                                className="w-full sm:w-1/3 py-4 bg-muted hover:bg-muted/80 font-bold text-lg rounded-2xl flex items-center justify-center gap-2 transition-all duration-200 active:scale-98"
+                                type="button"
+                            >
+                                Share Math 🔥
+                            </button>
+                            <a
+                                href={getAffiliateLink(product)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full sm:w-2/3 py-4 bg-primary text-primary-foreground font-bold text-lg rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                            >
+                                View Deal on Amazon <ExternalLink className="w-5 h-5" />
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -132,6 +171,6 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(generateProductSchema(product)) }}
             />
-        </div >
+        </div>
     );
 }

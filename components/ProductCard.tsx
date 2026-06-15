@@ -2,9 +2,10 @@
 
 import { memo, useCallback } from 'react';
 import { Product } from '@/lib/types';
-import { ExternalLink, Star, Sparkles } from 'lucide-react';
+import { ExternalLink, Star, Sparkles, Share2 } from 'lucide-react';
 import { getAffiliateLink } from '@/lib/affiliate';
 import { useABTest } from '@/hooks/useABTest';
+import { useToast } from "@/components/ui/use-toast";
 
 interface ProductCardProps {
     product: Product;
@@ -32,6 +33,7 @@ export function ProductCardSkeleton() {
 
 export const ProductCard = memo(function ProductCard({ product, onClick, onSelect, isSelected, index = 99 }: ProductCardProps) {
     const { variant, trackConversion, isReady } = useABTest('cta_color');
+    const { toast } = useToast();
 
     // The first 4 items are visible above the fold on most devices. 
     // They get highest fetch priority to maximize Core Web Vitals (LCP).
@@ -50,8 +52,46 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
         trackConversion('CTA Clicked', { productId: product.id, title: product.title });
     };
 
+    const handleShareSavings = async (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevents card selection and modal triggers
+        
+        const trackingUrl = `${window.location.origin}/?q=${encodeURIComponent(product.title)}&ref=sharesavings`;
+        const shareSnippet = `📊 Deal Found via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.pricePerUnit} (${product.unitInfo?.formatted || 'N/A'})\n💵 Total Cost: $${product.price.toFixed(2)}\n\nVerify the breakdown instantly:\n👇👇👇\n${trackingUrl}`;
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(shareSnippet);
+            } else {
+                // FORCE-THROUGH FALLBACK LOOP FOR SANDBOXED APPS/HTTP ENVIRONMENT COMPLIANCE
+                const element = document.createElement('textarea');
+                element.value = shareSnippet;
+                element.style.position = 'fixed';
+                element.style.opacity = '0';
+                element.style.left = '-9999px';
+                document.body.appendChild(element);
+                element.select();
+                element.setSelectionRange(0, 99999);
+                document.execCommand('copy');
+                document.body.removeChild(element);
+            }
+
+            trackConversion('Savings Shared', { productId: product.id, title: product.title });
+
+            toast({
+                title: "Savings Copied! 🔥",
+                description: "Formatted deal snippet successfully written to your clipboard.",
+            });
+        } catch (err) {
+            toast({
+                variant: "destructive",
+                title: "Copy Execution Failed",
+                description: "Your platform or browser blocked auto-copy access.",
+            });
+        }
+    };
+
     const getCtaStyle = () => {
-        const base = "mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all group-hover:shadow-lg";
+        const base = "flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all group-hover:shadow-lg";
         if (!isReady) return `${base} bg-primary/10 text-primary hover:bg-primary hover:text-white`;
         if (variant === 'variant_b') {
             return `${base} bg-red-100 text-red-600 hover:bg-red-600 hover:text-white hover:shadow-red-900/20`;
@@ -138,16 +178,27 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                     </div>
                 </div>
 
-                {/* Action Button */}
-                <a
-                    href={getAffiliateLink(product)}
-                    onClick={handleViewDeal}
-                    target="_blank"
-                    rel="nofollow noopener noreferrer"
-                    className={getCtaStyle()}
-                >
-                    View Deals <ExternalLink className="h-4 w-4" />
-                </a>
+                {/* Inline Split Layout Execution Action Array */}
+                <div className="mt-5 flex items-center gap-2">
+                    <button
+                        onClick={handleShareSavings}
+                        className="flex items-center justify-center border border-border bg-background p-2.5 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200 active:scale-95"
+                        title="Share Savings Matrix"
+                        type="button"
+                    >
+                        <Share2 className="h-4 w-4" />
+                    </button>
+
+                    <a
+                        href={getAffiliateLink(product)}
+                        onClick={handleViewDeal}
+                        target="_blank"
+                        rel="nofollow noopener noreferrer"
+                        className={getCtaStyle()}
+                    >
+                        View Deals <ExternalLink className="h-4 w-4" />
+                    </a>
+                </div>
             </div>
         </div>
     );
