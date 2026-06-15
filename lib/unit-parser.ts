@@ -48,8 +48,8 @@ const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]+(?:c
 const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
-// Expanded to structurally absorb fresh meats, poultry, seafood, chubs, and trays
-const TOTAL_WEIGHT_PRODUCT_THEMES = /\b(?:bar|bars|granola|snack|snacks|pouch|pouches|variety\s?pack|assortment|cereal|oat|oats|oatmeal|packet|packets|beef|meat|burger|burgers|steak|steaks|chicken|turkey|pork|chub|chubs|seafood|salmon|shrimp,breast,breasts,thigh,thighs)\b/i;
+// Expanded to absorb fresh meats, poultry, bulk candy, confections, and dry snacks
+const TOTAL_WEIGHT_PRODUCT_THEMES = /\b(?:bar|bars|candy|candies|peppermint|sweets|chocolates?|brites|starburst|snack|snacks|pouch|pouches|variety\s?pack|assortment|cereal|oat|oats|oatmeal|packet|packets|beef|meat|burger|burgers|steak|steaks|chicken|turkey|pork|chub|chubs|seafood|salmon|shrimp|breast|breasts|thigh|thighs)\b/i;
 const EXPLICIT_EACH_INDICATORS = /\b(?:each|per|bars\s+at|ea\.?|per\s+pouch|per\s+packet|per\s+patty|per\s+bar)\b/i;
 const BULK_CONTAINER_INDICATORS = /\b(?:canister|canisters|tub|tubs|jar|jars|case|cases|pack\s+of\s+\d+\s+boxes)\b/i;
 const INDIVIDUAL_SCALAR_ITEMS = /\b(?:patty|patties|sliders?|meatballs?)\b/i;
@@ -206,14 +206,14 @@ export function parseUnit(title: string): UnitInfo | null {
         }
     }
 
-    // Fresh Perimeter Protein & Multi-Pack Safeguard
+    // Fresh Perimeter Protein, Confections & Multi-Pack Safeguard Layer
     if (quantity > 1 && (unit === 'oz' || unit === 'g' || unit === 'fl oz' || unit === 'lb' || unit === 'kg')) {
         const isPackageTotalTheme = TOTAL_WEIGHT_PRODUCT_THEMES.test(lowerTitle);
         const hasEachMarker = EXPLICIT_EACH_INDICATORS.test(lowerTitle);
         const isBulkContainer = BULK_CONTAINER_INDICATORS.test(lowerTitle);
         const isIndividualScalarItem = INDIVIDUAL_SCALAR_ITEMS.test(lowerTitle);
 
-        // Trap overall protein trays and tubes, bypassing multiplication unless specifically shaped into individual units
+        // Treat explicit single container weight fields containing a secondary item count descriptor as a absolute total package volume
         if (isPackageTotalTheme && !hasEachMarker && !isBulkContainer && !isIndividualScalarItem) {
             isImplicitTotal = true;
         }

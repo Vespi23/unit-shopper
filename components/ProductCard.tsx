@@ -53,16 +53,17 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
     };
 
     const handleShareSavings = async (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevents card selection and modal triggers
-        
+        e.stopPropagation(); // Stops card selection and modal triggers
+
+        // Seamless programmatic link construction for real-time stateless execution
         const trackingUrl = `${window.location.origin}/?q=${encodeURIComponent(product.title)}&ref=sharesavings`;
-        const shareSnippet = `📊 Deal Found via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.pricePerUnit} (${product.unitInfo?.formatted || 'N/A'})\n💵 Total Cost: $${product.price.toFixed(2)}\n\nVerify the breakdown instantly:\n👇👇👇\n${trackingUrl}`;
+        const shareSnippet = `🎯 Deal Alert via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.pricePerUnit} (${product.unitInfo?.formatted || 'N/A'})\n💵 Total Cost: $${product.price.toFixed(2)}\n\nCheck the unit value calculation here:\n👇👇👇\n${trackingUrl}`;
 
         try {
             if (navigator.clipboard && window.isSecureContext) {
                 await navigator.clipboard.writeText(shareSnippet);
             } else {
-                // FORCE-THROUGH FALLBACK LOOP FOR SANDBOXED APPS/HTTP ENVIRONMENT COMPLIANCE
+                // FORCE-THROUGH FALLBACK FOR MOBILE EMBEDDED SOCIAL CHANNELS
                 const element = document.createElement('textarea');
                 element.value = shareSnippet;
                 element.style.position = 'fixed';
@@ -75,11 +76,9 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                 document.body.removeChild(element);
             }
 
-            trackConversion('Savings Shared', { productId: product.id, title: product.title });
-
             toast({
                 title: "Savings Copied! 🔥",
-                description: "Formatted deal snippet successfully written to your clipboard.",
+                description: "Viral text snippet copied to your clipboard. Ready to paste!",
             });
         } catch (err) {
             toast({
