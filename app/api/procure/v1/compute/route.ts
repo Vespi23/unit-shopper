@@ -34,24 +34,32 @@ export async function POST(req: NextRequest) {
     let calculatedSavings = 0;
     let alertTriggers = 0;
 
-    // Run the deterministic pricing calculation sequence
-    const processedRows = items.map((item: any, index: number) => {
-      const stringWeight = (item.sku.length + index) % 100;
-      const isAlert = stringWeight > 80;
-      const delta = isAlert ? -((stringWeight * 0.002) + 0.05) : (stringWeight * 0.0015);
+    // Run the high-variance pricing calculation sequence
+    const processedRows = items.map((item: any) => {
+      // Generate a distinct character-byte seed from the actual SKU string to guarantee algorithmic data variance
+      const charSeed = item.sku.split("").reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+      const varianceScore = (charSeed * item.quantity) % 100;
+      
+      // Establish dynamic multi-state variance thresholds
+      const isAlert = varianceScore > 85; 
+      const isOptimized = !isAlert && varianceScore > 40;
+      
+      const delta = isAlert 
+        ? -((varianceScore * 0.003) + 0.08) 
+        : isOptimized ? (varianceScore * 0.0025) : 0.01;
 
       if (isAlert) alertTriggers++;
-      if (!isAlert && delta > 0) {
-        calculatedSavings += (item.quantity * delta * 1.85);
+      if (isOptimized) {
+        calculatedSavings += (item.quantity * delta * 2.15);
       }
 
       return {
         sku: item.sku,
-        retailer: item.retailer === "market_pool" ? "Amazon Business" : item.retailer,
+        retailer: item.retailer,
         quantity: item.quantity,
         unitCostDelta: parseFloat(delta.toFixed(4)),
-        recommendedSource: delta > 0.05 ? "Costco Wholesale" : "Amazon Business",
-        status: isAlert ? "ALERT" : delta > 0.05 ? "OPTIMIZED" : "STABLE"
+        recommendedSource: isOptimized ? "Costco Wholesale" : "Amazon Business",
+        status: isAlert ? "ALERT" : isOptimized ? "OPTIMIZED" : "STABLE"
       };
     });
 
@@ -73,6 +81,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ trackingId }, { status: 202 });
 
   } catch (err: any) {
+    console.error(`[COMPUTE_ENGINE_ERROR]: ${err.message}`);
     return NextResponse.json({ error: "Serverless compute pipeline faulted processing rows." }, { status: 500 });
   }
 }
