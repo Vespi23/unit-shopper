@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { useJobPolling, JobStatus } from "@/hooks/useJobPolling";
+import { useJobPolling } from "@/hooks/useJobPolling";
 
 interface AuditMetricSummary {
   totalItemsProcessed: number;
@@ -28,14 +28,16 @@ export default function ProcurePage() {
   const [auditLedger, setAuditLedger] = useState<AnalyzedRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // EXECUTION CIRCUIT CLOSURE: Connect frontend view explicitly to your secure polling hook
+  // REAL DATA COMPLIANCE: Polling updates now pull directly from the server-side calculations
   const { startPolling, progress, error: pollingError } = useJobPolling({
     onSuccess: (clusterData) => {
-      hydrateAuditInterface(clusterData.items || [], clusterData.totalItems || clusterData.items?.length || 0);
+      // Direct asset extraction without client-side mock interference
+      setMetrics(clusterData.metrics || null);
+      setAuditLedger(clusterData.items || []);
       setUiState("SUCCESS");
     },
     onError: (errMessage) => {
-      setUploadError(errMessage || "Background worker cluster encountered a processing error.");
+      setUploadError(errMessage || "Background worker cluster encountered an error processing the batch matrix.");
       setUiState("ERROR");
     }
   });
@@ -69,36 +71,6 @@ export default function ProcurePage() {
     return items;
   };
 
-  // Centralized Matrix Compiler: Used by both async completion returns and serverless fallback loops
-  const hydrateAuditInterface = (rawItems: any[], totalCount: number) => {
-    let calculatedSavings = 0;
-    let alertTriggers = 0;
-
-    const compiledLedger: AnalyzedRow[] = rawItems.map((item) => {
-      const isAlert = Math.random() > 0.8;
-      const delta = isAlert ? -(Math.random() * 0.22 + 0.05) : (Math.random() * 0.14);
-      if (isAlert) alertTriggers++;
-      if (!isAlert && delta > 0) calculatedSavings += (item.quantity * delta * 1.85);
-
-      return {
-        sku: item.sku,
-        retailer: item.retailer === "market_pool" ? "Amazon Business" : item.retailer,
-        quantity: item.quantity,
-        unitCostDelta: delta,
-        recommendedSource: delta > 0.05 ? "Costco Wholesale" : "Amazon Business",
-        status: isAlert ? "ALERT" : delta > 0.05 ? "OPTIMIZED" : "STABLE"
-      };
-    });
-
-    setMetrics({
-      totalItemsProcessed: totalCount,
-      projectedSavings: parseFloat(calculatedSavings.toFixed(2)),
-      shrinkflationAlerts: alertTriggers,
-      optimizedRoutesCount: compiledLedger.filter(r => r.status === "OPTIMIZED").length
-    });
-    setAuditLedger(compiledLedger);
-  };
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -127,15 +99,13 @@ export default function ProcurePage() {
         if (!res.ok) throw new Error(`Gateway returned server tracking status: ${res.status}`);
         const responseData = await res.json();
 
-        // INTEGRATION MULTIPLEXER SWITCH
         if (responseData.status === "ASYNC_CLUSTER_ACCEPTED") {
           setUiState("PROCESSING");
           startPolling(responseData.trackingId);
         } else if (responseData.status === "DEGRADED_COMPUTATION_SUCCESS") {
-          // Fallback routing triggered automatically due to connection drop
-          hydrateAuditInterface(parsedItems, responseData.itemsProcessed || parsedItems.length);
-          setUiState("SUCCESS");
-          setUploadError(responseData.RISK_WARNING || "Operating on backup serverless infrastructure.");
+          // Fallback UI Notice: Warns that local simulation was triggered due to server offline state
+          setUploadError("Notice: Distributed cluster is offline. Operating under local emergency failover routing constraints.");
+          setUiState("ERROR");
         } else {
           throw new Error("Unknown gateway transmission fingerprint encountered.");
         }
@@ -167,7 +137,7 @@ export default function ProcurePage() {
             <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading}
-              className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition execution duration-150 disabled:bg-slate-700 disabled:cursor-not-allowed"
+              className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition duration-150 disabled:bg-slate-700 disabled:cursor-not-allowed"
             >
               {uiState === "UPLOADING" && "Ingesting Spreadsheet..."}
               {uiState === "PROCESSING" && `Processing Cluster (${progress}%)`}
@@ -183,11 +153,11 @@ export default function ProcurePage() {
           </div>
         </header>
 
-        {/* REAL-TIME CLUSTER PROGRESS PROGRESS BAR TRACKER */}
+        {/* REAL-TIME CLUSTER PROGRESS BAR TRACKER */}
         {uiState === "PROCESSING" && (
           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-sm space-y-3">
             <div className="flex justify-between items-center text-sm font-semibold">
-              <span className="text-blue-400 animate-pulse">Scraping Live Retailer Asset Nodes...</span>
+              <span className="text-blue-400 animate-pulse">Running Server Analytical Compute Pipeline...</span>
               <span className="text-slate-300">{progress}% Compiled</span>
             </div>
             <div className="w-full bg-slate-900 rounded-full h-3 border border-slate-700 overflow-hidden">
@@ -228,7 +198,7 @@ export default function ProcurePage() {
           </section>
         )}
 
-        {/* ARBITRAGE SYSTEM COMPONENT ANALYSIS LEDGER */}
+        {/* ARBITRAGE SYSTEM ANALYSIS LEDGER */}
         {auditLedger.length > 0 && uiState === "SUCCESS" && (
           <section className="bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden">
             <div className="p-6 border-b border-slate-700">
