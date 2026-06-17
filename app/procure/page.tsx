@@ -1,6 +1,22 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import ProcurementDashboard from "@/components/ProcurementDashboard";
+
+export const metadata = {
+  title: "Procurement Processing Center | BudgetLynx",
+  description: "Enterprise high-throughput asynchronous scraping array console.",
+};
+
+export default function ProcurePage() {
+  return (
+    <main style={{ minHeight: "100vh", backgroundColor: "#fafafa", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ backgroundColor: "#ffffff", padding: "8px", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
+        <ProcurementDashboard />
+      </div>
+    </main>
+  );
+}
 
 interface AuditMetricSummary {
   totalItemsProcessed: number;
