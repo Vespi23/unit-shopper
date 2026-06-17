@@ -10,7 +10,7 @@ export default function ProcurementDashboard() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [processedCount, setProcessedCount] = useState<number>(0);
 
-  const { startPolling, progress, status, error: pollingError } = useJobPolling({
+  const { startPolling, progress, error: pollingError } = useJobPolling({
     onSuccess: (data) => {
       setUiState("SUCCESS");
       setProcessedCount(data.processedItems || 0);
@@ -26,14 +26,14 @@ export default function ProcurementDashboard() {
     setErrorMessage(null);
 
     try {
-      // Simulate payload submission to your live Next.js API route
+      // FIXED SYNTAX: Using strict colons (:) for valid object property assignments
       const response = await fetch("/api/procure/v1/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: [
-            { sku = "COSTCO-9910", retailer = "costco", quantity = 10 },
-            { sku = "AMZN-2214", retailer = "amazon", quantity = 5 }
+            { sku: "COSTCO-9910", retailer: "costco", quantity: 10 },
+            { sku: "AMZN-2214", retailer: "amazon", quantity: 5 }
           ]
         })
       });
@@ -46,7 +46,6 @@ export default function ProcurementDashboard() {
         setUiState("PROCESSING");
         startPolling(data.trackingId);
       } else if (data.status === "DEGRADED_COMPUTATION_SUCCESS") {
-        // Handle serverless fallback loop cleanly without initializing worker polling
         setUiState("SUCCESS");
         setProcessedCount(data.itemsProcessed || 0);
       }
@@ -62,7 +61,6 @@ export default function ProcurementDashboard() {
         BudgetLynx Processing Center
       </h2>
 
-      {/* STATE 1: IDLE */}
       {uiState === "IDLE" && (
         <button
           onClick={handleFileUploadMock}
@@ -72,10 +70,8 @@ export default function ProcurementDashboard() {
         </button>
       )}
 
-      {/* STATE 2: UPLOADING */}
       {uiState === "UPLOADING" && <p style={{ color: "#666" }}>Ingesting matrix spreadsheet layers...</p>}
 
-      {/* STATE 3: PROCESSING */}
       {uiState === "PROCESSING" && (
         <div style={{ marginTop: "16px" }}>
           <p style={{ fontWeight: "500", color: "#333" }}>Scraping Retailer Asset Nodes...</p>
@@ -88,7 +84,6 @@ export default function ProcurementDashboard() {
         </div>
       )}
 
-      {/* STATE 4: SUCCESS */}
       {uiState === "SUCCESS" && (
         <div style={{ padding: "16px", backgroundColor: "#e6f6ff", borderRadius: "4px", border: "1px solid #b3dbff" }}>
           <p style={{ color: "#0070f3", fontWeight: "bold" }}>✔ Matrix Execution Complete</p>
@@ -104,7 +99,6 @@ export default function ProcurementDashboard() {
         </div>
       )}
 
-      {/* STATE 5: ERROR */}
       {uiState === "ERROR" && (
         <div style={{ padding: "16px", backgroundColor: "#fff5f5", borderRadius: "4px", border: "1px solid #ffe3e3" }}>
           <p style={{ color: "#ff0000", fontWeight: "bold" }}>✕ Pipeline Error Detected</p>
