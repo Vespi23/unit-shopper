@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isRateLimited } from "@/lib/rateLimit";
 
-const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://localhost:3001";
+const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://127.0.0.1:3000/api/procure/v1/compute";
 const INTERNAL_WORKER_SECRET = process.env.INTERNAL_WORKER_SECRET || "";
 
 export async function POST(req: NextRequest) {
-  // 1. SECURITY FILTER: Extract IP footprint and enforce token bucket constraint gates
+  // 1. RATE LIMIT SECURITY GATE
   const clientIp = req.headers.get("x-forwarded-for") || "127.0.0.1";
-  
   if (isRateLimited(clientIp, { maxTokens: 10, refillRate: 1 })) {
     return NextResponse.json(
       { error: "Too Many Requests.", details: "Rate allocation capacity limit breached. Hold execution." },
@@ -27,12 +26,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid structural payload matrix format." }, { status: 400 });
   }
 
-  // 2. DISPATCH ROUTER: Attempt handoff execution to your high-velocity compute cluster
+  // 2. DISPATCH TO SERVERLESS COMPUTE ENGINE
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000); // Strict 4s threshold to determine cluster availability
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s SLA timeout limit
 
   try {
-    const clusterResponse = await fetch(`${CLUSTER_WORKER_URL}/v1/procure-ingest`, {
+    // Clean, direct fetch execution target - no legacy strings appended
+    const clusterResponse = await fetch(CLUSTER_WORKER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -48,12 +48,12 @@ export async function POST(req: NextRequest) {
     clearTimeout(timeoutId);
 
     if (!clusterResponse.ok) {
-      throw new Error(`Cluster hardware node rejected payload with status: ${clusterResponse.status}`);
+      throw new Error(`Compute route rejected payload with status code: ${clusterResponse.status}`);
     }
 
     const clusterData = await clusterResponse.json();
     
-    // Return the active asynchronous tracking identifier directly to the polling hook
+    // Return clean 202 tracking status back to frontend pipeline
     return NextResponse.json({
       status: "ASYNC_CLUSTER_ACCEPTED",
       trackingId: clusterData.trackingId
@@ -62,14 +62,13 @@ export async function POST(req: NextRequest) {
   } catch (clusterError: any) {
     clearTimeout(timeoutId);
 
-    // 3. DETERMINISTIC CIRCUIT BREAKER FAILOVER TRACK
-    console.error(`[GATEWAY OUTAGE ALERT] Failover triggered: ${clusterError.message || "Cluster node connection timed out."}`);
+    console.error(`[GATEWAY ROUTING FALLBACK] Target engine unreachable, deploying circuit breaker: ${clusterError.message}`);
 
-    // Process file locally on backup serverless infrastructure to avoid client crashes
+    // LOCAL SERVERLESS EMERGENCY TRACK
     return NextResponse.json({
       status: "DEGRADED_COMPUTATION_SUCCESS",
       itemsProcessed: items.length,
-      RISK_WARNING: "Operating on backup serverless infrastructure. Telemetry tracking features are temporarily degraded."
+      RISK_WARNING: "Operating on backup serverless infrastructure. Telemetry features are degraded."
     }, { status: 200 });
   }
 }

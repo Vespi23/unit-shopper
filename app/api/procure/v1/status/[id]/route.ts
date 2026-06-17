@@ -1,38 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Redis } from "@upstash/redis";
 
-const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://localhost:3001";
+const redis = Redis.fromEnv();
 
-// Explicit type contract declaration mirroring Next.js 16 Route Constraints
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  // NEXT.JS 16 CORE COMPLIANCE FIXED: Explicitly await the params Promise wrapper
-  const { id: jobId } = await context.params;
-
-  if (!jobId || !jobId.startsWith("bl_job_")) {
-    return NextResponse.json(
-      { error: "Invalid structural tracking key format." }, 
-      { status: 400 }
-    );
-  }
-
   try {
-    const workerRes = await fetch(`${CLUSTER_WORKER_URL}/v1/job-status/${jobId}`, {
-      method: "GET",
-      headers: {
-        "x-route-strategy": "telemetry-lookup"
-      }
-    });
+    // 1. DYNAMIC PARAM PROTECTION GATE: Safely handle both sync and async runtime frameworks
+    const resolvedParams = "then" in context.params ? await context.params : context.params;
+    const jobId = resolvedParams.id;
 
-    if (!workerRes.ok) {
-      return NextResponse.json({ status: "PROCESSING", progress: 50 }, { status: 200 });
+    if (!jobId) {
+      return NextResponse.json({ error: "Missing tracking identifier resource parameter." }, { status: 400 });
     }
 
-    const workerData = await workerRes.json();
-    return NextResponse.json(workerData, { status: 200 });
+    // 2. FETCH FROM SERVERLESS CACHE NODE
+    const cachedJob = await redis.get(jobId);
 
-  } catch (err) {
-    return NextResponse.json({ status: "PROCESSING", progress: 99 }, { status: 200 });
+    if (!cachedJob) {
+      return NextResponse.json({ 
+        error: "Job signature record has expired or was not initialized.",
+        status: "NOT_FOUND" 
+      }, { status: 404 });
+    }
+
+    // 3. SAFE PARSE GUARD: Handle both raw strings and pre-parsed objects from Upstash
+    const jobData = typeof cachedJob === "string" ? JSON.parse(cachedJob) : cachedJob;
+
+    // Enforce that a baseline status key is explicitly guaranteed in the payload
+    return NextResponse.json({
+      status: jobData.status || "PROCESSING",
+      progress: jobData.progress ?? 0,
+      orgId: jobData.orgId || "unknown",
+      totalItems: jobData.totalItems ?? 0,
+      items: jobData.items || [],
+      metrics: jobData.metrics || null
+    }, { status: 200 });
+
+  } catch (err: any) {
+    console.error(`[TELEMETRY PROXY CRASH]: ${err.message}`);
+    return NextResponse.json({ 
+      error: "Failed to read data matrix from serverless cache cluster.",
+      details: err.message
+    }, { status: 500 });
   }
 }
