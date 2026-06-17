@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     if (items.length > 50) {
       return NextResponse.json({
         error: "Payload size limit exceeded for standard pipeline processing.",
-        [RISK_WARNING]: "Direct execution blocks above 50 items risk engine timeouts. Use an Enterprise Token."
+        "RISK_WARNING": "Direct execution blocks above 50 items risk engine timeouts. Use an Enterprise Token."
       }, { status: 403 });
     }
     
