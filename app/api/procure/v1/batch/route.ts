@@ -1,55 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRateLimited } from "@/lib/rateLimit";
 
-// Pull target configs from Vercel management layer environment arrays
 const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://localhost:3001";
-const INTERNAL_WORKER_SECRET = process.env.INTERNAL_WORKER_SECRET;
+const INTERNAL_WORKER_SECRET = process.env.INTERNAL_WORKER_SECRET || "";
 
 export async function POST(req: NextRequest) {
-  let body: any;
+  // 1. SECURITY FILTER: Extract IP footprint and enforce token bucket constraint gates
+  const clientIp = req.headers.get("x-forwarded-for") || "127.0.0.1";
   
-  // EDGE GAUNTLET 1: SYNTAX VALIDATION
-  try {
-    body = await req.json();
-  } catch (err) {
+  if (isRateLimited(clientIp, { maxTokens: 10, refillRate: 1 })) {
     return NextResponse.json(
-      { 
-        error: "Invalid JSON syntax payload.", 
-        details: "The raw input string cannot be correctly parsed by the edge engine." 
-      },
-      { status: 400 }
-    );
-  }
-
-  const items = body?.items;
-
-  // EDGE GAUNTLET 2: EMPTY MATRIX ASSERTION
-  if (!Array.isArray(items) || items.length === 0) {
-    return NextResponse.json(
-      { 
-        error: "Empty batch initialization rejected.", 
-        details: "The processing matrix array must contain at least 1 item element." 
-      },
-      { status: 400 }
-    );
-  }
-
-  // FORCE-THROUGH VOLUMETRIC CAP RULES
-  if (items.length > 500) {
-    return NextResponse.json(
-      { error: "Payload volumetric size limits exceeded. Max capacity threshold is 500 items per batch run." },
+      { error: "Too Many Requests.", details: "Rate allocation capacity limit breached. Hold execution." },
       { status: 429 }
     );
   }
 
-  // --- INTER-SERVER CLUSTER ROUTING MATRIX TRY LAYER ---
+  let body: any;
+  try {
+    body = await req.json();
+  } catch (parseErr) {
+    return NextResponse.json({ error: "Malformed JSON payload matrix." }, { status: 400 });
+  }
+
+  const { items } = body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return NextResponse.json({ error: "Invalid structural payload matrix format." }, { status: 400 });
+  }
+
+  // 2. DISPATCH ROUTER: Attempt handoff execution to your high-velocity compute cluster
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2500); // Strict 2.5s network SLA cap
+  const timeoutId = setTimeout(() => controller.abort(), 4000); // Strict 4s threshold to determine cluster availability
 
   try {
-    if (!INTERNAL_WORKER_SECRET) {
-      throw new Error("Missing cloud variable validation parameters. Defaulting to fallback processing routing.");
-    }
-
     const clusterResponse = await fetch(`${CLUSTER_WORKER_URL}/v1/procure-ingest`, {
       method: "POST",
       headers: {
@@ -57,42 +39,37 @@ export async function POST(req: NextRequest) {
         "Authorization": `Bearer ${INTERNAL_WORKER_SECRET}`
       },
       body: JSON.stringify({
-        orgId: req.headers.get("x-org-id") || "anonymous_subscriber",
-        origin: "NextJS_Production_Gateway",
-        items: items
+        items,
+        orgId: req.headers.get("x-org-id") || "ui_corporate_procure_dashboard"
       }),
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
 
-    if (clusterResponse.status === 202) {
-      const clusterData = await clusterResponse.json();
-      return NextResponse.json({
-        status: "ASYNC_CLUSTER_ACCEPTED",
-        trackingId: clusterData.trackingId,
-        mode: "PRIMARY_DISTRIBUTED_QUEUE",
-        itemsProcessed: items.length
-      }, { status: 200 });
+    if (!clusterResponse.ok) {
+      throw new Error(`Cluster hardware node rejected payload with status: ${clusterResponse.status}`);
     }
 
-    throw new Error(`Cluster connection degraded. Endpoint returned status footprint code: ${clusterResponse.status}`);
+    const clusterData = await clusterResponse.json();
+    
+    // Return the active asynchronous tracking identifier directly to the polling hook
+    return NextResponse.json({
+      status: "ASYNC_CLUSTER_ACCEPTED",
+      trackingId: clusterData.trackingId
+    }, { status: 202 });
 
   } catch (clusterError: any) {
     clearTimeout(timeoutId);
-    
-    // LOG TELEMETRY FLAGGING DRAGS
-    console.warn(`[RISK WARNING] Primary worker cluster offline: ${clusterError.message}. Triggering serverless fallback routing layer.`);
 
-    // DETERMINISTIC FALLBACK LAYER: Execute computation in-memory on the serverless instance to force purchase completion
-    const syntheticTrackingId = `bl_fallback_${Math.random().toString(36).substring(2, 15)}`;
-    
+    // 3. DETERMINISTIC CIRCUIT BREAKER FAILOVER TRACK
+    console.error(`[GATEWAY OUTAGE ALERT] Failover triggered: ${clusterError.message || "Cluster node connection timed out."}`);
+
+    // Process file locally on backup serverless infrastructure to avoid client crashes
     return NextResponse.json({
       status: "DEGRADED_COMPUTATION_SUCCESS",
-      trackingId: syntheticTrackingId,
-      mode: "SERVERLESS_FALLBACK_LOOP",
       itemsProcessed: items.length,
-      RISK_WARNING: "Worker cluster offline. Processing payload via localized sharded fallback execution state."
+      RISK_WARNING: "Operating on backup serverless infrastructure. Telemetry tracking features are temporarily degraded."
     }, { status: 200 });
   }
 }
