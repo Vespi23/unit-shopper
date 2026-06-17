@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       error: "Invalid JSON syntax payload.",
       details: parseError.message,
-      [RISK_WARNING]: "The raw input string cannot be correctly parsed by the edge engine."
+      "RISK_WARNING": "The raw input string cannot be correctly parsed by the edge engine."
     }, { status: 400 });
   }
 
