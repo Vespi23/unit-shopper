@@ -11,12 +11,27 @@ export default function ProcurePage() {
   );
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const executeBulkCheck = async () => {
     setLoading(true);
     setResult(null);
+    setValidationError(null);
+
+    // CLIENT-SIDE VALIDATION SHIELD
+    let parsedItems;
     try {
-      const parsedItems = JSON.parse(itemsText);
+      parsedItems = JSON.parse(itemsText);
+      if (!Array.isArray(parsedItems)) {
+        throw new Error("Payload matrix must be formatted as a valid JSON array.");
+      }
+    } catch (err: any) {
+      setValidationError(`Invalid JSON Payload: ${err.message}`);
+      setLoading(false);
+      return;
+    }
+
+    try {
       const res = await fetch("/api/procure/v1/batch", {
         method: "POST",
         headers: {
@@ -46,8 +61,18 @@ export default function ProcurePage() {
           value={itemsText}
           onChange={(e) => setItemsText(e.target.value)}
           rows={10}
-          style={{ width: "100%", fontFamily: "monospace", padding: "1rem", fontSize: "14px", borderRadius: "4px", border: "1px solid #ccc" }}
+          style={{ 
+            width: "100%", 
+            fontFamily: "monospace", 
+            padding: "1rem", 
+            fontSize: "14px", 
+            borderRadius: "4px", 
+            border: validationError ? "2px solid #ff4d4f" : "1px solid #ccc" 
+          }}
         />
+        {validationError && (
+          <p style={{ color: "#ff4d4f", marginTop: "0.5rem", fontWeight: "bold" }}>{validationError}</p>
+        )}
       </div>
 
       <div style={{ marginTop: "1.5rem" }}>
