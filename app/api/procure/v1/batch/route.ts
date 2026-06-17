@@ -10,8 +10,33 @@ export async function POST(request: NextRequest) {
   const strategy = request.headers.get("x-route-strategy");
   const orgId = request.headers.get("x-org-id");
   
-  const body = await request.json().catch(() => ({}));
-  const items: VolumePayloadItem[] = body.items || [];
+  let items: VolumePayloadItem[] = [];
+
+  // FORCE-THROUGH STICKY GATE: Fail fast on raw malformed string payloads
+  try {
+    const body = await request.json();
+    if (!body || !Array.isArray(body.items)) {
+      return NextResponse.json({
+        error: "Malformed request structure.",
+        details: "Missing or invalid 'items' root array element."
+      }, { status: 400 });
+    }
+    items = body.items;
+  } catch (parseError: any) {
+    return NextResponse.json({
+      error: "Invalid JSON syntax payload.",
+      details: parseError.message,
+      [RISK_WARNING]: "The raw input string cannot be correctly parsed by the edge engine."
+    }, { status: 400 });
+  }
+
+  // ZERO-LENGTH EMBED SHIELD
+  if (items.length === 0) {
+    return NextResponse.json({
+      error: "Empty batch initialization rejected.",
+      details: "The processing matrix array must contain at least 1 item element."
+    }, { status: 400 });
+  }
 
   if (strategy !== "high-velocity-cluster") {
     if (items.length > 50) {
@@ -26,7 +51,6 @@ export async function POST(request: NextRequest) {
   try {
     const queuePayload = { orgId, items, origin: "BudgetLynx_Procure_Engine", timestamp: Date.now() };
 
-    // Primary Worker Connection Attempt
     const queueResponse = await fetch("https://workers.budgetlynx.com/v1/procure-ingest", {
       method: "POST",
       headers: { 
@@ -46,20 +70,15 @@ export async function POST(request: NextRequest) {
     }, { status: 202 });
 
   } catch (err: any) {
-    // RESOURCE RUNTIME CEILING SHIELD
     const MAX_FALLBACK_LIMIT = 500;
     if (items.length > MAX_FALLBACK_LIMIT) {
       return NextResponse.json({
         error: "Primary worker cluster offline and payload exceeds serverless fallback ceiling.",
-        remediation: "Reduce batch request size below 500 items to process via edge backup channels, or retry when primary cluster nodes stabilize.",
-        "RISK_WARNING": "Transaction halted to mitigate serverless timeout drops."
+        remediation: "Reduce batch request size below 500 items to process via edge backup channels."
       }, { status: 429 });
     }
 
-    // Local execution fallback logic path
     const fallbackTrackingId = `bl_fallback_${Math.random().toString(36).substring(2, 15)}`;
-    
-    // Telemetry dispatch hook location (Optional telemetry beacon goes here)
     console.error(`[TELEMETRY ALERT] Org ${orgId} dropped to fallback layer. Size: ${items.length}. Reason: ${err.message}`);
 
     return NextResponse.json({
