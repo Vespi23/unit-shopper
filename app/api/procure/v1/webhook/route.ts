@@ -3,24 +3,8 @@ import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
 
-// OMNI-VARIABLE MATRIX: Scan all possible deployment naming schemas natively
-const redisUrl = 
-  process.env.UPSTASH_REDIS_REST_URL || 
-  process.env.KV_REST_API_URL || 
-  process.env.REDIS_URL || 
-  "";
-
-const redisToken = 
-  process.env.UPSTASH_REDIS_REST_TOKEN || 
-  process.env.KV_REST_API_TOKEN || 
-  process.env.REDIS_TOKEN || 
-  "";
-
-// CRITICAL EXHAUSTION GUARD
-if (!redisUrl || !redisToken) {
-  console.error(`[CRITICAL_CONFIG_ERROR]: Redis credentials missing. URL: ${!!redisUrl}, Token: ${!!redisToken}`);
-}
-
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.REDIS_URL || "";
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.REDIS_TOKEN || "";
 const redis = new Redis({ url: redisUrl, token: redisToken });
 
 function cleanNumericPrice(value: any): number {
@@ -39,10 +23,7 @@ export async function POST(req: NextRequest) {
   if (!jobId || !sku) return NextResponse.json({ error: "Missing matrices." }, { status: 400 });
   const setKey = `bl_job:pending:${jobId}`;
 
-  // Pre-emptively stop execution if configuration environment is broken
-  if (!redisToken) {
-    return NextResponse.json({ error: "Database configuration desynchronized." }, { status: 500 });
-  }
+  if (!redisToken) return NextResponse.json({ error: "Database configuration desynchronized." }, { status: 500 });
 
   try {
     const rawData = await req.json();
@@ -65,15 +46,17 @@ export async function POST(req: NextRequest) {
       const liveWholesalePrice = isNaN(cleanNumericPrice(rawWholesale)) ? liveRetailPrice * 0.85 : cleanNumericPrice(rawWholesale);
 
       let delta = 0.0000;
+      
+      // FIXED: Matched exact capitalization strings expected by the UI render loops
       let recommendedSource = "Amazon.com";
-      let status: "STABLE" | "OPTIMIZED" | "ALERT" = "STABLE";
+      let status: "Stable" | "Optimized" | "Alert" = "Stable";
 
       const qty = jobData.items[targetItemIndex].quantity || 1;
 
       if (!isNaN(liveRetailPrice) && liveRetailPrice > 0) {
         delta = (liveRetailPrice - liveWholesalePrice) / liveRetailPrice;
         if (delta > 0.05) {
-          status = "OPTIMIZED";
+          status = "Optimized";
           recommendedSource = "AMAZON_BUSINESS_BULK";
         }
       }
@@ -95,7 +78,7 @@ export async function POST(req: NextRequest) {
       let optimizedCount = 0;
 
       jobData.items.forEach((item: any) => {
-        if (item.status === "OPTIMIZED") {
+        if (item.status === "Optimized") {
           optimizedCount++;
           const itemCostDiff = (item.price - item.wholesale_price) * item.quantity;
           if (!isNaN(itemCostDiff) && itemCostDiff > 0) {
@@ -120,7 +103,6 @@ export async function POST(req: NextRequest) {
     }
 
     await redis.set(jobId, JSON.stringify(jobData), { ex: 1800 });
-    console.log(`[CALLBACK_SUCCESS]: SKU ${sku} processed atomically. [Remaining: ${remainingCount}]`);
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: any) {
