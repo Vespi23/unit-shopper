@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isRateLimited } from "@/lib/rateLimit";
+import { Redis } from "@upstash/redis";
 
-const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://127.0.0.1:3000/api/procure/v1/compute";
-const INTERNAL_WORKER_SECRET = process.env.INTERNAL_WORKER_SECRET || "";
+export const runtime = "nodejs";
+
+const redis = Redis.fromEnv();
 const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
 
 export async function POST(req: NextRequest) {
@@ -16,65 +18,65 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Malformed JSON payload matrix." }, { status: 400 });
   }
 
-  const { items } = body;
+  const { items, orgId } = body;
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: "Invalid structural payload format." }, { status: 400 });
   }
 
-  let processingItems = [...items];
+  const trackingId = `bl_job_${Math.random().toString(36).substring(2, 15)}`;
 
-  // NETWORKING INSULATION RING: Wrap the external API in an independent try block
   try {
-    const asinList = items.map((i: any) => i.sku).filter(Boolean);
+    // Dispatch tasks to Decodo and collect background tracking IDs immediately
+    const registeredTasks = await Promise.all(
+      items.map(async (item: any) => {
+        if (!item.sku || item.sku === "UNKNOWN_ASIN") return null;
+        try {
+          const res = await fetch("https://scraper-api.decodo.com/v3/task", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
+            },
+            body: JSON.stringify({ 
+              url: `https://www.amazon.com/dp/${item.sku}`,
+              // Provide an optional callback URL if Decodo supports webhooks natively
+              callback_url: `${req.nextUrl.origin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${item.sku}`
+            })
+          });
+          if (!res.ok) return null;
+          const data = await res.json();
+          return { sku: item.sku, quantity: item.quantity, taskId: data.task_id || data.id };
+        } catch (_) {
+          return null;
+        }
+      })
+    );
 
-    const decodoResponse = await fetch("https://api.decodo.io/v1/scrape/amazon", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
-      },
-      body: JSON.stringify({ asins: asinList, country: "us", render_js: true }),
-      // Add a clean 4-second network timeout window
-      signal: AbortSignal.timeout(4000) 
-    });
+    const validTasks = registeredTasks.filter(Boolean);
 
-    if (decodoResponse.ok) {
-      const liveScrapedData = await decodoResponse.json();
-      const scrapedProducts = liveScrapedData.data || liveScrapedData.results || items;
-      
-      processingItems = scrapedProducts.map((scrapedItem: any, index: number) => ({
-        ...scrapedItem,
-        asin: scrapedItem.asin || items[index]?.sku,
-        quantity: items[index]?.quantity || 1
-      }));
-      console.log("[DECODO_GATEWAY_SUCCESS]: Live scraper matrix data loaded.");
-    } else {
-      console.warn(`[DECODO_API_WARN]: Server returned status ${decodoResponse.status}. Utilizing core backup calculations.`);
-    }
+    // Commit initial job blueprint records to Upstash cache instantly
+    await redis.set(trackingId, JSON.stringify({
+      status: "PROCESSING",
+      progress: 10,
+      orgId: orgId || "ui_corporate_procure_dashboard",
+      totalItems: items.length,
+      pendingTasks: validTasks,
+      items: items.map(i => ({
+        sku: i.sku,
+        retailer: "Amazon.com",
+        quantity: i.quantity,
+        unitCostDelta: 0.0000,
+        recommendedSource: "PENDING_LIVE_INGEST",
+        status: "STABLE"
+      })),
+      metrics: { totalItemsProcessed: items.length, projectedSavings: 0.00, shrinkflationAlerts: 0, optimizedRoutesCount: 0 }
+    }), { ex: 3600 });
 
-  } catch (netErr: any) {
-    // Intercept "fetch failed" network network drops cleanly without crashing the pipeline
-    console.warn(`[DECODO_NETWORK_REDIRECT]: Connection to scraper target failed (${netErr.message}). Deploying local fallback track.`);
-  }
-
-  // 3. SECURE PASS DOWNSTREAM (Always runs successfully)
-  try {
-    const clusterResponse = await fetch(CLUSTER_WORKER_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${INTERNAL_WORKER_SECRET}`
-      },
-      body: JSON.stringify({ items: processingItems, orgId: "ui_corporate_procure_dashboard" })
-    });
-
-    if (!clusterResponse.ok) throw new Error(`Compute node rejected payload: ${clusterResponse.status}`);
-
-    const clusterData = await clusterResponse.json();
-    return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId: clusterData.trackingId }, { status: 202 });
+    console.log(`[DECODO_GATEWAY_ASYNC_INIT]: Job ${trackingId} successfully registered and offloaded to Upstash.`);
+    return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId }, { status: 202 });
 
   } catch (err: any) {
-    console.error(`[COMPUTE_CRITICAL_ERROR]: ${err.message}`);
-    return NextResponse.json({ error: "Serverless compute pipeline faulted processing rows." }, { status: 500 });
+    console.error(`[INGEST_CRITICAL_FAULT]: ${err.message}`);
+    return NextResponse.json({ error: "Serverless data ingress failed." }, { status: 500 });
   }
 }
