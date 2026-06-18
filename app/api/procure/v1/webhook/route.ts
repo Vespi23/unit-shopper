@@ -24,10 +24,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const rawPayload = await req.json();
-    
-    // Decodo batches return results inside a 'results' or 'tasks' array block
     const scrapedTasks = rawPayload.results || rawPayload.tasks || [];
     
+    if (!Array.isArray(scrapedTasks) || scrapedTasks.length === 0) {
+      return NextResponse.json({ success: true, message: "Empty frame callback block ignored." });
+    }
+
     const cachedJob = await redis.get(jobId);
     if (!cachedJob) return NextResponse.json({ error: "Job instance expired." }, { status: 404 });
 
@@ -36,9 +38,13 @@ export async function POST(req: NextRequest) {
     let finalProjectedSavings = 0;
     let optimizedCount = 0;
 
-    // Process every single batch item in a clean, isolated loop execution context
+    // Map through our items and update them using parameters from the callback URLs
     jobData.items = jobData.items.map((existingItem: any) => {
-      const match = scrapedTasks.find((t: any) => t.metadata?.sku === existingItem.sku || t.sku === existingItem.sku);
+      // Extract properties by scanning Decodo's callback URL matches
+      const match = scrapedTasks.find((t: any) => {
+        const callbackUrlString = String(t.callback_url || t.task_callback_url || "");
+        return callbackUrlString.includes(`sku=${existingItem.sku}`) || String(t.sku) === String(existingItem.sku);
+      });
       
       if (!match) return existingItem;
 
@@ -75,7 +81,7 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // Update global properties
+    // Save final aggregated metrics
     jobData.status = "COMPLETED";
     jobData.progress = 100;
     jobData.metrics = {

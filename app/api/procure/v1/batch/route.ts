@@ -38,14 +38,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const secureOrigin = req.nextUrl.origin.replace(/^http:/, "https:");
-    
-    // Target Decodo's batch pipeline directly
-    const targetCallback = `${secureOrigin}/api/procure/v1/webhook?jobId=${trackingId}`;
 
-    const tasks = items.map((item: any) => ({
-      url: `https://www.amazon.com/dp/${item.sku}`,
-      metadata: { sku: item.sku, quantity: item.quantity || 1 }
-    }));
+    // FIXED: Build flat task definitions that use the callback URL to preserve metadata parameters safely
+    const tasks = items.map((item: any) => {
+      const itemSku = String(item.sku || "UNKNOWN");
+      const itemQty = parseInt(item.quantity || "1", 10);
+      return {
+        url: `https://www.amazon.com/dp/${itemSku}`,
+        callback_url: `${secureOrigin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${itemSku}&qty=${itemQty}`
+      };
+    });
 
     const res = await fetch("https://scraper-api.decodo.com/v3/batch", {
       method: "POST",
@@ -53,13 +55,12 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
       },
-      body: JSON.stringify({
-        tasks,
-        batch_callback_url: targetCallback // Triggers exactly ONE consolidated payload hit
-      })
+      body: JSON.stringify({ tasks }) // Decodo natively matches task-level callbacks in batch operations
     });
 
     if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[DECODO_BATCH_GATE_REJECT]: Status ${res.status} - Payload: ${errText}`);
       return NextResponse.json({ error: "Failed to allocate parsing targets upstream." }, { status: 502 });
     }
 
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     await redis.set(trackingId, JSON.stringify(runtimeCacheState), { ex: 3600 });
 
-    console.log(`[DECODO_BATCH_INIT]: Single batch collection registered under tracker ID: ${trackingId}`);
+    console.log(`[DECODO_BATCH_INIT]: Batch array initialized safely using flat tracking routes under ID: ${trackingId}`);
     return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId }, { status: 202 });
 
   } catch (err: any) {
