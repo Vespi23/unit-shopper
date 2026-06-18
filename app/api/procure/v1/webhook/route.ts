@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
-const redis = Redis.fromEnv();
+
+// FIXED: Hardwire environment mappings directly to eliminate client driver instantiation drops
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || "",
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+});
 
 function cleanNumericPrice(value: any): number {
   if (value === null || value === undefined) return NaN;
@@ -24,6 +29,7 @@ export async function POST(req: NextRequest) {
     const rawData = await req.json();
     const payload = rawData.data || rawData.result || rawData;
 
+    // Execute atomic steps
     await redis.srem(setKey, sku);
     const remainingCount = await redis.scard(setKey);
 
@@ -66,7 +72,6 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // REACTIVE SUMMARY ENGINE: Run totals right here when remaining tasks drop to 0
     if (remainingCount === 0) {
       let finalProjectedSavings = 0;
       let optimizedCount = 0;
@@ -97,6 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     await redis.set(jobId, JSON.stringify(jobData), { ex: 1800 });
+    console.log(`[CALLBACK_SUCCESS]: SKU ${sku} processed atomically. [Remaining: ${remainingCount}]`);
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: any) {
