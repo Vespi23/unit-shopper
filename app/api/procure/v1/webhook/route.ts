@@ -18,14 +18,13 @@ export async function POST(req: NextRequest) {
   const sku = searchParams.get("sku");
 
   if (!jobId || !sku) return NextResponse.json({ error: "Missing matrices." }, { status: 400 });
-
   const setKey = `bl_job:pending:${jobId}`;
 
   try {
     const rawData = await req.json();
     const payload = rawData.data || rawData.result || rawData;
 
-    const isNewRemoval = await redis.srem(setKey, sku);
+    await redis.srem(setKey, sku);
     const remainingCount = await redis.scard(setKey);
 
     const cachedJob = await redis.get(jobId);
@@ -42,7 +41,7 @@ export async function POST(req: NextRequest) {
       const liveWholesalePrice = isNaN(cleanNumericPrice(rawWholesale)) ? liveRetailPrice * 0.85 : cleanNumericPrice(rawWholesale);
 
       let delta = 0.0000;
-      let recommendedSource = "AMAZON_RETAIL";
+      let recommendedSource = "Amazon.com";
       let status: "STABLE" | "OPTIMIZED" | "ALERT" = "STABLE";
 
       const qty = jobData.items[targetItemIndex].quantity || 1;
@@ -52,11 +51,9 @@ export async function POST(req: NextRequest) {
         if (delta > 0.05) {
           status = "OPTIMIZED";
           recommendedSource = "AMAZON_BUSINESS_BULK";
-          jobData.metrics.projectedSavings += (liveRetailPrice - liveWholesalePrice) * qty;
         }
       }
 
-      // FIXED: Added absolute pricing keys directly onto the object to satisfy UI schema bindings
       jobData.items[targetItemIndex] = {
         sku: sku,
         retailer: "Amazon.com",
@@ -69,23 +66,41 @@ export async function POST(req: NextRequest) {
       };
     }
 
+    // REACTIVE SUMMARY ENGINE: Run totals right here when remaining tasks drop to 0
     if (remainingCount === 0) {
+      let finalProjectedSavings = 0;
+      let optimizedCount = 0;
+
+      jobData.items.forEach((item: any) => {
+        if (item.status === "OPTIMIZED") {
+          optimizedCount++;
+          const itemCostDiff = (item.price - item.wholesale_price) * item.quantity;
+          if (!isNaN(itemCostDiff) && itemCostDiff > 0) {
+            finalProjectedSavings += itemCostDiff;
+          }
+        }
+      });
+
       jobData.status = "COMPLETED";
       jobData.progress = 100;
-      jobData.metrics.projectedSavings = parseFloat(jobData.metrics.projectedSavings.toFixed(2));
-      jobData.metrics.optimizedRoutesCount = jobData.items.filter((r: any) => r.status === "OPTIMIZED").length;
-      console.log(`[JOB_SUCCESS]: Ingress fully compiled for ${jobId}. All lanes clear.`);
+      jobData.metrics = {
+        totalItemsProcessed: jobData.items.length,
+        projectedSavings: parseFloat(finalProjectedSavings.toFixed(2)),
+        shrinkflationAlerts: 0,
+        optimizedRoutesCount: optimizedCount
+      };
+      
+      console.log(`[JOB_SUCCESS]: Ingress fully compiled for ${jobId}. Final calculated savings: $${finalProjectedSavings}`);
     } else {
       const completedCount = jobData.totalItems - remainingCount;
       jobData.progress = Math.min(95, Math.floor((completedCount / jobData.totalItems) * 100));
     }
 
     await redis.set(jobId, JSON.stringify(jobData), { ex: 1800 });
-
-    console.log(`[CALLBACK_SUCCESS]: SKU ${sku} processed atomically. [Remaining items in tracker: ${remainingCount}]`);
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: any) {
+    console.error(`[WEBHOOK_ERROR]: ${err.message}`);
     return NextResponse.json({ error: "Internal crash." }, { status: 500 });
   }
 }

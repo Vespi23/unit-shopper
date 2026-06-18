@@ -4,19 +4,17 @@ import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
 const redis = Redis.fromEnv();
-
-const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://127.0.0.1:3000/api/procure/v1/compute";
 const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
-const INTERNAL_WORKER_SECRET = process.env.INTERNAL_WORKER_SECRET || "";
-const SHARED_SECURITY_TOKEN = INTERNAL_WORKER_SECRET || DECODO_AUTH_TOKEN || "LOCAL_DEV_DEFAULT_SECURE_TOKEN_9981";
 
 interface TaskPayloadRow {
   sku: string;
   retailer: string;
   quantity: number;
+  price: number;
+  wholesale_price: number;
   unitCostDelta: number;
   recommendedSource: string;
-  status: "STABLE" | "OPTIMIZED" | "ALERT";
+  status: "PROCESSING" | "STABLE" | "OPTIMIZED" | "ALERT";
 }
 
 export async function POST(req: NextRequest) {
@@ -74,8 +72,6 @@ export async function POST(req: NextRequest) {
     }
 
     const skusToTrack = validTasks.map(t => t.sku);
-    
-    // FIXED: Satisfies strict (key, member, ...members) type validation by passing head elements directly
     await redis.sadd(setKey, skusToTrack[0], ...skusToTrack.slice(1));
     await redis.expire(setKey, 1800); 
 
@@ -85,9 +81,11 @@ export async function POST(req: NextRequest) {
         sku: i.sku,
         retailer: "Amazon.com",
         quantity: i.quantity || 1,
+        price: 0,
+        wholesale_price: 0,
         unitCostDelta: 0.0000,
         recommendedSource: isRegistered ? "PENDING_LIVE_INGEST" : "SKIPPED_REGISTRATION_FAILED",
-        status: "STABLE"
+        status: "PROCESSING"
       };
     });
 
@@ -102,20 +100,7 @@ export async function POST(req: NextRequest) {
 
     await redis.set(trackingId, JSON.stringify(runtimeCacheState), { ex: 3600 });
 
-    try {
-      fetch(CLUSTER_WORKER_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SHARED_SECURITY_TOKEN}`
-        },
-        body: JSON.stringify({ items: items, orgId })
-      }).catch(e => console.error(`[CLUSTER_ASYNC_DISPATCH_FAIL]: ${e.message}`));
-    } catch (dispatchErr: any) {
-      console.warn(`[CLUSTER_DISPATCH_WARN]: Downstream execution warning: ${dispatchErr.message}`);
-    }
-
-    console.log(`[DECODO_GATEWAY_ASYNC_INIT]: Set key ${setKey} safely initialized. Downstream compute trace fired.`);
+    console.log(`[DECODO_GATEWAY_ASYNC_INIT]: Set key ${setKey} seeded. Awaiting webhook completion.`);
     return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId }, { status: 202 });
 
   } catch (err: any) {
