@@ -3,9 +3,21 @@ import { isRateLimited } from "@/lib/rateLimit";
 import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
-
 const redis = Redis.fromEnv();
+
+const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://127.0.0.1:3000/api/procure/v1/compute";
 const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
+const INTERNAL_WORKER_SECRET = process.env.INTERNAL_WORKER_SECRET || "";
+const SHARED_SECURITY_TOKEN = INTERNAL_WORKER_SECRET || DECODO_AUTH_TOKEN || "LOCAL_DEV_DEFAULT_SECURE_TOKEN_9981";
+
+interface TaskPayloadRow {
+  sku: string;
+  retailer: string;
+  quantity: number;
+  unitCostDelta: number;
+  recommendedSource: string;
+  status: "STABLE" | "OPTIMIZED" | "ALERT";
+}
 
 export async function POST(req: NextRequest) {
   const clientIp = req.headers.get("x-forwarded-for") || "127.0.0.1";
@@ -18,19 +30,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Malformed JSON payload matrix." }, { status: 400 });
   }
 
-  const { items, orgId } = body;
+  const { items } = body;
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: "Invalid structural payload format." }, { status: 400 });
   }
 
+  const orgId = String(body.orgId || "ui_corporate_procure_dashboard").trim();
   const trackingId = `bl_job_${Math.random().toString(36).substring(2, 15)}`;
+  const setKey = `bl_job:pending:${trackingId}`;
 
   try {
+    const secureOrigin = req.nextUrl.origin.replace(/^http:/, "https:");
+
     const registeredTasks = await Promise.all(
       items.map(async (item: any) => {
         if (!item.sku || item.sku === "UNKNOWN_ASIN") return null;
         try {
-          const targetCallback = `${req.nextUrl.origin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${item.sku}`;
+          const targetCallback = `${secureOrigin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${item.sku}`;
           
           const res = await fetch("https://scraper-api.decodo.com/v3/task", {
             method: "POST",
@@ -38,56 +54,68 @@ export async function POST(req: NextRequest) {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
             },
-            body: JSON.stringify({ 
-              url: `https://www.amazon.com/dp/${item.sku}`,
-              callback_url: targetCallback
-            })
+            body: JSON.stringify({ url: `https://www.amazon.com/dp/${item.sku}`, callback_url: targetCallback })
           });
 
-          if (!res.ok) {
-            console.error(`[DECODO_INIT_ERROR]: SKU ${item.sku} failed registration with code ${res.status}`);
-            return null;
-          }
-          
+          if (!res.ok) return null;
           const data = await res.json();
-          
-          // DIAGNOSTIC CORE: Log exactly what Decodo confirms back to your environment
-          if (item.sku === items[0].sku) {
-            console.log("================= DECODO INGRESS RESPONSE =================");
-            console.log(`TARGETED CALLBACK HOST: ${targetCallback}`);
-            console.log("RAW RETURN KEYS:", Object.keys(data));
-            console.log("PAYLOAD DATA:", JSON.stringify(data));
-            console.log("===========================================================");
-          }
-
-          return { sku: item.sku, quantity: item.quantity, taskId: data.task_id || data.id };
-        } catch (err: any) {
-          console.error(`[DECODO_INIT_EXCEPT]: ${err.message}`);
-          return null;
-        }
+          return { sku: item.sku, taskId: data.task_id || data.id };
+        } catch (_) { return null; }
       })
     );
 
-    const validTasks = registeredTasks.filter(Boolean);
+    const validTasks = registeredTasks.filter(
+      (t): t is { sku: string; taskId: string } => t !== null
+    );
+    
+    if (validTasks.length === 0) {
+      console.error("[INGEST_FAIL]: 0 tasks successfully registered with external api.");
+      return NextResponse.json({ error: "Failed to allocate parsing targets upstream." }, { status: 502 });
+    }
 
-    await redis.set(trackingId, JSON.stringify({
-      status: "PROCESSING",
-      progress: 10,
-      orgId: orgId || "ui_corporate_procure_dashboard",
-      totalItems: items.length,
-      pendingTasks: validTasks,
-      items: items.map(i => ({
+    const skusToTrack = validTasks.map(t => t.sku);
+    
+    // FIXED: Satisfies strict (key, member, ...members) type validation by passing head elements directly
+    await redis.sadd(setKey, skusToTrack[0], ...skusToTrack.slice(1));
+    await redis.expire(setKey, 1800); 
+
+    const validatedItemPayloads: TaskPayloadRow[] = items.map((i: any) => {
+      const isRegistered = skusToTrack.includes(i.sku);
+      return {
         sku: i.sku,
         retailer: "Amazon.com",
-        quantity: i.quantity,
+        quantity: i.quantity || 1,
         unitCostDelta: 0.0000,
-        recommendedSource: "PENDING_LIVE_INGEST",
+        recommendedSource: isRegistered ? "PENDING_LIVE_INGEST" : "SKIPPED_REGISTRATION_FAILED",
         status: "STABLE"
-      })),
-      metrics: { totalItemsProcessed: items.length, projectedSavings: 0.00, shrinkflationAlerts: 0, optimizedRoutesCount: 0 }
-    }), { ex: 3600 });
+      };
+    });
 
-    console.log(`[DECODO_GATEWAY_ASYNC_INIT]: Job ${trackingId} successfully registered and offloaded to Upstash.`);
+    const runtimeCacheState = {
+      status: "PROCESSING",
+      progress: 10,
+      orgId,
+      totalItems: validatedItemPayloads.length,
+      items: validatedItemPayloads,
+      metrics: { totalItemsProcessed: validatedItemPayloads.length, projectedSavings: 0.00, shrinkflationAlerts: 0, optimizedRoutesCount: 0 }
+    };
+
+    await redis.set(trackingId, JSON.stringify(runtimeCacheState), { ex: 3600 });
+
+    try {
+      fetch(CLUSTER_WORKER_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SHARED_SECURITY_TOKEN}`
+        },
+        body: JSON.stringify({ items: items, orgId })
+      }).catch(e => console.error(`[CLUSTER_ASYNC_DISPATCH_FAIL]: ${e.message}`));
+    } catch (dispatchErr: any) {
+      console.warn(`[CLUSTER_DISPATCH_WARN]: Downstream execution warning: ${dispatchErr.message}`);
+    }
+
+    console.log(`[DECODO_GATEWAY_ASYNC_INIT]: Set key ${setKey} safely initialized. Downstream compute trace fired.`);
     return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId }, { status: 202 });
 
   } catch (err: any) {
