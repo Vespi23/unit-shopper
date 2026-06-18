@@ -25,10 +25,7 @@ export async function POST(req: NextRequest) {
     const rawData = await req.json();
     const payload = rawData.data || rawData.result || rawData;
 
-    // ATOMIC ENGINE ACTION: Remove the item from the tracking set transaction block
     const isNewRemoval = await redis.srem(setKey, sku);
-    
-    // Fetch remaining item count atomically from database core
     const remainingCount = await redis.scard(setKey);
 
     const cachedJob = await redis.get(jobId);
@@ -59,17 +56,19 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // FIXED: Added absolute pricing keys directly onto the object to satisfy UI schema bindings
       jobData.items[targetItemIndex] = {
         sku: sku,
         retailer: "Amazon.com",
         quantity: qty,
+        price: liveRetailPrice,
+        wholesale_price: liveWholesalePrice,
         unitCostDelta: parseFloat(delta.toFixed(4)),
         recommendedSource: recommendedSource,
         status: status
       };
     }
 
-    // RESOLVE COMPLETION STATUS VIA ATOMIC VALUE METRICS
     if (remainingCount === 0) {
       jobData.status = "COMPLETED";
       jobData.progress = 100;
