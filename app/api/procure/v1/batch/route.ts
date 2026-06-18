@@ -26,11 +26,12 @@ export async function POST(req: NextRequest) {
   const trackingId = `bl_job_${Math.random().toString(36).substring(2, 15)}`;
 
   try {
-    // Dispatch tasks to Decodo and collect background tracking IDs immediately
     const registeredTasks = await Promise.all(
       items.map(async (item: any) => {
         if (!item.sku || item.sku === "UNKNOWN_ASIN") return null;
         try {
+          const targetCallback = `${req.nextUrl.origin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${item.sku}`;
+          
           const res = await fetch("https://scraper-api.decodo.com/v3/task", {
             method: "POST",
             headers: {
@@ -39,14 +40,29 @@ export async function POST(req: NextRequest) {
             },
             body: JSON.stringify({ 
               url: `https://www.amazon.com/dp/${item.sku}`,
-              // Provide an optional callback URL if Decodo supports webhooks natively
-              callback_url: `${req.nextUrl.origin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${item.sku}`
+              callback_url: targetCallback
             })
           });
-          if (!res.ok) return null;
+
+          if (!res.ok) {
+            console.error(`[DECODO_INIT_ERROR]: SKU ${item.sku} failed registration with code ${res.status}`);
+            return null;
+          }
+          
           const data = await res.json();
+          
+          // DIAGNOSTIC CORE: Log exactly what Decodo confirms back to your environment
+          if (item.sku === items[0].sku) {
+            console.log("================= DECODO INGRESS RESPONSE =================");
+            console.log(`TARGETED CALLBACK HOST: ${targetCallback}`);
+            console.log("RAW RETURN KEYS:", Object.keys(data));
+            console.log("PAYLOAD DATA:", JSON.stringify(data));
+            console.log("===========================================================");
+          }
+
           return { sku: item.sku, quantity: item.quantity, taskId: data.task_id || data.id };
-        } catch (_) {
+        } catch (err: any) {
+          console.error(`[DECODO_INIT_EXCEPT]: ${err.message}`);
           return null;
         }
       })
@@ -54,7 +70,6 @@ export async function POST(req: NextRequest) {
 
     const validTasks = registeredTasks.filter(Boolean);
 
-    // Commit initial job blueprint records to Upstash cache instantly
     await redis.set(trackingId, JSON.stringify({
       status: "PROCESSING",
       progress: 10,
