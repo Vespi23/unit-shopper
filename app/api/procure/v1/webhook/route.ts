@@ -4,6 +4,8 @@ import { Redis } from "@upstash/redis";
 export const runtime = "nodejs";
 const redis = Redis.fromEnv();
 
+const SHARED_SECURITY_TOKEN = process.env.INTERNAL_WORKER_SECRET || process.env.DECODO_AUTH_TOKEN || "LOCAL_DEV_DEFAULT_SECURE_TOKEN_9981";
+
 export async function POST(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const jobId = searchParams.get("jobId");
@@ -17,23 +19,20 @@ export async function POST(req: NextRequest) {
     const rawData = await req.json();
     const payload = rawData.data || rawData.result || rawData;
 
-    // 1. EXTRACT QUANTITATIVE PRICING NODES
-    const liveRetailPrice = parseFloat(payload.price || payload.amazon_price || payload.ecommerce_data?.price);
-    const liveWholesalePrice = parseFloat(payload.wholesale_price || payload.business_price || payload.ecommerce_data?.wholesale_price);
-
-    // 2. RETRIEVE CURRENT UPSTASH JOB METRICS
     const cachedJob = await redis.get(jobId);
     if (!cachedJob) return NextResponse.json({ error: "Job instance expired." }, { status: 404 });
 
     const jobData = typeof cachedJob === "string" ? JSON.parse(cachedJob) : cachedJob;
 
-    // 3. EXECUTE RE-CALCULATION BLOCK FOR THE SCRAPED ITEM
+    const targetItemIndex = jobData.items.findIndex((i: any) => i.sku === sku);
+    if (targetItemIndex === -1) return NextResponse.json({ error: "SKU not found in manifest." }, { status: 404 });
+
+    const liveRetailPrice = parseFloat(payload.price || payload.amazon_price || payload.ecommerce_data?.price);
+    const liveWholesalePrice = parseFloat(payload.wholesale_price || payload.business_price || payload.ecommerce_data?.wholesale_price);
+
     let delta = 0.0000;
     let recommendedSource = "AMAZON_RETAIL";
     let status: "STABLE" | "OPTIMIZED" | "ALERT" = "STABLE";
-
-    const targetItemIndex = jobData.items.findIndex((i: any) => i.sku === sku);
-    if (targetItemIndex === -1) return NextResponse.json({ error: "SKU not found in manifest." }, { status: 404 });
 
     const qty = jobData.items[targetItemIndex].quantity || 1;
 
@@ -46,7 +45,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. MUTATE ITEM PROPERTY TILES INSIDE ACTIVE MEMORY
     jobData.items[targetItemIndex] = {
       sku: sku,
       retailer: "Amazon.com",
@@ -56,20 +54,18 @@ export async function POST(req: NextRequest) {
       status: status
     };
 
-    // Remove item trace from pending check queues
     jobData.pendingTasks = jobData.pendingTasks.filter((t: any) => t.sku !== sku);
 
-    // 5. UPDATE PROGRESS TRACKING AND EVALUATE JOB COMPLETION STATE
     if (jobData.pendingTasks.length === 0) {
       jobData.status = "COMPLETED";
       jobData.progress = 100;
       jobData.metrics.optimizedRoutesCount = jobData.items.filter((r: any) => r.status === "OPTIMIZED").length;
+      console.log(`[JOB_SUCCESS]: Ingress completely resolved for ${jobId}. Dashboard updated.`);
     } else {
       const completedCount = jobData.totalItems - jobData.pendingTasks.length;
       jobData.progress = Math.min(95, Math.floor((completedCount / jobData.totalItems) * 100));
     }
 
-    // 6. COMMIT RE-COMPILED RECORDS BACK TO ACTIVE RUNTIME CACHE
     await redis.set(jobId, JSON.stringify(jobData), { ex: 1800 });
 
     console.log(`[CALLBACK_SUCCESS]: Webhook updated SKU ${sku} inside job context [Remaining: ${jobData.pendingTasks.length}]`);
