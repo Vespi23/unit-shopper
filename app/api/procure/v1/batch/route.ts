@@ -3,7 +3,10 @@ import { isRateLimited } from "@/lib/rateLimit";
 import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
-const redis = Redis.fromEnv();
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || "",
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+});
 const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
 
 interface TaskPayloadRow {
@@ -16,6 +19,9 @@ interface TaskPayloadRow {
   recommendedSource: string;
   status: "Processing" | "Stable" | "Optimized" | "Alert";
 }
+
+// Micro-throttle pacing primitive
+const pace = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(req: NextRequest) {
   const clientIp = req.headers.get("x-forwarded-for") || "127.0.0.1";
@@ -35,45 +41,64 @@ export async function POST(req: NextRequest) {
 
   const orgId = String(body.orgId || "ui_corporate_procure_dashboard").trim();
   const trackingId = `bl_job_${Math.random().toString(36).substring(2, 15)}`;
+  const setKey = `bl_job:pending:${trackingId}`;
 
   try {
     const secureOrigin = req.nextUrl.origin.replace(/^http:/, "https:");
+    const skusToTrack: string[] = [];
 
-    // FIXED: Build flat task definitions that use the callback URL to preserve metadata parameters safely
-    const tasks = items.map((item: any) => {
-      const itemSku = String(item.sku || "UNKNOWN");
-      const itemQty = parseInt(item.quantity || "1", 10);
-      return {
-        url: `https://www.amazon.com/dp/${itemSku}`,
-        callback_url: `${secureOrigin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${itemSku}&qty=${itemQty}`
-      };
-    });
+    // FIXED: Run synchronous sequential registration to protect Vercel edge proxy pipelines
+    for (const item of items) {
+      if (!item.sku || item.sku === "UNKNOWN_ASIN") continue;
 
-    const res = await fetch("https://scraper-api.decodo.com/v3/batch", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
-      },
-      body: JSON.stringify({ tasks }) // Decodo natively matches task-level callbacks in batch operations
-    });
+      try {
+        const targetCallback = `${secureOrigin}/api/procure/v1/webhook?jobId=${trackingId}&sku=${item.sku}`;
+        
+        const res = await fetch("https://scraper-api.decodo.com/v3/task", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
+          },
+          body: JSON.stringify({ 
+            url: `https://www.amazon.com/dp/${item.sku}`, 
+            callback_url: targetCallback 
+          })
+        });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[DECODO_BATCH_GATE_REJECT]: Status ${res.status} - Payload: ${errText}`);
+        if (res.ok) {
+          skusToTrack.push(item.sku);
+        } else {
+          console.error(`[DECODO_INDIVIDUAL_REJECT]: SKU ${item.sku} returned status ${res.status}`);
+        }
+
+        // Apply a brief 40ms execution breather to separate connection sockets cleanly
+        await pace(40);
+      } catch (innerErr: any) {
+        console.error(`[DECODO_FETCH_FAIL]: ${innerErr.message}`);
+      }
+    }
+
+    if (skusToTrack.length === 0) {
       return NextResponse.json({ error: "Failed to allocate parsing targets upstream." }, { status: 502 });
     }
 
-    const validatedItemPayloads: TaskPayloadRow[] = items.map((i: any) => ({
-      sku: i.sku,
-      retailer: "Amazon.com",
-      quantity: i.quantity || 1,
-      price: 0,
-      wholesale_price: 0,
-      unitCostDelta: 0.0000,
-      recommendedSource: "PENDING_LIVE_INGEST",
-      status: "Processing"
-    }));
+    await redis.sadd(setKey, skusToTrack[0], ...skusToTrack.slice(1));
+    await redis.expire(setKey, 1800); 
+
+    const validatedItemPayloads: TaskPayloadRow[] = items.map((i: any) => {
+      const isRegistered = skusToTrack.includes(i.sku);
+      return {
+        sku: i.sku,
+        retailer: "Amazon.com",
+        quantity: i.quantity || 1,
+        price: 0,
+        wholesale_price: 0,
+        unitCostDelta: 0.0000,
+        recommendedSource: isRegistered ? "PENDING_LIVE_INGEST" : "SKIPPED_REGISTRATION_FAILED",
+        status: "Processing"
+      };
+    });
 
     const runtimeCacheState = {
       status: "PROCESSING",
@@ -86,7 +111,7 @@ export async function POST(req: NextRequest) {
 
     await redis.set(trackingId, JSON.stringify(runtimeCacheState), { ex: 3600 });
 
-    console.log(`[DECODO_BATCH_INIT]: Batch array initialized safely using flat tracking routes under ID: ${trackingId}`);
+    console.log(`[INGEST_PACED_COMPLETE]: Seeded tracker ${setKey} with ${skusToTrack.length} elements.`);
     return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId }, { status: 202 });
 
   } catch (err: any) {

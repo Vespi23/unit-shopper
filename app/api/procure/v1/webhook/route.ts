@@ -18,39 +18,29 @@ function cleanNumericPrice(value: any): number {
 export async function POST(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const jobId = searchParams.get("jobId");
+  const sku = searchParams.get("sku");
 
-  if (!jobId) return NextResponse.json({ error: "Missing tracking identification." }, { status: 400 });
+  if (!jobId || !sku) return NextResponse.json({ error: "Missing matrices." }, { status: 400 });
+  const setKey = `bl_job:pending:${jobId}`;
+
   if (!redisToken) return NextResponse.json({ error: "Database configuration desynchronized." }, { status: 500 });
 
   try {
-    const rawPayload = await req.json();
-    const scrapedTasks = rawPayload.results || rawPayload.tasks || [];
-    
-    if (!Array.isArray(scrapedTasks) || scrapedTasks.length === 0) {
-      return NextResponse.json({ success: true, message: "Empty frame callback block ignored." });
-    }
+    const rawData = await req.json();
+    const payload = rawData.data || rawData.result || rawData;
+
+    await redis.srem(setKey, sku);
+    const remainingCount = await redis.scard(setKey);
 
     const cachedJob = await redis.get(jobId);
-    if (!cachedJob) return NextResponse.json({ error: "Job instance expired." }, { status: 404 });
+    if (!cachedJob) return NextResponse.json({ error: "Expired." }, { status: 404 });
 
     const jobData = typeof cachedJob === "string" ? JSON.parse(cachedJob) : cachedJob;
 
-    let finalProjectedSavings = 0;
-    let optimizedCount = 0;
-
-    // Map through our items and update them using parameters from the callback URLs
-    jobData.items = jobData.items.map((existingItem: any) => {
-      // Extract properties by scanning Decodo's callback URL matches
-      const match = scrapedTasks.find((t: any) => {
-        const callbackUrlString = String(t.callback_url || t.task_callback_url || "");
-        return callbackUrlString.includes(`sku=${existingItem.sku}`) || String(t.sku) === String(existingItem.sku);
-      });
-      
-      if (!match) return existingItem;
-
-      const resultData = match.result || match.data || match;
-      const rawRetail = resultData.price || resultData.amazon_price || resultData.buybox_price || resultData.ecommerce_data?.price;
-      const rawWholesale = resultData.wholesale_price || resultData.business_price || resultData.ecommerce_data?.wholesale_price;
+    const targetItemIndex = jobData.items.findIndex((i: any) => i.sku === sku);
+    if (targetItemIndex !== -1) {
+      const rawRetail = payload.price || payload.amazon_price || payload.buybox_price || payload.ecommerce_data?.price;
+      const rawWholesale = payload.wholesale_price || payload.business_price || payload.ecommerce_data?.wholesale_price;
 
       const liveRetailPrice = cleanNumericPrice(rawRetail);
       const liveWholesalePrice = isNaN(cleanNumericPrice(rawWholesale)) ? liveRetailPrice * 0.85 : cleanNumericPrice(rawWholesale);
@@ -59,45 +49,63 @@ export async function POST(req: NextRequest) {
       let recommendedSource = "Amazon.com";
       let status: "Stable" | "Optimized" | "Alert" = "Stable";
 
+      const qty = jobData.items[targetItemIndex].quantity || 1;
+
       if (!isNaN(liveRetailPrice) && liveRetailPrice > 0) {
         delta = (liveRetailPrice - liveWholesalePrice) / liveRetailPrice;
         if (delta > 0.05) {
           status = "Optimized";
           recommendedSource = "AMAZON_BUSINESS_BULK";
-          optimizedCount++;
-          finalProjectedSavings += (liveRetailPrice - liveWholesalePrice) * existingItem.quantity;
         }
       }
 
-      return {
-        sku: existingItem.sku,
+      jobData.items[targetItemIndex] = {
+        sku: sku,
         retailer: "Amazon.com",
-        quantity: existingItem.quantity,
+        quantity: qty,
         price: liveRetailPrice,
         wholesale_price: liveWholesalePrice,
         unitCostDelta: parseFloat(delta.toFixed(4)),
-        recommendedSource,
-        status
+        recommendedSource: recommendedSource,
+        status: status
       };
-    });
+    }
 
-    // Save final aggregated metrics
-    jobData.status = "COMPLETED";
-    jobData.progress = 100;
-    jobData.metrics = {
-      totalItemsProcessed: jobData.items.length,
-      projectedSavings: parseFloat(finalProjectedSavings.toFixed(2)),
-      shrinkflationAlerts: 0,
-      optimizedRoutesCount: optimizedCount
-    };
+    if (remainingCount === 0) {
+      let finalProjectedSavings = 0;
+      let optimizedCount = 0;
+
+      jobData.items.forEach((item: any) => {
+        if (item.status === "Optimized") {
+          optimizedCount++;
+          const itemCostDiff = (item.price - item.wholesale_price) * item.quantity;
+          if (!isNaN(itemCostDiff) && itemCostDiff > 0) {
+            finalProjectedSavings += itemCostDiff;
+          }
+        }
+      });
+
+      jobData.status = "COMPLETED";
+      jobData.progress = 100;
+      jobData.metrics = {
+        totalItemsProcessed: jobData.items.length,
+        projectedSavings: parseFloat(finalProjectedSavings.toFixed(2)),
+        shrinkflationAlerts: 0,
+        optimizedRoutesCount: optimizedCount
+      };
+      
+      console.log(`[JOB_SUCCESS]: Ingress fully compiled for ${jobId}. Savings mapped: $${finalProjectedSavings}`);
+    } else {
+      const completedCount = jobData.totalItems - remainingCount;
+      jobData.progress = Math.min(95, Math.floor((completedCount / jobData.totalItems) * 100));
+    }
 
     await redis.set(jobId, JSON.stringify(jobData), { ex: 1800 });
-    
-    console.log(`[BATCH_SUCCESS]: Unified webhook completed for ${jobId}. Savings mapped: $${finalProjectedSavings}`);
+    console.log(`[CALLBACK_SUCCESS]: SKU ${sku} written cleanly. [Remaining elements: ${remainingCount}]`);
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: any) {
-    console.error(`[BATCH_WEBHOOK_CRITICAL_ERROR]: ${err.message}`);
-    return NextResponse.json({ error: "Internal processing crash." }, { status: 500 });
+    console.error(`[WEBHOOK_ERROR]: ${err.message}`);
+    return NextResponse.json({ error: "Internal crash." }, { status: 500 });
   }
 }
