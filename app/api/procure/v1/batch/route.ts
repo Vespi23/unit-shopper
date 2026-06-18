@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid structural payload format." }, { status: 400 });
   }
 
+  let processingItems = [...items];
+
+  // NETWORKING INSULATION RING: Wrap the external API in an independent try block
   try {
     const asinList = items.map((i: any) => i.sku).filter(Boolean);
 
@@ -30,39 +33,48 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
       },
-      body: JSON.stringify({ asins: asinList, country: "us", render_js: true })
+      body: JSON.stringify({ asins: asinList, country: "us", render_js: true }),
+      // Add a clean 4-second network timeout window
+      signal: AbortSignal.timeout(4000) 
     });
 
-    if (!decodoResponse.ok) {
-      throw new Error(`Decodo API responded with status: ${decodoResponse.status}`);
+    if (decodoResponse.ok) {
+      const liveScrapedData = await decodoResponse.json();
+      const scrapedProducts = liveScrapedData.data || liveScrapedData.results || items;
+      
+      processingItems = scrapedProducts.map((scrapedItem: any, index: number) => ({
+        ...scrapedItem,
+        asin: scrapedItem.asin || items[index]?.sku,
+        quantity: items[index]?.quantity || 1
+      }));
+      console.log("[DECODO_GATEWAY_SUCCESS]: Live scraper matrix data loaded.");
+    } else {
+      console.warn(`[DECODO_API_WARN]: Server returned status ${decodoResponse.status}. Utilizing core backup calculations.`);
     }
 
-    const liveScrapedData = await decodoResponse.json();
+  } catch (netErr: any) {
+    // Intercept "fetch failed" network network drops cleanly without crashing the pipeline
+    console.warn(`[DECODO_NETWORK_REDIRECT]: Connection to scraper target failed (${netErr.message}). Deploying local fallback track.`);
+  }
 
-    // FIXED: Decodo returns the scraped object listings inside a 'data' array root
-    const scrapedProducts = liveScrapedData.data || liveScrapedData.results || items;
-
-    // Attach the original requested quantities to the scraped pricing data rows
-    const enrichedItems = scrapedProducts.map((scrapedItem: any, index: number) => ({
-      ...scrapedItem,
-      asin: scrapedItem.asin || items[index]?.sku,
-      quantity: items[index]?.quantity || 1
-    }));
-
+  // 3. SECURE PASS DOWNSTREAM (Always runs successfully)
+  try {
     const clusterResponse = await fetch(CLUSTER_WORKER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${INTERNAL_WORKER_SECRET}`
       },
-      body: JSON.stringify({ items: enrichedItems, orgId: "ui_corporate_procure_dashboard" })
+      body: JSON.stringify({ items: processingItems, orgId: "ui_corporate_procure_dashboard" })
     });
+
+    if (!clusterResponse.ok) throw new Error(`Compute node rejected payload: ${clusterResponse.status}`);
 
     const clusterData = await clusterResponse.json();
     return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId: clusterData.trackingId }, { status: 202 });
 
   } catch (err: any) {
-    console.error(`[DECODO_GATEWAY_ERROR]: ${err.message}`);
-    return NextResponse.json({ error: "Failed to process live metrics through scraper.", details: err.message }, { status: 500 });
+    console.error(`[COMPUTE_CRITICAL_ERROR]: ${err.message}`);
+    return NextResponse.json({ error: "Serverless compute pipeline faulted processing rows." }, { status: 500 });
   }
 }
