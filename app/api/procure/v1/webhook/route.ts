@@ -3,11 +3,25 @@ import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
 
-// FIXED: Hardwire environment mappings directly to eliminate client driver instantiation drops
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
-});
+// OMNI-VARIABLE MATRIX: Scan all possible deployment naming schemas natively
+const redisUrl = 
+  process.env.UPSTASH_REDIS_REST_URL || 
+  process.env.KV_REST_API_URL || 
+  process.env.REDIS_URL || 
+  "";
+
+const redisToken = 
+  process.env.UPSTASH_REDIS_REST_TOKEN || 
+  process.env.KV_REST_API_TOKEN || 
+  process.env.REDIS_TOKEN || 
+  "";
+
+// CRITICAL EXHAUSTION GUARD
+if (!redisUrl || !redisToken) {
+  console.error(`[CRITICAL_CONFIG_ERROR]: Redis credentials missing. URL: ${!!redisUrl}, Token: ${!!redisToken}`);
+}
+
+const redis = new Redis({ url: redisUrl, token: redisToken });
 
 function cleanNumericPrice(value: any): number {
   if (value === null || value === undefined) return NaN;
@@ -25,11 +39,15 @@ export async function POST(req: NextRequest) {
   if (!jobId || !sku) return NextResponse.json({ error: "Missing matrices." }, { status: 400 });
   const setKey = `bl_job:pending:${jobId}`;
 
+  // Pre-emptively stop execution if configuration environment is broken
+  if (!redisToken) {
+    return NextResponse.json({ error: "Database configuration desynchronized." }, { status: 500 });
+  }
+
   try {
     const rawData = await req.json();
     const payload = rawData.data || rawData.result || rawData;
 
-    // Execute atomic steps
     await redis.srem(setKey, sku);
     const remainingCount = await redis.scard(setKey);
 
