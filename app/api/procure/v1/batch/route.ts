@@ -3,15 +3,13 @@ import { isRateLimited } from "@/lib/rateLimit";
 
 const CLUSTER_WORKER_URL = process.env.CLUSTER_WORKER_URL || "http://127.0.0.1:3000/api/procure/v1/compute";
 const INTERNAL_WORKER_SECRET = process.env.INTERNAL_WORKER_SECRET || "";
+// CORRECTED: Aligned directly to your exact .env.local token variable
+const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
 
 export async function POST(req: NextRequest) {
-  // 1. RATE LIMIT SECURITY GATE
   const clientIp = req.headers.get("x-forwarded-for") || "127.0.0.1";
   if (isRateLimited(clientIp, { maxTokens: 10, refillRate: 1 })) {
-    return NextResponse.json(
-      { error: "Too Many Requests.", details: "Rate allocation capacity limit breached. Hold execution." },
-      { status: 429 }
-    );
+    return NextResponse.json({ error: "Too Many Requests." }, { status: 429 });
   }
 
   let body: any;
@@ -26,12 +24,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid structural payload matrix format." }, { status: 400 });
   }
 
-  // 2. DISPATCH TO SERVERLESS COMPUTE ENGINE
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s SLA timeout limit
-
   try {
-    // Clean, direct fetch execution target - no legacy strings appended
+    // 1. EXTRACT ASIN ARRAY FOR DECODO STREAM INGESTION
+    const asinList = items.map((i: any) => i.sku).filter(Boolean);
+
+    // 2. LIVE FETCH FROM DECODO SCRAPING CORE WITH YOUR CORRECT AUTH KEY
+    const decodoResponse = await fetch("https://api.decodo.io/v1/scrape/amazon", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DECODO_AUTH_TOKEN}`
+      },
+      body: JSON.stringify({
+        asins: asinList,
+        country: "us",
+        render_js: true
+      })
+    });
+
+    if (!decodoResponse.ok) {
+      throw new Error(`Decodo API returned error status: ${decodoResponse.status}`);
+    }
+
+    const liveScrapedData = await decodoResponse.json();
+
+    // 3. PASS LIVE SCALED DATA DIRECTLY TO COMPUTE ENGINE
     const clusterResponse = await fetch(CLUSTER_WORKER_URL, {
       method: "POST",
       headers: {
@@ -39,36 +56,16 @@ export async function POST(req: NextRequest) {
         "Authorization": `Bearer ${INTERNAL_WORKER_SECRET}`
       },
       body: JSON.stringify({
-        items,
-        orgId: req.headers.get("x-org-id") || "ui_corporate_procure_dashboard"
-      }),
-      signal: controller.signal
+        items: liveScrapedData.results || items,
+        orgId: "ui_corporate_procure_dashboard"
+      })
     });
 
-    clearTimeout(timeoutId);
-
-    if (!clusterResponse.ok) {
-      throw new Error(`Compute route rejected payload with status code: ${clusterResponse.status}`);
-    }
-
     const clusterData = await clusterResponse.json();
-    
-    // Return clean 202 tracking status back to frontend pipeline
-    return NextResponse.json({
-      status: "ASYNC_CLUSTER_ACCEPTED",
-      trackingId: clusterData.trackingId
-    }, { status: 202 });
+    return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId: clusterData.trackingId }, { status: 202 });
 
-  } catch (clusterError: any) {
-    clearTimeout(timeoutId);
-
-    console.error(`[GATEWAY ROUTING FALLBACK] Target engine unreachable, deploying circuit breaker: ${clusterError.message}`);
-
-    // LOCAL SERVERLESS EMERGENCY TRACK
-    return NextResponse.json({
-      status: "DEGRADED_COMPUTATION_SUCCESS",
-      itemsProcessed: items.length,
-      RISK_WARNING: "Operating on backup serverless infrastructure. Telemetry features are degraded."
-    }, { status: 200 });
+  } catch (err: any) {
+    console.error(`[LIVE DECODO INTEGRATION CRASH]: ${err.message}`);
+    return NextResponse.json({ error: "Failed to process live metrics through scraper.", details: err.message }, { status: 500 });
   }
 }
