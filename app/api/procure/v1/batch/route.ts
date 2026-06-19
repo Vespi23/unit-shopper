@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isRateLimited } from "@/lib/rateLimit";
-import { Redis } from "@upstash/redis";
+import { redisREST } from "@/lib/redis-client"; // FIXED: Swapped for zero-dependency REST utility
 
 export const runtime = "nodejs";
-
-// FIXED: Remove custom object properties and manage via standard environment overrides
-process.env.UPSTASH_DISABLE_TELEMETRY = "1";
-
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
-});
 
 const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
 
@@ -83,8 +75,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to allocate parsing targets upstream." }, { status: 502 });
     }
 
-    await redis.sadd(setKey, skusToTrack[0], ...skusToTrack.slice(1));
-    await redis.expire(setKey, 1800); 
+    // FIXED: Shifted to native REST calls
+    await redisREST.sadd(setKey, skusToTrack[0], ...skusToTrack.slice(1));
+    await redisREST.expire(setKey, 1800); 
 
     const validatedItemPayloads: TaskPayloadRow[] = items.map((i: any) => {
       const isRegistered = skusToTrack.includes(i.sku);
@@ -109,7 +102,8 @@ export async function POST(req: NextRequest) {
       metrics: { totalItemsProcessed: validatedItemPayloads.length, projectedSavings: 0.00, shrinkflationAlerts: 0, optimizedRoutesCount: 0 }
     };
 
-    await redis.set(trackingId, JSON.stringify(runtimeCacheState), { ex: 3600 });
+    // FIXED: Shifted to native REST calls
+    await redisREST.set(trackingId, JSON.stringify(runtimeCacheState), { ex: 3600 });
 
     return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId }, { status: 202 });
 
