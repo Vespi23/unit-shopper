@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
+import { redisREST } from "@/lib/redis-client"; // FIXED: Use zero-dependency REST utility
 
 export const runtime = "nodejs";
-
-// FIXED: Remove illegal inline property configurations
-process.env.UPSTASH_DISABLE_TELEMETRY = "1";
-
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "";
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "";
-
-const redis = redisUrl && redisToken 
-  ? new Redis({ url: redisUrl, token: redisToken }) 
-  : null;
 
 function cleanNumericPrice(value: any): number {
   if (value === null || value === undefined) return NaN;
@@ -27,7 +17,6 @@ export async function POST(req: NextRequest) {
   const sku = searchParams.get("sku");
 
   if (!jobId || !sku) return NextResponse.json({ error: "Missing matrices." }, { status: 400 });
-  if (!redis) return NextResponse.json({ error: "Database instance uninitialized." }, { status: 500 });
 
   const setKey = `bl_job:pending:${jobId}`;
 
@@ -35,10 +24,10 @@ export async function POST(req: NextRequest) {
     const rawData = await req.json();
     const payload = rawData.data || rawData.result || rawData;
 
-    await redis.srem(setKey, sku);
-    const remainingCount = await redis.scard(setKey);
+    await redisREST.srem(setKey, sku);
+    const remainingCount = await redisREST.scard(setKey);
 
-    const cachedJob = await redis.get(jobId);
+    const cachedJob = await redisREST.get(jobId);
     if (!cachedJob) return NextResponse.json({ error: "Expired." }, { status: 404 });
 
     const jobData = typeof cachedJob === "string" ? JSON.parse(cachedJob) : cachedJob;
@@ -104,7 +93,7 @@ export async function POST(req: NextRequest) {
       jobData.progress = Math.min(95, Math.floor((completedCount / jobData.totalItems) * 100));
     }
 
-    await redis.set(jobId, JSON.stringify(jobData), { ex: 1800 });
+    await redisREST.set(jobId, JSON.stringify(jobData), { ex: 1800 });
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: any) {
