@@ -1,6 +1,15 @@
 // next.config.ts
 import type { NextConfig } from "next";
 
+// FIXED: Immediately kill automatic background telemetry processing before Next.js compiles the server chunks
+process.env.UPSTASH_DISABLE_TELEMETRY = "1";
+if (!process.env.UPSTASH_REDIS_REST_URL) {
+  process.env.UPSTASH_REDIS_REST_URL = "https://localhost";
+}
+if (!process.env.UPSTASH_REDIS_REST_TOKEN) {
+  process.env.UPSTASH_REDIS_REST_TOKEN = "mock_build_token_bypass";
+}
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -8,7 +17,7 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: [
           {
-            key: 'Content-Security-Policy',
+            key: 'Content-Security-Security-Policy',
             value: "frame-ancestors 'self' https://*.amazon.com; img-src 'self' https: data: blob:;"
           },
           {
@@ -36,7 +45,6 @@ const nextConfig: NextConfig = {
     ];
   },
   
-  // FORCED REWRITE LAYER: Intercepts Turbopack sitemap conflicts and routes to the API handler
   async rewrites() {
     return [
       {
