@@ -8,28 +8,37 @@ export const maxDuration = 60;
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
-    const targetUnit = toCanonicalUnit(searchParams.get('u') || '');
+    
+    // FIXED: Loose-binding fallback matrix checks all common search parameter names
+    const query = searchParams.get('q') || 
+                  searchParams.get('query') || 
+                  searchParams.get('term') || 
+                  searchParams.get('searchTerm') || 
+                  '';
+                  
+    const targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
 
-    if (!query) return NextResponse.json([]);
+    // Strict validation check only if all variants are blank
+    if (!query.trim()) {
+        console.warn("[SEARCH_ROUTE_EMPTY_TRIGGER]: Aborted search pass. No valid text query parameters matched.");
+        return NextResponse.json([]);
+    }
 
     let rawResults: any[] = [];
 
     try {
-        // STANDARD PATH: Attempt to leverage your core internal client module
+        console.log(`[PUBLIC_SEARCH_GATE]: Ingested query target: "${query}"`);
         rawResults = await searchProducts(query);
     } catch (primaryError: any) {
-        // [RISK WARNING]: Primary database or environment variable connection failed. 
         console.error(`[SEARCH_ROUTE_RECOVERY_TRIGGERED]: Primary search failed: ${primaryError.message}`);
         
-        // THE "FORCE-THROUGH" WORKAROUND: Direct raw HTTP provider fallback bypass
         try {
             const fallbackRes = await fetch(`https://scraper-api.decodo.com/v3/search?q=${encodeURIComponent(query)}`, {
                 method: "GET",
                 headers: {
                     "Authorization": `Bearer ${process.env.DECODO_AUTH_TOKEN || ""}`
                 },
-                next: { revalidate: 300 } // Enforce native Vercel edge caching, bypassing Redis entirely
+                next: { revalidate: 300 }
             });
             
             if (fallbackRes.ok) {
@@ -45,7 +54,6 @@ export async function GET(request: Request) {
     }
 
     try {
-        // Execute structural unit conversion parsing maps over retrieved datasets
         const processedResults = rawResults.map(p => {
             const currentUnit = toCanonicalUnit(p.unit || p.unit_type || '');
             const currentAmount = parseFloat(p.totalAmount || p.amount || p.size || p.volume || 0);
