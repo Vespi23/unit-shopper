@@ -6,7 +6,6 @@ import { getAmazonAffiliateLink } from './affiliate';
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 
 export async function searchProducts(query: string): Promise<Product[]> {
-  // We push to 55s. If it's not done by then, we HAVE to return what we have to avoid a 504.
   const GLOBAL_DEADLINE = 55000; 
 
   try {
@@ -18,10 +17,17 @@ export async function searchProducts(query: string): Promise<Product[]> {
       if (signal.aborted) return [];
 
       try {
+        const token = process.env.DECODO_AUTH_TOKEN || "";
+        
+        // FIXED: Shift to unified Authorization schema format to support standard tokens cleanly
+        const authHeader = token.startsWith("Basic ") || token.startsWith("Bearer ") 
+          ? token 
+          : `Bearer ${token}`;
+
         const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
           method: 'POST',
           headers: { 
-            'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`, 
+            'Authorization': authHeader, 
             'Content-Type': 'application/json' 
           },
           body: JSON.stringify({ 
@@ -29,14 +35,18 @@ export async function searchProducts(query: string): Promise<Product[]> {
             proxy_pool: "premium", 
             headless: "html" 
           }),
-          signal // Listens to the 55s Global Deadline
+          signal 
         });
         
+        if (!res.ok) {
+          console.error(`[DECODO_PAGE_REJECT]: Page ${p} failed with status code ${res.status}`);
+          return [];
+        }
+
         const json = await res.json();
         const html = json.results?.[0]?.content || json.content || null;
         return html ? parseAmazonHTML(html) : [];
       } catch (err) { 
-        // If aborted, we'll see this in your Vercel logs
         if (err instanceof Error && err.name === 'AbortError') {
             console.log(`[TIMEOUT] Page ${p} was aborted by Global Deadline.`);
         }
@@ -47,8 +57,9 @@ export async function searchProducts(query: string): Promise<Product[]> {
     const globalController = new AbortController();
     const timeoutId = setTimeout(() => globalController.abort(), GLOBAL_DEADLINE);
 
-    const pageNumbers = [1, 2, 3, 4, 5, 6, 7];
-    // Increased stagger to 400ms to improve proxy stability
+    // FIXED: Downscaled default execution range to prevent serverless function memory or execution crashes
+    const pageNumbers = [1, 2, 3];
+    
     const pagePromises = pageNumbers.map((p, index) => 
       fetchPage(p, index * 400, globalController.signal)
     );
@@ -72,6 +83,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
     filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
     return filtered;
   } catch (error) { 
+    console.error(`[API_CLIENT_CRITICAL_EXCEPTION]: ${error}`);
     return []; 
   }
 }
