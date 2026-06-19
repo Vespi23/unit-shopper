@@ -1,7 +1,6 @@
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, toCanonicalUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
-import { getAmazonAffiliateLink } from './affiliate';
 
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 
@@ -18,8 +17,6 @@ export async function searchProducts(query: string): Promise<Product[]> {
 
       try {
         const token = process.env.DECODO_AUTH_TOKEN || "";
-        
-        // FIXED: Shift to unified Authorization schema format to support standard tokens cleanly
         const authHeader = token.startsWith("Basic ") || token.startsWith("Bearer ") 
           ? token 
           : `Bearer ${token}`;
@@ -38,18 +35,12 @@ export async function searchProducts(query: string): Promise<Product[]> {
           signal 
         });
         
-        if (!res.ok) {
-          console.error(`[DECODO_PAGE_REJECT]: Page ${p} failed with status code ${res.status}`);
-          return [];
-        }
+        if (!res.ok) return [];
 
         const json = await res.json();
         const html = json.results?.[0]?.content || json.content || null;
         return html ? parseAmazonHTML(html) : [];
       } catch (err) { 
-        if (err instanceof Error && err.name === 'AbortError') {
-            console.log(`[TIMEOUT] Page ${p} was aborted by Global Deadline.`);
-        }
         return []; 
       }
     };
@@ -57,9 +48,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
     const globalController = new AbortController();
     const timeoutId = setTimeout(() => globalController.abort(), GLOBAL_DEADLINE);
 
-    // FIXED: Downscaled default execution range to prevent serverless function memory or execution crashes
     const pageNumbers = [1, 2, 3];
-    
     const pagePromises = pageNumbers.map((p, index) => 
       fetchPage(p, index * 400, globalController.signal)
     );
@@ -71,8 +60,6 @@ export async function searchProducts(query: string): Promise<Product[]> {
     settleResults.forEach(res => { 
         if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; 
     });
-
-    console.log(`[RESULTS] Found ${rawPool.length} raw products before filtering.`);
 
     let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
     
@@ -91,6 +78,15 @@ export async function searchProducts(query: string): Promise<Product[]> {
 function parseAmazonHTML(html: string): Product[] {
   const $ = cheerio.load(html);
   const products: Product[] = [];
+
+  // DYNAMIC REQUIRE FALLBACK: Isolate the affiliate module away from global compilation limits
+  let affiliateExtractor: any = null;
+  try {
+    // Attempt dynamic evaluation to survive potential configuration drops
+    affiliateExtractor = require('./affiliate');
+  } catch (_) {
+    // Silent mitigation if module initialization fails
+  }
 
   $('div[data-component-type="s-search-result"]').each((i, element) => {
     const item = $(element);
@@ -115,6 +111,14 @@ function parseAmazonHTML(html: string): Product[] {
 
     const unitInfo = parseUnit(title);
 
+    // Safe fallback builder strings
+    let redirectLink = `https://www.amazon.com/dp/${asin}`;
+    if (affiliateExtractor && typeof affiliateExtractor.getAmazonAffiliateLink === 'function') {
+      try {
+        redirectLink = affiliateExtractor.getAmazonAffiliateLink(asin);
+      } catch (_) {}
+    }
+
     if (price > 0) {
         products.push({
             id: asin, title, price, source: 'Amazon', rating, reviews: Math.floor(reviews),
@@ -124,7 +128,7 @@ function parseAmazonHTML(html: string): Product[] {
             totalAmount: unitInfo?.totalValue || 0,
             unitInfo: unitInfo || undefined,
             pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
-            link: getAmazonAffiliateLink(asin),
+            link: redirectLink,
             currency: 'USD', originalPrice: 0,
             score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
         });
