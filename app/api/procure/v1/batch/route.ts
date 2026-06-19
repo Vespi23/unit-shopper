@@ -3,11 +3,15 @@ import { isRateLimited } from "@/lib/rateLimit";
 import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
+
+// FIXED: Remove custom object properties and manage via standard environment overrides
+process.env.UPSTASH_DISABLE_TELEMETRY = "1";
+
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || "",
   token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
-  telemetry: false
 });
+
 const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
 
 interface TaskPayloadRow {
@@ -21,7 +25,6 @@ interface TaskPayloadRow {
   status: "Processing" | "Stable" | "Optimized" | "Alert";
 }
 
-// Micro-throttle pacing primitive
 const pace = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(req: NextRequest) {
@@ -48,7 +51,6 @@ export async function POST(req: NextRequest) {
     const secureOrigin = req.nextUrl.origin.replace(/^http:/, "https:");
     const skusToTrack: string[] = [];
 
-    // FIXED: Run synchronous sequential registration to protect Vercel edge proxy pipelines
     for (const item of items) {
       if (!item.sku || item.sku === "UNKNOWN_ASIN") continue;
 
@@ -69,11 +71,8 @@ export async function POST(req: NextRequest) {
 
         if (res.ok) {
           skusToTrack.push(item.sku);
-        } else {
-          console.error(`[DECODO_INDIVIDUAL_REJECT]: SKU ${item.sku} returned status ${res.status}`);
         }
 
-        // Apply a brief 40ms execution breather to separate connection sockets cleanly
         await pace(40);
       } catch (innerErr: any) {
         console.error(`[DECODO_FETCH_FAIL]: ${innerErr.message}`);
@@ -112,11 +111,9 @@ export async function POST(req: NextRequest) {
 
     await redis.set(trackingId, JSON.stringify(runtimeCacheState), { ex: 3600 });
 
-    console.log(`[INGEST_PACED_COMPLETE]: Seeded tracker ${setKey} with ${skusToTrack.length} elements.`);
     return NextResponse.json({ status: "ASYNC_CLUSTER_ACCEPTED", trackingId }, { status: 202 });
 
   } catch (err: any) {
-    console.error(`[INGEST_CRITICAL_FAULT]: ${err.message}`);
     return NextResponse.json({ error: "Serverless data ingress failed." }, { status: 500 });
   }
 }

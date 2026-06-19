@@ -3,16 +3,14 @@ import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
 
-// FIXED: Explicitly define token configs and turn off telemetry in the constructor matrix
+// FIXED: Remove illegal inline property configurations
+process.env.UPSTASH_DISABLE_TELEMETRY = "1";
+
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "";
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "";
 
 const redis = redisUrl && redisToken 
-  ? new Redis({ 
-      url: redisUrl, 
-      token: redisToken,
-      telemetry: false // CRITICAL: Hard-kills internal telemetry requests to /pipeline
-    }) 
+  ? new Redis({ url: redisUrl, token: redisToken }) 
   : null;
 
 function cleanNumericPrice(value: any): number {
