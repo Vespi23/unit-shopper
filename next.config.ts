@@ -1,13 +1,18 @@
 // next.config.ts
 import type { NextConfig } from "next";
 
-// FIXED: Immediately kill automatic background telemetry processing before Next.js compiles the server chunks
+// =========================================================================
+// ANTI-CRASH SHIELD LAYER: Intercept global variables before serverless runtime compilation
+// =========================================================================
 process.env.UPSTASH_DISABLE_TELEMETRY = "1";
-if (!process.env.UPSTASH_REDIS_REST_URL) {
-  process.env.UPSTASH_REDIS_REST_URL = "https://localhost";
+
+// FIXED: If the managed integration leaves keys empty, force a valid absolute URL layout 
+// to prevent the undici fetch engine from throwing an ERR_INVALID_URL exception
+if (!process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL.startsWith("/")) {
+  process.env.UPSTASH_REDIS_REST_URL = "https://disabled-telemetry.localhost";
 }
 if (!process.env.UPSTASH_REDIS_REST_TOKEN) {
-  process.env.UPSTASH_REDIS_REST_TOKEN = "mock_build_token_bypass";
+  process.env.UPSTASH_REDIS_REST_TOKEN = "mock_token_bypass";
 }
 
 const nextConfig: NextConfig = {
@@ -17,7 +22,7 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: [
           {
-            key: 'Content-Security-Security-Policy',
+            key: 'Content-Security-Policy',
             value: "frame-ancestors 'self' https://*.amazon.com; img-src 'self' https: data: blob:;"
           },
           {
