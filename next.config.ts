@@ -1,18 +1,13 @@
 // next.config.ts
 import type { NextConfig } from "next";
 
-// =========================================================================
-// ANTI-CRASH SHIELD LAYER: Intercept global variables before serverless runtime compilation
-// =========================================================================
+// RUNTIME SERVER CHUNK RECOVERY SHIELD (Executes during build initialization)
 process.env.UPSTASH_DISABLE_TELEMETRY = "1";
-
-// FIXED: If the managed integration leaves keys empty, force a valid absolute URL layout 
-// to prevent the undici fetch engine from throwing an ERR_INVALID_URL exception
 if (!process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL.startsWith("/")) {
   process.env.UPSTASH_REDIS_REST_URL = "https://disabled-telemetry.localhost";
 }
 if (!process.env.UPSTASH_REDIS_REST_TOKEN) {
-  process.env.UPSTASH_REDIS_REST_TOKEN = "mock_token_bypass";
+  process.env.UPSTASH_REDIS_REST_TOKEN = "mock_runtime_token_bypass";
 }
 
 const nextConfig: NextConfig = {
@@ -76,6 +71,7 @@ const nextConfig: NextConfig = {
   },
   
   experimental: {
+    // FIXED: Removed instrumentationHook line since it is natively stable on your Next.js 16 build core
     optimizePackageImports: ['lucide-react'],
   },
 };
