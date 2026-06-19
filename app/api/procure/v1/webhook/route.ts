@@ -3,9 +3,17 @@ import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
 
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.REDIS_URL || "";
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.REDIS_TOKEN || "";
-const redis = new Redis({ url: redisUrl, token: redisToken });
+// FIXED: Explicitly define token configs and turn off telemetry in the constructor matrix
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "";
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "";
+
+const redis = redisUrl && redisToken 
+  ? new Redis({ 
+      url: redisUrl, 
+      token: redisToken,
+      telemetry: false // CRITICAL: Hard-kills internal telemetry requests to /pipeline
+    }) 
+  : null;
 
 function cleanNumericPrice(value: any): number {
   if (value === null || value === undefined) return NaN;
@@ -21,9 +29,9 @@ export async function POST(req: NextRequest) {
   const sku = searchParams.get("sku");
 
   if (!jobId || !sku) return NextResponse.json({ error: "Missing matrices." }, { status: 400 });
-  const setKey = `bl_job:pending:${jobId}`;
+  if (!redis) return NextResponse.json({ error: "Database instance uninitialized." }, { status: 500 });
 
-  if (!redisToken) return NextResponse.json({ error: "Database configuration desynchronized." }, { status: 500 });
+  const setKey = `bl_job:pending:${jobId}`;
 
   try {
     const rawData = await req.json();
@@ -93,15 +101,12 @@ export async function POST(req: NextRequest) {
         shrinkflationAlerts: 0,
         optimizedRoutesCount: optimizedCount
       };
-      
-      console.log(`[JOB_SUCCESS]: Ingress fully compiled for ${jobId}. Savings mapped: $${finalProjectedSavings}`);
     } else {
       const completedCount = jobData.totalItems - remainingCount;
       jobData.progress = Math.min(95, Math.floor((completedCount / jobData.totalItems) * 100));
     }
 
     await redis.set(jobId, JSON.stringify(jobData), { ex: 1800 });
-    console.log(`[CALLBACK_SUCCESS]: SKU ${sku} written cleanly. [Remaining elements: ${remainingCount}]`);
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: any) {

@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || "",
   token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+  telemetry: false
 });
 const DECODO_AUTH_TOKEN = process.env.DECODO_AUTH_TOKEN || ""; 
 
