@@ -1,3 +1,18 @@
+// =========================================================================
+// RUNTIME SERVER CHUNK RECOVERY INNER SHIELD (LINE 1 DEPLOYMENT)
+// =========================================================================
+if (typeof process !== 'undefined' && process.env) {
+  process.env.UPSTASH_DISABLE_TELEMETRY = "1";
+  
+  if (!process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL.startsWith("/")) {
+    process.env.UPSTASH_REDIS_REST_URL = "https://disabled-telemetry.localhost";
+  }
+  if (!process.env.UPSTASH_REDIS_REST_TOKEN) {
+    process.env.UPSTASH_REDIS_REST_TOKEN = "mock_runtime_token_bypass";
+  }
+}
+// =========================================================================
+
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, toCanonicalUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
@@ -79,14 +94,10 @@ function parseAmazonHTML(html: string): Product[] {
   const $ = cheerio.load(html);
   const products: Product[] = [];
 
-  // DYNAMIC REQUIRE FALLBACK: Isolate the affiliate module away from global compilation limits
   let affiliateExtractor: any = null;
   try {
-    // Attempt dynamic evaluation to survive potential configuration drops
     affiliateExtractor = require('./affiliate');
-  } catch (_) {
-    // Silent mitigation if module initialization fails
-  }
+  } catch (_) {}
 
   $('div[data-component-type="s-search-result"]').each((i, element) => {
     const item = $(element);
@@ -111,7 +122,6 @@ function parseAmazonHTML(html: string): Product[] {
 
     const unitInfo = parseUnit(title);
 
-    // Safe fallback builder strings
     let redirectLink = `https://www.amazon.com/dp/${asin}`;
     if (affiliateExtractor && typeof affiliateExtractor.getAmazonAffiliateLink === 'function') {
       try {
