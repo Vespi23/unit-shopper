@@ -1,32 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
+import { redisREST } from "@/lib/redis-client"; // FIXED: Zero-dependency conversion
 
 export const runtime = "nodejs";
-const redis = Redis.fromEnv();
 
 export async function GET(
-  req: NextRequest, 
-  context: { params: Promise<{ id: string }> }
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await context.params;
-  const jobId = resolvedParams.id;
-  
-  if (!jobId) {
-    return NextResponse.json({ error: "Missing job tracking ID." }, { status: 400 });
+  const { id } = await params;
+
+  if (!id) {
+    return NextResponse.json({ error: "Missing tracking execution parameter." }, { status: 400 });
   }
 
   try {
-    const cachedJob = await redis.get(jobId);
+    // FIXED: Use native REST engine lookups
+    const cachedJob = await redisREST.get(id);
+    
     if (!cachedJob) {
-      return NextResponse.json({ error: "Job context expired or not found." }, { status: 404 });
+      return NextResponse.json({
+        status: "NOT_FOUND",
+        progress: 0,
+        message: "The requested batch tracking array has expired or does not exist."
+      }, { status: 404 });
     }
 
-    // PURE EXECUTION READ: Return state records straight to the frontend dashboard
     const jobData = typeof cachedJob === "string" ? JSON.parse(cachedJob) : cachedJob;
     return NextResponse.json(jobData, { status: 200 });
 
   } catch (err: any) {
-    console.error(`[STATUS_READ_FAULT]: ${err.message}`);
-    return NextResponse.json({ error: "Failed to read runtime status." }, { status: 500 });
+    console.error(`[STATUS_POLL_CRASH]: ${err.message}`);
+    return NextResponse.json({ error: "Internal lookup breakdown." }, { status: 500 });
   }
 }
