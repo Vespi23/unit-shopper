@@ -238,8 +238,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 name="searchQuery"
                                 type="text"
 
-                                defaultValue={submittedQuery}
-                                onChange={(e) => setSubmittedQuery(e.target.value)}
+                                key = {initialQueryState}
+                                defaultValue={initialQueryState}
                                 
                                 placeholder="Search products (e.g. Toilet Paper)..."
                                 className="flex-1 bg-transparent border-none outline-none text-xl h-12 ring-0 focus:ring-0"
