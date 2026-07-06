@@ -110,6 +110,10 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         if (newQuery) params.set('q', newQuery); else params.delete('q');
         if (selectedUnit) params.set('u', selectedUnit);
 
+        // FIXED: Detect if user is on a search sub-route or the root domain
+        const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+        const targetPath = currentPath.startsWith('/search/') ? currentPath : '/';
+
         router.push(`/?${params.toString()}`, { scroll: false });
         setSubmittedQuery(newQuery);
     };
@@ -119,7 +123,11 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         setSelectedUnit(canonical);
         const params = new URLSearchParams(searchParams.toString());
         if (canonical && canonical !== 'unknown') params.set('u', canonical); else params.delete('u');
-        router.push(`/?${params.toString()}`, { scroll: false });
+
+        // FIXED: Use dynamic path detection to preserve your pSEO URL route structure
+        const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+
+        router.push(`${currentPath}?${params.toString()}`, { scroll: false });
     };
 
     useEffect(() => {
