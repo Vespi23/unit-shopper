@@ -296,7 +296,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 {!loading && searched && results.length > 0 && (
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full mb-6 animate-in fade-in slide-in-from-top-2">
                         <div className="text-sm text-muted-foreground">
-                            Found {results.length} results for <span className="text-foreground font-semibold">"{submittedQuery}"</span>
+                            {/* FIXED: Prioritize submittedQuery, but fall back to initialQueryState to prevent empty quotes on load */}
+                            Found {results.length} results for <span className="text-foreground font-semibold">"{submittedQuery || initialQueryState}"</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-4">
                             <div className="flex items-center gap-3">
