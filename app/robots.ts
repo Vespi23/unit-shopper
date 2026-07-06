@@ -6,19 +6,22 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: ['/'],
-        // FIXED: Arranged as clean, type-compliant string arrays to prevent compilation blocks
+        allow: [
+          '/', 
+          '/ledger',          
+          '/api/og'           
+        ],
         disallow: [
           '/*ref=sharesavings',
           '/*q=*&ref=*',
-          '/*?*',             // Restricts crawled parameter variations from polluting indices
-          '/api/',            // Shields data routers
-          '/admin/',          // Restricts engine visibility on workspace portals
-          '/*_next/static/*', // Blocks redundant file parsing loops
+          '/*?*',             // Restricts crawled tracking/parameter variations from polluting indices
+          '/api/',            // Shields data routers and serverless API sub-folders
+          '/admin/',          // Restricts engine visibility on administrative portals
+          '/*_next/static/*', // Blocks redundant static framework asset loops
         ],
       },
     ],
-    // FIXED: Shifted canonical endpoint to native file structure to prevent indexing loops
+    // Points directly to the automatically generated native canonical endpoint
     sitemap: 'https://budgetlynx.com/sitemap.xml',
   };
 }
