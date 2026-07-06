@@ -46,7 +46,16 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const { slug } = await props.params;
   const post = await getPost(slug);
   
-  if (!post) return { title: 'Entry Not Found - BudgetLynx' };
+  // SHIELD LAYER FIXED: Removed invalid 'doFollow' property to resolve ts(2561)
+  if (!post) {
+    return {
+      title: 'Not Found',
+      robots: { 
+        index: false, 
+        follow: false 
+      }
+    };
+  }
   
   const seoDescription = post.excerpt 
     ? `${post.excerpt.substring(0, 155).trim()}...`
@@ -88,7 +97,11 @@ export default async function PostPage(props: Props) {
   const { slug } = await props.params;
   const post = await getPost(slug);
 
-  if (!post) return notFound();
+  // CRITICAL PROTECTION FOR SOFT 404s:
+  // Terminates request lifecycle immediately with an explicit HTTP 404 response if post is empty.
+  if (!post) {
+    notFound();
+  }
 
   const embedVideoUrl = formatYouTubeEmbed(post.videoUrl);
   const postDate = post.publishedAt ? new Date(post.publishedAt) : new Date(post._createdAt);
