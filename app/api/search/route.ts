@@ -4,34 +4,6 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60; 
 
-/**
- * Normalizes and extracts numeric rating scores safely.
- */
-function parseRating(ratingInput: string | number | undefined | null): number {
-    if (!ratingInput) return 0;
-    if (typeof ratingInput === 'number') return ratingInput;
-    const matches = ratingInput.match(/([0-9.]+)/);
-    if (matches && matches[1]) {
-        const val = parseFloat(matches[1]);
-        return isNaN(val) ? 0 : val;
-    }
-    return 0;
-}
-
-/**
- * Normalizes and extracts numeric review totals safely.
- */
-function parseReviewsCount(reviewsInput: string | number | undefined | null): number {
-    if (!reviewsInput) return 0;
-    if (typeof reviewsInput === 'number') return reviewsInput;
-    const normalized = reviewsInput.replace(/,/g, '').match(/\d+/);
-    if (normalized) {
-        const val = parseInt(normalized[0], 10);
-        return isNaN(val) ? 0 : val;
-    }
-    return 0;
-}
-
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     
@@ -47,7 +19,6 @@ export async function GET(request: Request) {
 
     let rawResults: any[] = [];
     let errorContext = "";
-    let isFallbackTriggered = false;
 
     // CHANNEL 1: Dynamic Search Fetch Execution
     try {
@@ -59,7 +30,6 @@ export async function GET(request: Request) {
         }
     } catch (primaryError: any) {
         errorContext += `[Search Client Fault: ${primaryError.message}] `;
-        isFallbackTriggered = true;
         
         // CHANNEL 2: Public Scraper Fallback
         try {
@@ -78,17 +48,12 @@ export async function GET(request: Request) {
             
             if (fallbackRes.ok) {
                 const json = await fallbackRes.json();
+                // Simple inline HTML cheerio parsing would happen here if needed, or extract raw fields
                 const html = json.results?.[0]?.content || json.content || "";
                 if (html) {
+                    // Quick regex match fallback to extract raw metrics if cheerio is blocked
                     const matchAsins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)].map(m => m[1]);
-                    rawResults = Array.from(new Set(matchAsins)).map(asin => ({ 
-                        id: asin, 
-                        sku: asin, 
-                        price: 1.0, 
-                        title: query,
-                        rating: undefined,      // Undefined in fallback channel regex
-                        reviews_count: undefined // Undefined in fallback channel regex
-                    }));
+                    rawResults = Array.from(new Set(matchAsins)).map(asin => ({ id: asin, sku: asin, price: 1.0, title: query }));
                 }
             }
         } catch (fallbackError: any) {
@@ -103,23 +68,12 @@ export async function GET(request: Request) {
 
     // LAYER 3: DYNAMICALLY ISOLATED UNIT TRANSLATION ENGINE
     try {
+        // FIXED: Wrap parsing modules dynamically to catch the ERR_INVALID_URL global crash safely
         const parserModule = await import('@/lib/unit-parser');
         const targetUnit = parserModule.toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
 
         const processedResults = rawResults.map(p => {
             if (!p) return null;
-
-            // Extract numeric metrics safely
-            const numRating = parseRating(p.rating);
-            const numReviews = parseReviewsCount(p.reviews_count);
-
-            // FORCE-THROUGH WORKAROUND: Apply the strict quality criteria filters.
-            // If the fallback scraper is active, skip filters to protect against a completely empty UI.
-            if (!isFallbackTriggered) {
-                if (numRating < 4.0 || numReviews < 100) {
-                    return null; 
-                }
-            }
             
             const currentUnit = parserModule.toCanonicalUnit(p.unit || p.unit_type || '');
             const currentAmount = parseFloat(p.totalAmount || p.amount || p.size || p.volume || 0);
@@ -139,8 +93,6 @@ export async function GET(request: Request) {
             return {
                 ...p,
                 price: unitPrice,
-                rating: numRating,
-                reviews_count: numReviews,
                 unitInfo: {
                     value: finalAmount, 
                     unit: finalUnit,
@@ -154,8 +106,10 @@ export async function GET(request: Request) {
 
         return NextResponse.json(processedResults);
     } catch (parsingError: any) {
+        // FIXED: Safety catch block shields user from unit-parser configuration runtime exceptions
         console.error(`[ISOLATED_UNIT_PARSER_CRASH_RECOVERY]: Intercepted global unit-parser module failure: ${parsingError.message}`);
         
+        // Return raw products directly without unit calculations rather than throwing a hard 500 error
         const structuralFallback = rawResults.map(p => ({
             ...p,
             unitInfo: { value: 0, unit: "unknown", quantity: 1, totalValue: 0, formatted: "Pending Calibration" },
