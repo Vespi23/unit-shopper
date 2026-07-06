@@ -2,17 +2,17 @@
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import { client } from '@/sanity/lib/client';
+import { SearchPage } from '@/components/SearchPage';
 
 interface SearchPageProps {
   params: Promise<{ keyword: string }>;
 }
 
-// Cache the compiled HTML footprint at the edge for 24 hours
-export const revalidate = 86400; 
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: SearchPageProps): Promise<Metadata> {
   const { keyword } = await params;
-  const decodedKeyword = decodeURIComponent(keyword);
+  const decodedKeyword = decodeURIComponent(keyword).replace(/-/g, ' ');
 
   return {
     title: `Best Lowest Price Per Unit ${decodedKeyword} | BudgetLynx`,
@@ -25,37 +25,46 @@ export async function generateMetadata({ params }: SearchPageProps): Promise<Met
 
 export default async function ProgrammaticSearchPage({ params }: SearchPageProps) {
   const { keyword } = await params;
-  const decodedKeyword = decodeURIComponent(keyword);
   
-  // Pull pre-filtered dataset directly from your database
+  // 1. Verify that this slug belongs to a real ingested pSEO keyword asset row
   const queryData = await client.fetch(
-    `*[_type == "productQuery" && keywordSlug == $keyword][0] {
-      keywordValue,
-      products[] {
+    `*[_type in ["productQuery", "pSeoKeyword"] && (keywordSlug == $keyword || slug.current == $keyword)][0] {
+      "keywordValue": coalesce(keywordValue, slug.current)
+    }`,
+    { keyword }
+  );
+
+  // Hard fail to 404 only if the keyword hasn't been created by your scraper tool
+  if (!queryData || !queryData.keywordValue) {
+    notFound();
+  }
+
+  // 2. Fetch all products matching this keyword phrase to pre-populate the page server-side
+  const cleanSearchTerm = queryData.keywordValue.trim();
+  let preHydratedProducts = [];
+  
+  try {
+    preHydratedProducts = await client.fetch(
+      `*[_type == "product" && (title match $searchQuery || description match $searchQuery)][0...40] {
         id,
         title,
         price,
         unitInfo,
-        pricePerUnit
-      }
-    }`, 
-    { keyword }
-  );
-
-  // If the query configuration doesn't exist or holds no records, 
-  // immediately throw a hard 404 header to prevent Search Console soft 404 traps.
-  if (!queryData || !queryData.products || queryData.products.length === 0) {
-    notFound(); 
+        pricePerUnit,
+        image,
+        stars,
+        reviews
+      }`,
+      { searchQuery: `*${cleanSearchTerm}*` }
+    );
+  } catch (error) {
+    console.error('[PSEO_LIVE_PROD_FETCH_ERROR]:', error);
   }
 
+  // 3. Render your full-featured SearchPage component pre-populated with your data
   return (
-    <main className="min-h-screen bg-zinc-950 p-8 text-zinc-100">
-      <h1 className="text-2xl font-black font-mono text-rose-500 uppercase tracking-tight">
-        // SEARCH OPTIMIZATION PATH: {queryData.keywordValue}
-      </h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-        {/* Render your pre-filtered high-quality item card collection here */}
-      </div>
-    </main>
+    <div className="w-full pt-6 bg-background min-h-screen">
+      <SearchPage initialResults={preHydratedProducts} />
+    </div>
   );
 }
