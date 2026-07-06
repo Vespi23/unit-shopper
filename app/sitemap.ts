@@ -2,7 +2,6 @@
 import { MetadataRoute } from 'next';
 import { createClient } from '@sanity/client';
 
-// FIXED: Aligned project ID and dataset target to your true production space
 const targetClient = createClient({
   projectId: '7st9no77', 
   dataset: 'production', 
@@ -13,6 +12,7 @@ const targetClient = createClient({
 const SITEMAP_MAX_SIZE = 50000;
 
 export async function generateSitemaps() {
+  // Keeps shard generation logic active. Covers up to 100,000 total elements
   return [{ id: 0 }, { id: 1 }];
 }
 
@@ -44,13 +44,13 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
 
     const skipValue = id * SITEMAP_MAX_SIZE;
     
-    // Pulling verified keywords directly from your live production dataset
+    // FIXED: Adjusted slice parameters from ($skip...$max) to standard bounds ($skip...$skip + $limit)
     const productQueries = await targetClient.fetch(
-      `*[_type in ["productQuery", "pSeoKeyword"]] | order(_createdAt desc) [$skip...$max] {
+      `*[_type in ["productQuery", "pSeoKeyword"]] | order(_createdAt desc) [$skip...$skip + $limit] {
         "slug": coalesce(keywordSlug, slug.current, keywordValue),
         _updatedAt
       }`,
-      { skip: skipValue, max: skipValue + SITEMAP_MAX_SIZE }
+      { skip: skipValue, limit: SITEMAP_MAX_SIZE }
     );
 
     let pSEORoutes: MetadataRoute.Sitemap = [];
@@ -59,9 +59,16 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
         .filter((item: any) => item && item.slug)
         .map((item: any) => {
           const targetSlug = typeof item.slug === 'string' ? item.slug : item.slug.current || '';
-          if (!targetSlug.trim()) return null;
+          const trimmedSlug = targetSlug.trim().toLowerCase();
+          if (!trimmedSlug) return null;
+
+          // SAFE PATH MODEL: Use clean slugs as-is; only encode if spaces are left
+          const finalSlugPath = trimmedSlug.includes(' ') 
+            ? encodeURIComponent(trimmedSlug).replace(/%20/g, '-') 
+            : trimmedSlug;
+
           return {
-            url: `${baseUrl}/search/${encodeURIComponent(targetSlug.trim().toLowerCase())}`,
+            url: `${baseUrl}/search/${finalSlugPath}`,
             lastModified: new Date(item._updatedAt || Date.now()),
             changeFrequency: 'monthly' as const,
             priority: 0.6,
