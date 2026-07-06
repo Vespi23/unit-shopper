@@ -2,6 +2,8 @@
 import { MetadataRoute } from 'next';
 import { createClient } from '@sanity/client';
 
+export const dynamic = 'force-dynamic';
+
 const targetClient = createClient({
   projectId: '7st9no77', 
   dataset: 'production', 
@@ -12,14 +14,23 @@ const targetClient = createClient({
 const SITEMAP_MAX_SIZE = 50000;
 
 export async function generateSitemaps() {
-  // Keeps shard generation logic active. Covers up to 100,000 total elements
+  // Returns shard ids mapping cleanly to the system sitemap splitter
   return [{ id: 0 }, { id: 1 }];
 }
 
-export default async function sitemap({ id }: { id: number }): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://budgetlynx.com';
+interface SitemapProps {
+  id: number | string | Promise<string | number>;
+}
 
-  const staticRoutes: MetadataRoute.Sitemap = id === 0 ? [
+export default async function sitemap(props: { id: any }): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = 'https://budgetlynx.com';
+  
+  // FIXED: Resolve the Next.js runtime parameter promise safely and parse as an integer base-10 number
+  const resolvedParams = await props;
+  const rawId = typeof resolvedParams === 'object' && resolvedParams !== null ? resolvedParams.id : resolvedParams;
+  const shardId = parseInt(String(rawId || '0'), 10) || 0;
+
+  const staticRoutes: MetadataRoute.Sitemap = shardId === 0 ? [
     { url: baseUrl, lastModified: new Date(), priority: 1.0 },
     { url: `${baseUrl}/ledger`, lastModified: new Date(), priority: 0.8 },
     { url: `${baseUrl}/procure`, lastModified: new Date(), priority: 0.8 },
@@ -30,7 +41,7 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
 
   try {
     let blogRoutes: MetadataRoute.Sitemap = [];
-    if (id === 0) {
+    if (shardId === 0) {
       const posts = await targetClient.fetch(`*[_type == "post" && defined(slug.current)] { "slug": slug.current, _updatedAt }`);
       if (Array.isArray(posts)) {
         blogRoutes = posts.map((post: any) => ({
@@ -42,9 +53,10 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       }
     }
 
-    const skipValue = id * SITEMAP_MAX_SIZE;
+    // Math operation executes safely against an absolute number variable
+    const skipValue = shardId * SITEMAP_MAX_SIZE;
     
-    // FIXED: Adjusted slice parameters from ($skip...$max) to standard bounds ($skip...$skip + $limit)
+    // Fetch data using optimized sliding limits
     const productQueries = await targetClient.fetch(
       `*[_type in ["productQuery", "pSeoKeyword"]] | order(_createdAt desc) [$skip...$skip + $limit] {
         "slug": coalesce(keywordSlug, slug.current, keywordValue),
@@ -62,7 +74,6 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
           const trimmedSlug = targetSlug.trim().toLowerCase();
           if (!trimmedSlug) return null;
 
-          // SAFE PATH MODEL: Use clean slugs as-is; only encode if spaces are left
           const finalSlugPath = trimmedSlug.includes(' ') 
             ? encodeURIComponent(trimmedSlug).replace(/%20/g, '-') 
             : trimmedSlug;
@@ -79,7 +90,7 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
 
     return [...staticRoutes, ...blogRoutes, ...pSEORoutes];
   } catch (error) {
-    console.error(`[SITEMAP_SHARD_ERROR]: Execution failure on index ${id}`, error);
+    console.error(`[SITEMAP_SHARD_ERROR]: Execution failure on index ${shardId}`, error);
     return staticRoutes;
   }
 }
