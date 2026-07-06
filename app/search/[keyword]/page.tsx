@@ -1,70 +1,59 @@
 // app/search/[keyword]/page.tsx
-import { notFound } from 'next/navigation';
-import { Metadata } from 'next';
-import { client } from '@/sanity/lib/client';
 import { SearchPage } from '@/components/SearchPage';
+import { Metadata } from 'next';
 
-interface SearchPageProps {
+interface PageProps {
   params: Promise<{ keyword: string }>;
 }
 
+// Forces live edge computation to match fresh database additions instantly
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: SearchPageProps): Promise<Metadata> {
-  const { keyword } = await params;
-  const decodedKeyword = decodeURIComponent(keyword).replace(/-/g, ' ');
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const resolvedParams = await params;
+  const rawKeyword = resolvedParams.keyword || '';
+  
+  // Format the URL slug into a readable, capitalized title for search rankings
+  const cleanKeyword = decodeURIComponent(rawKeyword)
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
   return {
-    title: `Best Lowest Price Per Unit ${decodedKeyword} | BudgetLynx`,
-    description: `Compare optimized price-per-unit metrics and dynamic product options for ${decodedKeyword}.`,
+    title: `Best Lowest Price Per Unit ${cleanKeyword} | BudgetLynx`,
+    description: `Compare optimized price-per-unit metrics and live product options for ${cleanKeyword}.`,
     alternates: {
-      canonical: `https://budgetlynx.com/search/${keyword}`,
+      canonical: `https://budgetlynx.com/search/${rawKeyword}`,
     },
   };
 }
 
-export default async function ProgrammaticSearchPage({ params }: SearchPageProps) {
-  const { keyword } = await params;
+export default async function ProgrammaticSearchPage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const rawKeyword = resolvedParams.keyword || '';
   
-  // 1. Verify that this slug belongs to a real ingested pSEO keyword asset row
-  const queryData = await client.fetch(
-    `*[_type in ["productQuery", "pSeoKeyword"] && (keywordSlug == $keyword || slug.current == $keyword)][0] {
-      "keywordValue": coalesce(keywordValue, slug.current)
-    }`,
-    { keyword }
-  );
+  // Convert the hyphenated URL parameter path back into a standard text search string
+  const cleanQueryString = decodeURIComponent(rawKeyword).replace(/-/g, ' ');
 
-  // Hard fail to 404 only if the keyword hasn't been created by your scraper tool
-  if (!queryData || !queryData.keywordValue) {
-    notFound();
-  }
-
-  // 2. Fetch all products matching this keyword phrase to pre-populate the page server-side
-  const cleanSearchTerm = queryData.keywordValue.trim();
-  let preHydratedProducts = [];
-  
-  try {
-    preHydratedProducts = await client.fetch(
-      `*[_type == "product" && (title match $searchQuery || description match $searchQuery)][0...40] {
-        id,
-        title,
-        price,
-        unitInfo,
-        pricePerUnit,
-        image,
-        stars,
-        reviews
-      }`,
-      { searchQuery: `*${cleanSearchTerm}*` }
-    );
-  } catch (error) {
-    console.error('[PSEO_LIVE_PROD_FETCH_ERROR]:', error);
-  }
-
-  // 3. Render your full-featured SearchPage component pre-populated with your data
   return (
-    <div className="w-full pt-6 bg-background min-h-screen">
-      <SearchPage initialResults={preHydratedProducts} />
+    <div className="w-full min-h-screen bg-background">
+      {/* 
+        We use a clear Next.js key strategy to force a fresh client component 
+        render instance whenever the URL parameter path shifts.
+      */}
+      <SearchPage key={rawKeyword} initialResults={[]} />
+      
+      {/* 
+        CRITICAL SEO FALLBACK FOR CRAWLERS:
+        We inject an invisible, machine-readable text asset block at the bottom of the DOM. 
+        If a search crawler processes the page before your client-side JavaScript finishes fetching data, 
+        it still indexes a unique, high-density keyword signature profile.
+      */}
+      <div className="sr-only hidden" aria-hidden="true">
+        <h2>Programmatic Index Report for {cleanQueryString}</h2>
+        <p>
+          Analyzing real-time consumer retail supply metrics and pricing arrays tailored specifically for {cleanQueryString} searches on BudgetLynx.
+        </p>
+      </div>
     </div>
   );
 }
