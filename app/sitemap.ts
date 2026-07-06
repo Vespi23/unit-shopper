@@ -2,9 +2,10 @@
 import { MetadataRoute } from 'next';
 import { createClient } from '@sanity/client';
 
+// FIXED: Aligned project ID and dataset target to your true production space
 const targetClient = createClient({
-  projectId: '3g5m7g46', 
-  dataset: 'development', 
+  projectId: '7st9no77', 
+  dataset: 'production', 
   apiVersion: '2024-01-01',
   useCdn: false,
 });
@@ -18,7 +19,6 @@ export async function generateSitemaps() {
 export default async function sitemap({ id }: { id: number }): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://budgetlynx.com';
 
-  // Core baseline routes are loaded exclusively into Shard 0
   const staticRoutes: MetadataRoute.Sitemap = id === 0 ? [
     { url: baseUrl, lastModified: new Date(), priority: 1.0 },
     { url: `${baseUrl}/ledger`, lastModified: new Date(), priority: 0.8 },
@@ -44,7 +44,7 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
 
     const skipValue = id * SITEMAP_MAX_SIZE;
     
-    // Scans your development workspace dataset for live keyword documents
+    // Pulling verified keywords directly from your live production dataset
     const productQueries = await targetClient.fetch(
       `*[_type in ["productQuery", "pSeoKeyword"]] | order(_createdAt desc) [$skip...$max] {
         "slug": coalesce(keywordSlug, slug.current, keywordValue),
@@ -70,7 +70,6 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
         .filter(Boolean) as MetadataRoute.Sitemap;
     }
 
-    // Combined layout stream returns core pages even if pSEO collections are currently zero-length
     return [...staticRoutes, ...blogRoutes, ...pSEORoutes];
   } catch (error) {
     console.error(`[SITEMAP_SHARD_ERROR]: Execution failure on index ${id}`, error);
