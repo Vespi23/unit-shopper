@@ -6,24 +6,28 @@ interface PageProps {
   params: Promise<{ keyword: string }>;
 }
 
-// Forces live edge computation to match fresh database additions instantly
 export const dynamic = 'force-dynamic';
+
+// Array of exact modifier phrase patterns used in your ingestion script
+const modifiersToStrip = [
+  "price per pound", "cost per ounce", "bulk wholesale price", "best price per unit",
+  "lowest price per count", "value pack pricing", "price breakdown", "cost comparison",
+  "wholesale per ounce", "bulk buy metrics", "amazon price per count", "unit value matrix",
+  "cheapest per lb", "case price analysis", "size cost efficiency", "pack distribution value",
+  "per item baseline", "economical bulk size", "smart shopper cost", "volume discount tier",
+  "price verification", "retail unit index", "net weight cost", "oz cost optimization",
+  "fluid ounce breakdown", "for bulk", "pack of", "bulk"
+];
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const rawKeyword = resolvedParams.keyword || '';
-  
-  // Format the URL slug into a readable, capitalized title for search rankings
-  const cleanKeyword = decodeURIComponent(rawKeyword)
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const cleanKeyword = decodeURIComponent(rawKeyword).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   return {
     title: `Best Lowest Price Per Unit ${cleanKeyword} | BudgetLynx`,
-    description: `Compare optimized price-per-unit metrics and live product options for ${cleanKeyword}.`,
-    alternates: {
-      canonical: `https://budgetlynx.com/search/${rawKeyword}`,
-    },
+    description: `Compare optimized price-per-unit metrics and live product choices for ${cleanKeyword}.`,
+    alternates: { canonical: `https://budgetlynx.com/search/${rawKeyword}` },
   };
 }
 
@@ -31,28 +35,32 @@ export default async function ProgrammaticSearchPage({ params }: PageProps) {
   const resolvedParams = await params;
   const rawKeyword = resolvedParams.keyword || '';
   
-  // Convert the hyphenated URL parameter path back into a standard text search string
-  const cleanQueryString = decodeURIComponent(rawKeyword).replace(/-/g, ' ');
+  // Convert slug to standard space-separated phrase text string
+  const fullSEOPhrase = decodeURIComponent(rawKeyword).replace(/-/g, ' ').toLowerCase();
+
+  // Clean the text by filtering out your target search modifiers
+  let cleanSearchQuery = fullSEOPhrase;
+  for (const modifier of modifiersToStrip) {
+    const regex = new RegExp(`\\b${modifier}\\b`, 'gi');
+    cleanSearchQuery = cleanSearchQuery.replace(regex, '');
+  }
+
+  // Clean up any remaining extra white spaces or hanging numeric patterns
+  cleanSearchQuery = cleanSearchQuery.replace(/\b\d+\b/g, '').replace(/\s+/g, ' ').trim();
+
+  // Fallback safety gate: if the string is empty, preserve the original phrase
+  if (!cleanSearchQuery) {
+    cleanSearchQuery = fullSEOPhrase;
+  }
 
   return (
     <div className="w-full min-h-screen bg-background">
-      {/* 
-        We use a clear Next.js key strategy to force a fresh client component 
-        render instance whenever the URL parameter path shifts.
-      */}
-      <SearchPage key={rawKeyword} initialResults={[]} />
+      {/* Pass the stripped query string directly to your component interface */}
+      <SearchPage key={rawKeyword} initialQuery={cleanSearchQuery} initialResults={[]} />
       
-      {/* 
-        CRITICAL SEO FALLBACK FOR CRAWLERS:
-        We inject an invisible, machine-readable text asset block at the bottom of the DOM. 
-        If a search crawler processes the page before your client-side JavaScript finishes fetching data, 
-        it still indexes a unique, high-density keyword signature profile.
-      */}
       <div className="sr-only hidden" aria-hidden="true">
-        <h2>Programmatic Index Report for {cleanQueryString}</h2>
-        <p>
-          Analyzing real-time consumer retail supply metrics and pricing arrays tailored specifically for {cleanQueryString} searches on BudgetLynx.
-        </p>
+        <h2>Programmatic Optimization Index for {fullSEOPhrase}</h2>
+        <p>Evaluating consumer retail pricing metrics for {cleanSearchQuery}.</p>
       </div>
     </div>
   );

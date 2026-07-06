@@ -20,6 +20,7 @@ import { generateProductSchema } from '@/lib/schema';
 
 interface SearchPageProps {
     initialResults?: Product[];
+    initialQuery?: string; // Add this specific row definition line
 }
 
 const ITEMS_PER_PAGE = 40;
@@ -60,21 +61,26 @@ function LedgerPromo() {
     );
 }
 
-export function SearchPage({ initialResults = [] }: SearchPageProps) {
+export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const initialQuery = searchParams.get('q') || '';
+    // RENAME: Changed local variable to avoid duplicate identifier conflicts
+    const urlQueryParam = searchParams.get('q') || '';
     const initialUnit = toCanonicalUnit(searchParams.get('u') || '');
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
     const inputRef = useRef<HTMLInputElement>(null);
-    const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
+    
+    // Fallback hierarchy structure: URL state -> Server-side pSEO keyword -> Empty fallback
+    const initialQueryState = urlQueryParam || initialQuery || '';
+    const [submittedQuery, setSubmittedQuery] = useState(initialQueryState);
+    
     const [results, setResults] = useState<Product[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
     const [selectedUnit, setSelectedUnit] = useState<string>(initialUnit);
     const [loading, setLoading] = useState(false);
-    const [searched, setSearched] = useState(!!initialQuery);
+    const [searched, setSearched] = useState(!!initialQueryState);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
