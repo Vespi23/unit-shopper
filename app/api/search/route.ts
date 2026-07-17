@@ -22,29 +22,37 @@ export async function GET(request: Request) {
     let errorContext = "";
 
     try {
+        // FIXED: Reverting to Decodo's single unified web scraping endpoint
+        const decodoUrl = "https://scraper-api.decodo.com/v2/scrape";
         const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
 
-        // Target explicit search routing endpoints natively exposed by the provider layout
         const targetPayloads = [
             {
                 source: 'amazon',
-                url: "https://scraper-api.decodo.com/v1/tasks/amazon-search",
-                body: { query: query }
+                body: {
+                    target: "amazon_search",
+                    query: query,
+                    proxy_pool: "premium",
+                    output_format: "json"
+                }
             },
             {
                 source: 'walmart',
-                url: "https://scraper-api.decodo.com/v1/tasks/walmart-search",
-                body: { query: query }
+                body: {
+                    target: "walmart_search",
+                    query: query,
+                    proxy_pool: "premium",
+                    output_format: "json"
+                }
             }
         ];
 
         for (const target of targetPayloads) {
             try {
-                const res = await fetch(target.url, {
+                const res = await fetch(decodoUrl, {
                     method: "POST",
                     headers: {
-                        "X-API-Key": decodoToken,
-                        "Authorization": `Bearer ${decodoToken}`, // Redundant coverage block to satisfy alternative gateway maps
+                        "Authorization": `Bearer ${decodoToken}`,
                         "Accept": "application/json",
                         "Content-Type": "application/json"
                     },
@@ -58,8 +66,10 @@ export async function GET(request: Request) {
 
                 const data = await res.json();
                 
-                // Pull structured items from the primary response body fields
-                const items = data.products || data.search_results || data.results || [];
+                // Extract structured item content blocks safely from Decodo's JSON response format
+                const dataBlock = data.results?.[0]?.content || data.parsing_results || data;
+                const items = dataBlock.products || dataBlock.search_results || dataBlock.results || [];
+                
                 if (!Array.isArray(items)) continue;
 
                 if (target.source === 'amazon') {
