@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     } catch (primaryError: any) {
         errorContext += `[Search Client Fault: ${primaryError.message}] `;
         
-        // CHANNEL 2: Public Scraper Fallback Engine (Concurrently Targeting Amazon & Walmart)
+        // CHANNEL 2: Public Scraper Fallback Engine (Leveraging Native eCommerce Parsing)
         try {
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
             const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
@@ -39,37 +39,32 @@ export async function GET(request: Request) {
             const targetPayloads = [
                 {
                     source: 'amazon',
-                    url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`
+                    body: {
+                        url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`,
+                        proxy_pool: "premium",
+                        headless: "html"
+                    }
                 },
                 {
                     source: 'walmart',
-                    url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`
+                    body: {
+                        url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`,
+                        proxy_pool: "premium",
+                        // Instruct Decodo to apply its specialized Walmart parser and return structured JSON
+                        target: "walmart_search", 
+                        locale: "en-us"
+                    }
                 }
             ];
 
             const scraperPromises = targetPayloads.map(async (target) => {
-                // Determine parameters based on target retailer requirements
-                const useFullBrowser = target.source === 'walmart';
-
                 const res = await fetch(decodoUrl, {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${decodoToken}`,
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({
-                        url: target.url,
-                        proxy_pool: "premium",
-                        // Force real Chromium emulation on Walmart to crack the PerimeterX edge firewall
-                        headless: useFullBrowser ? "true" : "html", 
-                        wait_until: useFullBrowser ? "networkidle0" : undefined,
-                        custom_headers: useFullBrowser ? {
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                            "Accept-Language": "en-US,en;q=0.9",
-                            "Cache-Control": "max-age=0"
-                        } : undefined
-                    })
+                    body: JSON.stringify(target.body)
                 });
                 
                 if (!res.ok) throw new Error(`HTTP Error Status ${res.status}`);
@@ -83,74 +78,51 @@ export async function GET(request: Request) {
             settledScrapes.forEach((outcome) => {
                 if (outcome.status === 'fulfilled') {
                     const { source, data } = outcome.value;
-                    const html = data.results?.[0]?.content || data.content || "";
                     
-                    if (!html) {
-                        console.warn(`[RISK WARNING] Null response content returned from source: ${source}`);
-                        return;
-                    }
-
                     if (source === 'amazon') {
+                        const html = data.results?.[0]?.content || data.content || "";
+                        if (!html) return;
                         const matchAsins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)].map(m => m[1]);
-                        const uniqueAsins = Array.from(new Set(matchAsins));
-                        uniqueAsins.forEach(asin => {
+                        Array.from(new Set(matchAsins)).forEach(asin => {
                             collectedItems.push({ 
                                 id: `amzn-${asin}`, 
                                 sku: asin, 
                                 price: 1.0, 
                                 title: `${query} (Amazon)`,
-                                retailer: 'amazon'
-                            });
-                        });
-                    } else if (source === 'walmart') {
-                        let matchWalmartIds: string[] = [];
-
-                        // DIAGNOSTIC CHECK: Trace if the firewall blocked the request
-                        if (html.includes("captcha") || html.includes("blocked") || html.includes("Access Denied") || html.includes("PerimeterX")) {
-                            console.error(`[RISK WARNING] Decodo target for Walmart was flagged and blocked by anti-bot firewall. Snippet: ${html.substring(0, 300)}`);
-                        }
-
-                        // Strategy A: Intercept the immutable Next.js SSR data payload matrix
-                        try {
-                            const jsonMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
-                            if (jsonMatch && jsonMatch[1]) {
-                                const parsedData = JSON.parse(jsonMatch[1]);
-                                const itemsArray = parsedData.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
-                                
-                                itemsArray.forEach((wmtItem: any) => {
-                                    if (wmtItem.usItemId) {
-                                        matchWalmartIds.push(String(wmtItem.usItemId));
-                                    } else if (wmtItem.id) {
-                                        matchWalmartIds.push(String(wmtItem.id));
-                                    }
-                                });
-                            }
-                        } catch (jsonErr) {
-                            // Suppress verbose JSON parsing logging in production
-                        }
-
-                        // Strategy B: Robust DOM Regex Attribute Fallback
-                        if (matchWalmartIds.length === 0) {
-                            const attrMatches = [...html.matchAll(/(?:data-item-id|itemId|product-id)="([0-9]+)"/g)].map(m => m[1]);
-                            matchWalmartIds.push(...attrMatches);
-                        }
-
-                        // Strategy C: Global product page link tracking fallback
-                        if (matchWalmartIds.length === 0) {
-                            const linkMatches = [...html.matchAll(/\/ip\/([^/]+)\/([0-9]+)/g)];
-                            linkMatches.forEach(m => { if (m[2]) matchWalmartIds.push(m[2]); });
-                        }
-                        
-                        const uniqueIds = Array.from(new Set(matchWalmartIds));
-                        uniqueIds.forEach(itemId => {
-                            collectedItems.push({ 
-                                id: `wmt-${itemId}`, 
-                                sku: itemId, 
-                                price: 1.0, 
-                                title: `${query} (Walmart)`,
-                                retailer: 'walmart',
+                                retailer: 'amazon',
                                 unit: 'unit',
                                 totalAmount: 1
+                            });
+                        });
+                    } 
+                    else if (source === 'walmart') {
+                        // Handle the clean, anti-bot-parsed JSON data structure returned by Decodo's target engine
+                        const resultsContainer = data.results?.[0]?.content || data.parsing_results || data;
+                        const items = resultsContainer.products || resultsContainer.search_results || [];
+                        
+                        if (items.length === 0 && data.content) {
+                            console.warn(`[RISK WARNING] Template falling back to explicit JSON state sweep on string block.`);
+                            const match = data.content.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
+                            if (match && match[1]) {
+                                try {
+                                    const parsed = JSON.parse(match[1]);
+                                    const extracted = parsed.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
+                                    extracted.forEach((i: any) => items.push({ title: i.title, id: i.usItemId || i.id, price: i.price }));
+                                } catch (_) {}
+                            }
+                        }
+
+                        items.forEach((item: any) => {
+                            const parsedId = item.id || item.usItemId || item.productId || Math.random().toString();
+                            const itemPrice = item.price?.current_price || item.price || 1.0;
+                            collectedItems.push({
+                                id: `wmt-${parsedId}`,
+                                sku: parsedId,
+                                price: parseFloat(String(itemPrice)),
+                                title: item.title || `${query} (Walmart)`,
+                                retailer: 'walmart',
+                                unit: item.unit_type || 'unit',
+                                totalAmount: parseFloat(item.amount || item.size || 1)
                             });
                         });
                     }
@@ -181,7 +153,7 @@ export async function GET(request: Request) {
             
             const currentUnit = parserModule.toCanonicalUnit(p.unit || p.unit_type || '');
             const currentAmount = parseFloat(p.totalAmount || p.amount || p.size || p.volume || 0);
-            const unitPrice = parseFloat(p.price || p.amazon_price || p.retail_price || p.price_amount || 0);
+            const unitPrice = parseFloat(p.price || 0);
             
             let finalAmount = currentAmount;
             let finalUnit = currentUnit;
