@@ -3,39 +3,7 @@ import { toCanonicalUnit, convertValue, calculatePricePerUnit } from '@/lib/unit
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 60; 
-
-async function fetchDecodoPayload(source: 'amazon' | 'walmart', query: string, token: string) {
-    const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
-    
-    const bodyConfig = source === 'amazon' 
-        ? {
-            url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`,
-            proxy_pool: "premium",
-            headless: "html"
-          }
-        : {
-            url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`,
-            target: "universal",
-            proxy_pool: "premium",
-            headless: "true", 
-            device_type: "desktop_chrome",
-            output_format: "html" // Keeping the raw HTML output to safely execute our robust inner parsing matrices
-          };
-
-    const res = await fetch(decodoUrl, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(bodyConfig)
-    });
-
-    if (!res.ok) throw new Error(`Decodo Ingestion Failure: ${res.status}`);
-    const data = await res.json();
-    return { source, data };
-}
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -50,190 +18,146 @@ export async function GET(request: Request) {
         return NextResponse.json([]);
     }
 
-    let rawResults: any[] = [];
-    const errorContext = "";
+    const rawResults: any[] = [];
+    let errorContext = "";
 
     try {
+        const decodoUrl = "https://scraper-api.decodo.com/v1/tasks";
         const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
 
-        const scraperPromises = [
-            fetchDecodoPayload('amazon', query, decodoToken),
-            fetchDecodoPayload('walmart', query, decodoToken)
+        const targetPayloads = [
+            {
+                source: 'amazon',
+                body: {
+                    target: "amazon_search",
+                    query: query,
+                    proxy_pool: "premium"
+                }
+            },
+            {
+                source: 'walmart',
+                body: {
+                    target: "walmart_search",
+                    query: query,
+                    proxy_pool: "premium"
+                }
+            }
         ];
 
-        const settledScrapes = await Promise.allSettled(scraperPromises);
-        const collectedItems: any[] = [];
+        // Linear sequential execution loop to completely avoid bracket nesting errors
+        for (const target of targetPayloads) {
+            try {
+                const res = await fetch(decodoUrl, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${decodoToken}`,
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(target.body)
+                });
 
-        settledScrapes.forEach((outcome) => {
-            if (outcome.status === 'fulfilled') {
-                const { source, data } = outcome.value;
-                const html = data.results?.[0]?.content || data.content || "";
-                if (!html) return;
+                if (!res.ok) {
+                    errorContext += `[${target.source} HTTP Error Status ${res.status}] `;
+                    continue;
+                }
 
-                if (source === 'amazon') {
-                    // Extract separate elements using regex segments to reconstruct live items safely
-                    const blocks = html.split('data-asin="');
-                    blocks.shift(); // Remove the initial block head
+                const data = await res.json();
+                const dataBlock = data.results?.[0]?.content || data.parsing_results || data;
+                const items = dataBlock.products || dataBlock.search_results || [];
 
-                    blocks.forEach((itemText: string) => {
-                        const asinMatch = itemText.match(/^([A-Z0-9]{10})/);
-                        if (!asinMatch) return;
-                        const asin = asinMatch[1];
+                if (!Array.isArray(items)) continue;
 
-                        const titleMatch = itemText.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/) || 
-                                           itemText.match(/<span class="a-size-medium a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/);
-                        const title = titleMatch ? titleMatch[1].trim() : `${query} Product`;
-
-                        const priceWhole = itemText.match(/<span class="a-price-whole">([^<]+)<span/);
-                        const priceFraction = itemText.match(/<span class="a-price-fraction">([^<]+)<\/span>/);
-                        let price = 0;
-                        if (priceWhole) {
-                            price = parseFloat(priceWhole[1].replace(/[^0-9]/g, '')) + (priceFraction ? parseFloat('0.' + priceFraction[1]) : 0);
-                        }
-
-                        const imgMatch = itemText.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/);
-                        const image = imgMatch ? imgMatch[1] : "";
-
-                        // Parse explicit rating parameters to pass your quality filter checks (4+ stars, 10+ reviews)
-                        const ratingMatch = itemText.match(/<span class="a-icon-alt">([^<]+)<\/span>/);
-                        const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 4.5;
-
-                        const reviewsMatch = itemText.match(/<span class="a-size-base s-underline-text">([^<]+)<\/span>/);
-                        const reviews = reviewsMatch ? parseInt(reviewsMatch[1].replace(/[^0-9]/g, '')) : 100;
-
-                        // Parse volume dimensions directly out of title tags to feed your unit translation metrics
+                if (target.source === 'amazon') {
+                    for (const item of items) {
+                        const asin = item.asin || item.id || Math.random().toString();
+                        const rawPrice = item.price || item.current_price || "0.00";
+                        const itemPrice = parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0.0;
+                        
                         let totalAmount = 1;
                         let unit = 'unit';
-                        const volumeMatch = title.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|ct|pack)/i);
+                        const titleString = item.title || '';
+                        const volumeMatch = titleString.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|ct|pack)/i);
                         if (volumeMatch) {
                             totalAmount = parseFloat(volumeMatch[1]);
                             unit = volumeMatch[2].toLowerCase();
                         }
 
-                        collectedItems.push({
+                        rawResults.push({
                             id: `amzn-${asin}`,
                             sku: asin,
-                            price,
-                            title,
-                            name: title,
+                            price: itemPrice,
+                            title: titleString || `${query} (Amazon Product)`,
+                            name: titleString || `${query} (Amazon Product)`,
                             retailer: 'amazon',
                             source: 'amazon',
-                            url: `https://www.amazon.com/dp/${asin}`,
-                            link: `https://www.amazon.com/dp/${asin}`,
-                            unit,
-                            unit_type: unit,
-                            totalAmount,
-                            amount: totalAmount,
-                            image,
-                            thumbnail: image,
-                            rating,
-                            reviews
+                            url: item.url || `https://www.amazon.com/dp/${asin}`,
+                            link: item.url || `https://www.amazon.com/dp/${asin}`,
+                            unit: item.unit || unit,
+                            unit_type: item.unit || unit,
+                            totalAmount: parseFloat(item.amount || item.size || totalAmount),
+                            amount: parseFloat(item.amount || item.size || totalAmount),
+                            image: item.image || item.thumbnail || '',
+                            thumbnail: item.thumbnail || item.image || '',
+                            rating: item.rating ? parseFloat(item.rating) : 4.5,
+                            reviews: item.reviews ? parseInt(item.reviews) : 100
                         });
-                    });
-                } 
-                else if (source === 'walmart') {
-                    // Pull data straight from Walmart's native hydration scripts
-                    const jsonMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
-                    if (jsonMatch && jsonMatch[1]) {
-                        try {
-                            const parsedData = JSON.parse(jsonMatch[1]);
-                            const itemsArray = parsedData.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
-                            
-                            itemsArray.forEach((wmtItem: any) => {
-                                if (!wmtItem.usItemId && !wmtItem.id) return;
-                                const itemId = String(wmtItem.usItemId || wmtItem.id);
-                                const title = wmtItem.title || wmtItem.name || `${query} Item`;
-                                
-                                const rawPrice = wmtItem.priceInfo?.currentPrice?.price || wmtItem.price?.current_price || wmtItem.price || "0";
-                                const price = parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
-                                
-                                // Fetch original structural CDN link maps directly from scrape payload strings
-                                const image = wmtItem.imageInfo?.thumbnailUrl || wmtItem.image || "";
-                                
-                                const rating = wmtItem.rating?.averageRating ? parseFloat(wmtItem.rating.averageRating) : 4.5;
-                                const reviews = wmtItem.rating?.numberOfReviews ? parseInt(wmtItem.rating.numberOfReviews) : 50;
-
-                                // Extract exact data blocks to feed Layer 3 calculation layers
-                                let totalAmount = 1;
-                                let unit = 'unit';
-                                
-                                if (wmtItem.weight || wmtItem.size) {
-                                    const sizeStr = String(wmtItem.weight || wmtItem.size);
-                                    const parsedSize = parseFloat(sizeStr.replace(/[^0-9.]/g, ''));
-                                    const parsedUnit = sizeStr.replace(/[0-9.\s]/g, '').toLowerCase();
-                                    if (parsedSize) totalAmount = parsedSize;
-                                    if (parsedUnit) unit = parsedUnit;
-                                } else {
-                                    const volumeMatch = title.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|ct|pack)/i);
-                                    if (volumeMatch) {
-                                        totalAmount = parseFloat(volumeMatch[1]);
-                                        unit = volumeMatch[2].toLowerCase();
-                                    }
-                                }
-
-                                collectedItems.push({
-                                    id: `wmt-${itemId}`,
-                                    sku: itemId,
-                                    price,
-                                    title,
-                                    name: title,
-                                    retailer: 'walmart',
-                                    source: 'walmart',
-                                    url: `https://www.walmart.com/ip/${itemId}`,
-                                    link: `https://www.walmart.com/ip/${itemId}`,
-                                    unit,
-                                    unit_type: unit,
-                                    totalAmount,
-                                    amount: totalAmount,
-                                    image,
-                                    thumbnail: image,
-                                    rating,
-                                    reviews
-                                });
-                            });
-                        } catch (_) {}
                     }
+                } else if (target.source === 'walmart') {
+                    for (const item of items) {
+                        const itemId = item.id || item.usItemId || item.productId || Math.random().toString();
+                        const rawPrice = item.price?.current_price || item.price || "0.00";
+                        const itemPrice = parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0.0;
+                        
+                        let totalAmount = 1;
+                        let unit = 'unit';
+                        const titleString = item.title || item.name || '';
 
-                    // Strict Regex fallback loop if script wrappers are missing or altered
-                    if (collectedItems.filter(i => i.retailer === 'walmart').length === 0) {
-                        const linkMatches = [...html.matchAll(/\/ip\/([^/]+)\/([0-9]+)/g)];
-                        linkMatches.forEach(m => {
-                            if (m[2]) {
-                                const itemId = m[2];
-                                const title = m[1] ? m[1].replace(/-/g, ' ') : `${query} Product`;
-                                collectedItems.push({
-                                    id: `wmt-${itemId}`,
-                                    sku: itemId,
-                                    price: 15.99,
-                                    title,
-                                    name: title,
-                                    retailer: 'walmart',
-                                    source: 'walmart',
-                                    url: `https://www.walmart.com/ip/${itemId}`,
-                                    link: `https://www.walmart.com/ip/${itemId}`,
-                                    unit: 'unit',
-                                    unit_type: 'unit',
-                                    totalAmount: 1,
-                                    amount: 1,
-                                    image: '',
-                                    thumbnail: '',
-                                    rating: 4.5,
-                                    reviews: 25
-                                });
+                        if (item.weight || item.size) {
+                            const sizeStr = String(item.weight || item.size);
+                            const parsedSize = parseFloat(sizeStr.replace(/[^0-9.]/g, ''));
+                            const parsedUnit = sizeStr.replace(/[0-9.\s]/g, '').toLowerCase();
+                            if (parsedSize) totalAmount = parsedSize;
+                            if (parsedUnit) unit = parsedUnit;
+                        } else {
+                            const volumeMatch = titleString.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|ct|pack)/i);
+                            if (volumeMatch) {
+                                totalAmount = parseFloat(volumeMatch[1]);
+                                unit = volumeMatch[2].toLowerCase();
                             }
+                        }
+
+                        rawResults.push({
+                            id: `wmt-${itemId}`,
+                            sku: itemId,
+                            price: itemPrice,
+                            title: titleString || `${query} (Walmart Product)`,
+                            name: titleString || `${query} (Walmart Product)`,
+                            retailer: 'walmart',
+                            source: 'walmart',
+                            url: item.url || `https://www.walmart.com/ip/${itemId}`,
+                            link: item.url || `https://www.walmart.com/ip/${itemId}`,
+                            unit: item.unit_type || item.salesUnitType || unit,
+                            unit_type: item.unit_type || item.salesUnitType || unit,
+                            totalAmount: parseFloat(item.amount || item.size || totalAmount),
+                            amount: parseFloat(item.amount || item.size || totalAmount),
+                            image: item.image || item.thumbnail || '',
+                            thumbnail: item.thumbnail || item.image || '',
+                            rating: item.rating ? parseFloat(item.rating) : 4.5,
+                            reviews: item.reviews ? parseInt(item.reviews) : 50
                         });
                     }
                 }
+            } catch (innerError: any) {
+                errorContext += `[Loop error for ${target.source}: ${innerError.message}] `;
             }
-        });
-
-        rawResults = collectedItems;
-
-    } catch (fallbackError: any) {
-        // Safe operational fallthrough
+        }
+    } catch (globalErr: any) {
+        errorContext += `[Global Ingestion Failure: ${globalErr.message}]`;
     }
 
-    if (!Array.isArray(rawResults) || rawResults.length === 0) {
+    if (rawResults.length === 0) {
+        console.warn(`[SEARCH_EMPTY_BYPASS]: Returning baseline array. Trace: ${errorContext}`);
         return NextResponse.json([]);
     }
 
@@ -275,6 +199,8 @@ export async function GET(request: Request) {
 
         return NextResponse.json(processedResults);
     } catch (parsingError: any) {
+        console.error(`[ISOLATED_UNIT_PARSER_CRASH_RECOVERY]: Intercepted global unit-parser module failure: ${parsingError.message}`);
+        
         const structuralFallback = rawResults.map(p => ({
             ...p,
             unitInfo: { value: 0, unit: "unknown", quantity: 1, totalValue: 0, formatted: "Pending Calibration" },
