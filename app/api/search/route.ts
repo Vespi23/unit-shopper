@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     } catch (primaryError: any) {
         errorContext += `[Search Client Fault: ${primaryError.message}] `;
         
-        // CHANNEL 2: Public Scraper Fallback Engine (Leveraging Native eCommerce Parsing)
+        // CHANNEL 2: Public Scraper Fallback Engine (Corrected Parameter Alignment)
         try {
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
             const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
@@ -49,10 +49,11 @@ export async function GET(request: Request) {
                     source: 'walmart',
                     body: {
                         url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`,
+                        target: "universal", // REQUIRED: Standard identifier for /v2/scrape endpoint protocol
                         proxy_pool: "premium",
-                        // Instruct Decodo to apply its specialized Walmart parser and return structured JSON
-                        target: "walmart_search", 
-                        locale: "en-us"
+                        headless: "true", // Forces complete browser context layout rendering
+                        device_type: "desktop_chrome", // Applies explicit human client fingerprint matching
+                        locale: "en-US"
                     }
                 }
             ];
@@ -78,10 +79,11 @@ export async function GET(request: Request) {
             settledScrapes.forEach((outcome) => {
                 if (outcome.status === 'fulfilled') {
                     const { source, data } = outcome.value;
+                    const html = data.results?.[0]?.content || data.content || "";
                     
+                    if (!html) return;
+
                     if (source === 'amazon') {
-                        const html = data.results?.[0]?.content || data.content || "";
-                        if (!html) return;
                         const matchAsins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)].map(m => m[1]);
                         Array.from(new Set(matchAsins)).forEach(asin => {
                             collectedItems.push({ 
@@ -96,33 +98,64 @@ export async function GET(request: Request) {
                         });
                     } 
                     else if (source === 'walmart') {
-                        // Handle the clean, anti-bot-parsed JSON data structure returned by Decodo's target engine
-                        const resultsContainer = data.results?.[0]?.content || data.parsing_results || data;
-                        const items = resultsContainer.products || resultsContainer.search_results || [];
-                        
-                        if (items.length === 0 && data.content) {
-                            console.warn(`[RISK WARNING] Template falling back to explicit JSON state sweep on string block.`);
-                            const match = data.content.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
-                            if (match && match[1]) {
-                                try {
-                                    const parsed = JSON.parse(match[1]);
-                                    const extracted = parsed.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
-                                    extracted.forEach((i: any) => items.push({ title: i.title, id: i.usItemId || i.id, price: i.price }));
-                                } catch (_) {}
+                        let matchWalmartIds: string[] = [];
+                        let items: any[] = [];
+
+                        // Strategy A: Intercept the native Next.js hydration payload array from fully-rendered DOM
+                        try {
+                            const jsonMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
+                            if (jsonMatch && jsonMatch[1]) {
+                                const parsedData = JSON.parse(jsonMatch[1]);
+                                const itemsArray = parsedData.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
+                                
+                                itemsArray.forEach((wmtItem: any) => {
+                                    if (wmtItem.usItemId || wmtItem.id) {
+                                        const parsedId = String(wmtItem.usItemId || wmtItem.id);
+                                        const rawPrice = wmtItem.priceInfo?.currentPrice?.price || wmtItem.price?.current_price || wmtItem.price || "1.00";
+                                        const cleanPrice = parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 1.0;
+                                        
+                                        items.push({
+                                            id: parsedId,
+                                            title: wmtItem.title || wmtItem.name || `${query} (Walmart)`,
+                                            price: cleanPrice,
+                                            unit: wmtItem.salesUnitType || 'unit',
+                                            totalAmount: parseFloat(wmtItem.weight || wmtItem.size || 1)
+                                        });
+                                        matchWalmartIds.push(parsedId);
+                                    }
+                                });
                             }
+                        } catch (jsonErr) {
+                            // Catch parsing exceptions silently
                         }
 
-                        items.forEach((item: any) => {
-                            const parsedId = item.id || item.usItemId || item.productId || Math.random().toString();
-                            const itemPrice = item.price?.current_price || item.price || 1.0;
+                        // Strategy B: Fallback Regex Scans if hydration script was obfuscated at edge proxies
+                        if (items.length === 0) {
+                            const attrMatches = [...html.matchAll(/(?:data-item-id|itemId|product-id)="([0-9]+)"/g)].map(m => m[1]);
+                            const linkMatches = [...html.matchAll(/\/ip\/([^/]+)\/([0-9]+)/g)].map(m => m[2]);
+                            const structuralIds = Array.from(new Set([...attrMatches, ...linkMatches]));
+                            
+                            structuralIds.forEach(itemId => {
+                                items.push({
+                                    id: itemId,
+                                    title: `${query} (Walmart Product)`,
+                                    price: 1.0,
+                                    unit: 'unit',
+                                    totalAmount: 1
+                                });
+                            });
+                        }
+
+                        // Pipe normalized items safely out to search arrays
+                        items.forEach((item) => {
                             collectedItems.push({
-                                id: `wmt-${parsedId}`,
-                                sku: parsedId,
-                                price: parseFloat(String(itemPrice)),
-                                title: item.title || `${query} (Walmart)`,
+                                id: `wmt-${item.id}`,
+                                sku: item.id,
+                                price: item.price,
+                                title: item.title,
                                 retailer: 'walmart',
-                                unit: item.unit_type || 'unit',
-                                totalAmount: parseFloat(item.amount || item.size || 1)
+                                unit: item.unit,
+                                totalAmount: item.totalAmount
                             });
                         });
                     }
