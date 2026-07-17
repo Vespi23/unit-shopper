@@ -22,35 +22,29 @@ export async function GET(request: Request) {
     let errorContext = "";
 
     try {
-        const decodoUrl = "https://scraper-api.decodo.com/v1/tasks";
         const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
 
+        // Target explicit search routing endpoints natively exposed by the provider layout
         const targetPayloads = [
             {
                 source: 'amazon',
-                body: {
-                    target: "amazon_search",
-                    query: query,
-                    proxy_pool: "premium"
-                }
+                url: "https://scraper-api.decodo.com/v1/tasks/amazon-search",
+                body: { query: query }
             },
             {
                 source: 'walmart',
-                body: {
-                    target: "walmart_search",
-                    query: query,
-                    proxy_pool: "premium"
-                }
+                url: "https://scraper-api.decodo.com/v1/tasks/walmart-search",
+                body: { query: query }
             }
         ];
 
-        // Linear sequential execution loop to completely avoid bracket nesting errors
         for (const target of targetPayloads) {
             try {
-                const res = await fetch(decodoUrl, {
+                const res = await fetch(target.url, {
                     method: "POST",
                     headers: {
-                        "Authorization": `Bearer ${decodoToken}`,
+                        "X-API-Key": decodoToken,
+                        "Authorization": `Bearer ${decodoToken}`, // Redundant coverage block to satisfy alternative gateway maps
                         "Accept": "application/json",
                         "Content-Type": "application/json"
                     },
@@ -63,9 +57,9 @@ export async function GET(request: Request) {
                 }
 
                 const data = await res.json();
-                const dataBlock = data.results?.[0]?.content || data.parsing_results || data;
-                const items = dataBlock.products || dataBlock.search_results || [];
-
+                
+                // Pull structured items from the primary response body fields
+                const items = data.products || data.search_results || data.results || [];
                 if (!Array.isArray(items)) continue;
 
                 if (target.source === 'amazon') {
