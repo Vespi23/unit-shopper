@@ -6,6 +6,48 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60; 
 
+// BRAND NEW ISOLATED UTILITY WRAPPER - Breaks Vercel Dynamic Compilation Cache
+async function fetchDecodoPayload(source: 'amazon' | 'walmart', query: string, token: string) {
+    const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
+    
+    const bodyConfig = source === 'amazon' 
+        ? {
+            url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`,
+            proxy_pool: "premium",
+            headless: "html"
+          }
+        : {
+            url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`,
+            target: "universal",
+            proxy_pool: "premium",
+            headless: "true", // Compiles full browser context
+            device_type: "desktop_chrome", // Bypasses TLS fingerprinting checks
+            output_format: "json", // Instructs Decodo edge to map selectors natively
+            custom_extraction: {
+                products: {
+                    _selector: "[data-item-id], [data-testid='list-view'], .mb1, .w-percent",
+                    id: "attr:data-item-id",
+                    title: "[data-automation-id='product-title'], span.w_i0, h3, a",
+                    price: "[data-automation-id='product-price'], span.w_iB, div.js-content",
+                    image: "img:attr:src"
+                }
+            }
+          };
+
+    const res = await fetch(decodoUrl, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(bodyConfig)
+    });
+
+    if (!res.ok) throw new Error(`Decodo Ingestion Failure: ${res.status}`);
+    const data = await res.json();
+    return { source, data };
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     
@@ -27,62 +69,20 @@ export async function GET(request: Request) {
         if (typeof searchProducts === 'function') {
             rawResults = await searchProducts(query);
         } else {
-            throw new Error("Target search products function missing.");
+            throw new Error("Primary searchProducts client function unmapped.");
         }
     } catch (primaryError: any) {
         errorContext += `[Search Client Fault: ${primaryError.message}] `;
         
-        // CHANNEL 2: Public Scraper Fallback Engine (Robust Native Custom Extraction Protocol)
+        // CHANNEL 2: Public Scraper Fallback Engine (Isolated Explicit Payload Mapping)
         try {
-            const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`; 
             const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
 
-            const targetPayloads = [
-                {
-                    source: 'amazon',
-                    body: {
-                        url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`,
-                        proxy_pool: "premium",
-                        headless: "html"
-                    }
-                },
-                {
-                    source: 'walmart',
-                    body: {
-                        url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`,
-                        target: "universal", 
-                        proxy_pool: "premium",
-                        headless: "true", 
-                        device_type: "desktop_chrome", 
-                        output_format: "json", 
-                        custom_extraction: {
-                            products: {
-                                // Target immutable automation identifiers used across all design variants
-                                _selector: "[data-item-id], [data-testid='list-view'], .mb1, .w-percent",
-                                id: "attr:data-item-id",
-                                title: "[data-automation-id='product-title'], span.w_i0, h3, a",
-                                price: "[data-automation-id='product-price'], span.w_iB, div.js-content",
-                                image: "img:attr:src"
-                            }
-                        }
-                    }
-                }
+            // Concurrently map scraper profiles explicitly inside isolated helper loops
+            const scraperPromises = [
+                fetchDecodoPayload('amazon', query, decodoToken),
+                fetchDecodoPayload('walmart', query, decodoToken)
             ];
-
-            const scraperPromises = targetPayloads.map(async (target) => {
-                const res = await fetch(decodoUrl, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${decodoToken}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(target.body)
-                });
-                
-                if (!res.ok) throw new Error(`HTTP Error Status ${res.status}`);
-                const data = await res.json();
-                return { source: target.source, data };
-            });
 
             const settledScrapes = await Promise.allSettled(scraperPromises);
             const collectedItems: any[] = [];
@@ -101,7 +101,7 @@ export async function GET(request: Request) {
                                 sku: asin, 
                                 price: 1.0, 
                                 title: `${query} (Amazon Product)`,
-                                name: `${query} (Amazon Product)`, // Multi-key template mapping fallback
+                                name: `${query} (Amazon Product)`,
                                 retailer: 'amazon',
                                 unit: 'unit',
                                 unit_type: 'unit',
@@ -116,7 +116,7 @@ export async function GET(request: Request) {
                         const extractionBlock = data.results?.[0]?.custom_extraction || data.custom_extraction;
                         let parsedItems = extractionBlock?.products || [];
 
-                        // Strategy B Fallback: Next.js script extraction sweep
+                        // Strategy B Fallback: Next.js raw script sweep
                         if (parsedItems.length === 0) {
                             const rawHtml = data.results?.[0]?.content || data.content || "";
                             const jsonMatch = rawHtml.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
@@ -138,7 +138,7 @@ export async function GET(request: Request) {
                             }
                         }
 
-                        // Strategy C Fallback: Product tracking path link mapping
+                        // Strategy C Fallback: Product tracking page URL route match
                         if (parsedItems.length === 0) {
                             const rawHtml = data.results?.[0]?.content || data.content || "";
                             const linkMatches = [...rawHtml.matchAll(/\/ip\/([^/]+)\/([0-9]+)/g)];
@@ -150,9 +150,8 @@ export async function GET(request: Request) {
                         }
 
                         parsedItems.forEach((item: any) => {
-                            // Extract numbers only to isolate clean database IDs
-                            const cleanId = String(item.id || '').replace(/[^0-9]/g, '') || Math.random().toString();
-                            if (!cleanId || cleanId === 'false') return;
+                            const cleanId = String(item.id || '').replace(/[^0-9]/g, '');
+                            if (!cleanId) return;
 
                             const rawPrice = item.price || "1.00";
                             const cleanPrice = parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 1.0;
@@ -164,7 +163,7 @@ export async function GET(request: Request) {
                                 sku: cleanId,
                                 price: cleanPrice,
                                 title: cleanTitle,
-                                name: cleanTitle, // Preserves matching safety within card modules
+                                name: cleanTitle,
                                 retailer: 'walmart',
                                 unit: item.unit || 'unit',
                                 unit_type: 'unit',
