@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { searchProducts } from '@/lib/api-client';
+import { toCanonicalUnit, convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -22,9 +24,8 @@ export async function GET(request: Request) {
 
     // CHANNEL 1: Dynamic Search Fetch Execution
     try {
-        const clientModule = await import('@/lib/api-client');
-        if (clientModule && typeof clientModule.searchProducts === 'function') {
-            rawResults = await clientModule.searchProducts(query);
+        if (typeof searchProducts === 'function') {
+            rawResults = await searchProducts(query);
         } else {
             throw new Error("Target search products function missing.");
         }
@@ -33,7 +34,6 @@ export async function GET(request: Request) {
         
         // CHANNEL 2: Public Scraper Fallback Engine (Native eCommerce Ingestion Gateway)
         try {
-            // FIXED: Abandoning legacy `/v2/scrape` path to force Decodo template compilation
             const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`; 
             const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
 
@@ -50,11 +50,11 @@ export async function GET(request: Request) {
                     source: 'walmart',
                     body: {
                         url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`,
-                        target: "universal", // Identifies endpoint mapping protocol
+                        target: "universal", 
                         proxy_pool: "premium",
-                        headless: "true", // Compiles full javascript context layout before delivery
-                        device_type: "desktop_chrome", // Bypasses anti-bot TLS fingerprinting blocks
-                        output_format: "json", // Forces Decodo to pass back pre-parsed JSON structure
+                        headless: "true", 
+                        device_type: "desktop_chrome", 
+                        output_format: "json", 
                         custom_extraction: {
                             products: {
                                 _selector: "[data-item-id], .w-percent, [data-testid='list-view']",
@@ -106,11 +106,10 @@ export async function GET(request: Request) {
                         });
                     } 
                     else if (source === 'walmart') {
-                        // Extract parsed data from Decodo's native custom_extraction response array
                         const extractionBlock = data.results?.[0]?.custom_extraction || data.custom_extraction;
                         let parsedItems = extractionBlock?.products || [];
 
-                        // Deep Structural Fallback: If structured template returns empty, sweep raw source block
+                        // Deep Structural Fallback
                         if (parsedItems.length === 0) {
                             const rawHtml = data.results?.[0]?.content || data.content || "";
                             
@@ -147,7 +146,6 @@ export async function GET(request: Request) {
                             });
                         }
 
-                        // Normalize and transform clean parsed metrics down to the collection array
                         parsedItems.forEach((item: any) => {
                             if (!item.id) return;
                             const rawPrice = item.price || "1.00";
@@ -160,7 +158,7 @@ export async function GET(request: Request) {
                                 title: item.title || `${query} (Walmart Product)`,
                                 retailer: 'walmart',
                                 unit: item.unit || 'unit',
-                                totalAmount: parseFloat(item.totalAmount || 1)
+                                totalAmount: item.totalAmount || 1
                             });
                         });
                     }
@@ -183,13 +181,12 @@ export async function GET(request: Request) {
 
     // LAYER 3: DYNAMICALLY ISOLATED UNIT TRANSLATION ENGINE
     try {
-        const parserModule = await import('@/lib/unit-parser');
-        const targetUnit = parserModule.toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
+        const targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
 
         const processedResults = rawResults.map(p => {
             if (!p) return null;
             
-            const currentUnit = parserModule.toCanonicalUnit(p.unit || p.unit_type || '');
+            const currentUnit = toCanonicalUnit(p.unit || p.unit_type || '');
             const currentAmount = parseFloat(p.totalAmount || p.amount || p.size || p.volume || 0);
             const unitPrice = parseFloat(p.price || 0);
             
@@ -197,7 +194,7 @@ export async function GET(request: Request) {
             let finalUnit = currentUnit;
 
             if (targetUnit !== 'unknown' && currentUnit !== 'unknown') {
-                const converted = parserModule.convertValue(currentAmount, currentUnit, targetUnit);
+                const converted = convertValue(currentAmount, currentUnit, targetUnit);
                 if (converted) {
                     finalAmount = converted;
                     finalUnit = targetUnit;
@@ -214,7 +211,7 @@ export async function GET(request: Request) {
                     totalValue: finalAmount,
                     formatted: `${finalAmount.toFixed(2)} ${finalUnit}`
                 },
-                pricePerUnit: parserModule.calculatePricePerUnit(unitPrice, finalAmount, finalUnit)
+                pricePerUnit: calculatePricePerUnit(unitPrice, finalAmount, finalUnit)
             };
         }).filter(Boolean);
 
