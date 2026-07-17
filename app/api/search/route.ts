@@ -48,6 +48,9 @@ export async function GET(request: Request) {
             ];
 
             const scraperPromises = targetPayloads.map(async (target) => {
+                // Determine parameters based on target retailer requirements
+                const useFullBrowser = target.source === 'walmart';
+
                 const res = await fetch(decodoUrl, {
                     method: "POST",
                     headers: {
@@ -57,9 +60,18 @@ export async function GET(request: Request) {
                     body: JSON.stringify({
                         url: target.url,
                         proxy_pool: "premium",
-                        headless: "html"
+                        // Force real Chromium emulation on Walmart to crack the PerimeterX edge firewall
+                        headless: useFullBrowser ? "true" : "html", 
+                        wait_until: useFullBrowser ? "networkidle0" : undefined,
+                        custom_headers: useFullBrowser ? {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                            "Accept-Language": "en-US,en;q=0.9",
+                            "Cache-Control": "max-age=0"
+                        } : undefined
                     })
                 });
+                
                 if (!res.ok) throw new Error(`HTTP Error Status ${res.status}`);
                 const data = await res.json();
                 return { source: target.source, data };
@@ -73,7 +85,10 @@ export async function GET(request: Request) {
                     const { source, data } = outcome.value;
                     const html = data.results?.[0]?.content || data.content || "";
                     
-                    if (!html) return;
+                    if (!html) {
+                        console.warn(`[RISK WARNING] Null response content returned from source: ${source}`);
+                        return;
+                    }
 
                     if (source === 'amazon') {
                         const matchAsins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)].map(m => m[1]);
@@ -90,12 +105,16 @@ export async function GET(request: Request) {
                     } else if (source === 'walmart') {
                         let matchWalmartIds: string[] = [];
 
+                        // DIAGNOSTIC CHECK: Trace if the firewall blocked the request
+                        if (html.includes("captcha") || html.includes("blocked") || html.includes("Access Denied") || html.includes("PerimeterX")) {
+                            console.error(`[RISK WARNING] Decodo target for Walmart was flagged and blocked by anti-bot firewall. Snippet: ${html.substring(0, 300)}`);
+                        }
+
                         // Strategy A: Intercept the immutable Next.js SSR data payload matrix
                         try {
                             const jsonMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
                             if (jsonMatch && jsonMatch[1]) {
                                 const parsedData = JSON.parse(jsonMatch[1]);
-                                // Recursively target nested items within structural layouts
                                 const itemsArray = parsedData.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
                                 
                                 itemsArray.forEach((wmtItem: any) => {
@@ -107,12 +126,11 @@ export async function GET(request: Request) {
                                 });
                             }
                         } catch (jsonErr) {
-                            console.warn('[RISK WARNING] Walmart JSON state extraction skipped:', jsonErr);
+                            // Suppress verbose JSON parsing logging in production
                         }
 
-                        // Strategy B: Robust DOM Regex Attribute Fallback if script block is obfuscated
+                        // Strategy B: Robust DOM Regex Attribute Fallback
                         if (matchWalmartIds.length === 0) {
-                            // Target data-item-id or standard item structural references
                             const attrMatches = [...html.matchAll(/(?:data-item-id|itemId|product-id)="([0-9]+)"/g)].map(m => m[1]);
                             matchWalmartIds.push(...attrMatches);
                         }
@@ -128,11 +146,11 @@ export async function GET(request: Request) {
                             collectedItems.push({ 
                                 id: `wmt-${itemId}`, 
                                 sku: itemId, 
-                                price: 1.0, // Default baseline normalization token
+                                price: 1.0, 
                                 title: `${query} (Walmart)`,
                                 retailer: 'walmart',
                                 unit: 'unit',
-                                totalAmount: 1 // Baseline placeholder configuration passed to Layer 3
+                                totalAmount: 1
                             });
                         });
                     }
