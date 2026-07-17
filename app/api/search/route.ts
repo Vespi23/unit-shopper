@@ -88,12 +88,39 @@ export async function GET(request: Request) {
                             });
                         });
                     } else if (source === 'walmart') {
-                        // Extracting item patterns cleanly using structural attributes found within Walmart grid data
-                        const matchWalmartIds = [...html.matchAll(/data-item-id="([0-9]+)"/g)].map(m => m[1]);
-                        // Alternative fallback match template for general links if attribute map is stripped
+                        let matchWalmartIds: string[] = [];
+
+                        // Strategy A: Intercept the immutable Next.js SSR data payload matrix
+                        try {
+                            const jsonMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
+                            if (jsonMatch && jsonMatch[1]) {
+                                const parsedData = JSON.parse(jsonMatch[1]);
+                                // Recursively target nested items within structural layouts
+                                const itemsArray = parsedData.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
+                                
+                                itemsArray.forEach((wmtItem: any) => {
+                                    if (wmtItem.usItemId) {
+                                        matchWalmartIds.push(String(wmtItem.usItemId));
+                                    } else if (wmtItem.id) {
+                                        matchWalmartIds.push(String(wmtItem.id));
+                                    }
+                                });
+                            }
+                        } catch (jsonErr) {
+                            console.warn('[RISK WARNING] Walmart JSON state extraction skipped:', jsonErr);
+                        }
+
+                        // Strategy B: Robust DOM Regex Attribute Fallback if script block is obfuscated
                         if (matchWalmartIds.length === 0) {
-                            const matchLinks = [...html.matchAll(/\/ip\/([^/]+)\/([0-9]+)/g)];
-                            matchLinks.forEach(m => { if (m[2]) matchWalmartIds.push(m[2]); });
+                            // Target data-item-id or standard item structural references
+                            const attrMatches = [...html.matchAll(/(?:data-item-id|itemId|product-id)="([0-9]+)"/g)].map(m => m[1]);
+                            matchWalmartIds.push(...attrMatches);
+                        }
+
+                        // Strategy C: Global product page link tracking fallback
+                        if (matchWalmartIds.length === 0) {
+                            const linkMatches = [...html.matchAll(/\/ip\/([^/]+)\/([0-9]+)/g)];
+                            linkMatches.forEach(m => { if (m[2]) matchWalmartIds.push(m[2]); });
                         }
                         
                         const uniqueIds = Array.from(new Set(matchWalmartIds));
@@ -101,9 +128,11 @@ export async function GET(request: Request) {
                             collectedItems.push({ 
                                 id: `wmt-${itemId}`, 
                                 sku: itemId, 
-                                price: 1.0, 
+                                price: 1.0, // Default baseline normalization token
                                 title: `${query} (Walmart)`,
-                                retailer: 'walmart'
+                                retailer: 'walmart',
+                                unit: 'unit',
+                                totalAmount: 1 // Baseline placeholder configuration passed to Layer 3
                             });
                         });
                     }
