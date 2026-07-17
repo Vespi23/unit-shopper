@@ -31,31 +31,89 @@ export async function GET(request: Request) {
     } catch (primaryError: any) {
         errorContext += `[Search Client Fault: ${primaryError.message}] `;
         
-        // CHANNEL 2: Public Scraper Fallback
+        // CHANNEL 2: Public Scraper Fallback Engine (Concurrently Targeting Amazon & Walmart)
         try {
-            const fallbackRes = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${process.env.DECODO_AUTH_TOKEN || ""}`,
-                    "Content-Type": "application/json"
+            const decodoUrl = `https://scraper-api.decodo.com/v2/scrape`;
+            const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
+
+            const targetPayloads = [
+                {
+                    source: 'amazon',
+                    url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`
                 },
-                body: JSON.stringify({
-                    url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`,
-                    proxy_pool: "premium",
-                    headless: "html"
-                })
-            });
-            
-            if (fallbackRes.ok) {
-                const json = await fallbackRes.json();
-                // Simple inline HTML cheerio parsing would happen here if needed, or extract raw fields
-                const html = json.results?.[0]?.content || json.content || "";
-                if (html) {
-                    // Quick regex match fallback to extract raw metrics if cheerio is blocked
-                    const matchAsins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)].map(m => m[1]);
-                    rawResults = Array.from(new Set(matchAsins)).map(asin => ({ id: asin, sku: asin, price: 1.0, title: query }));
+                {
+                    source: 'walmart',
+                    url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`
                 }
-            }
+            ];
+
+            const scraperPromises = targetPayloads.map(async (target) => {
+                const res = await fetch(decodoUrl, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${decodoToken}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        url: target.url,
+                        proxy_pool: "premium",
+                        headless: "html"
+                    })
+                });
+                if (!res.ok) throw new Error(`HTTP Error Status ${res.status}`);
+                const data = await res.json();
+                return { source: target.source, data };
+            });
+
+            const settledScrapes = await Promise.allSettled(scraperPromises);
+            const collectedItems: any[] = [];
+
+            settledScrapes.forEach((outcome) => {
+                if (outcome.status === 'fulfilled') {
+                    const { source, data } = outcome.value;
+                    const html = data.results?.[0]?.content || data.content || "";
+                    
+                    if (!html) return;
+
+                    if (source === 'amazon') {
+                        const matchAsins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)].map(m => m[1]);
+                        const uniqueAsins = Array.from(new Set(matchAsins));
+                        uniqueAsins.forEach(asin => {
+                            collectedItems.push({ 
+                                id: `amzn-${asin}`, 
+                                sku: asin, 
+                                price: 1.0, 
+                                title: `${query} (Amazon)`,
+                                retailer: 'amazon'
+                            });
+                        });
+                    } else if (source === 'walmart') {
+                        // Extracting item patterns cleanly using structural attributes found within Walmart grid data
+                        const matchWalmartIds = [...html.matchAll(/data-item-id="([0-9]+)"/g)].map(m => m[1]);
+                        // Alternative fallback match template for general links if attribute map is stripped
+                        if (matchWalmartIds.length === 0) {
+                            const matchLinks = [...html.matchAll(/\/ip\/([^/]+)\/([0-9]+)/g)];
+                            matchLinks.forEach(m => { if (m[2]) matchWalmartIds.push(m[2]); });
+                        }
+                        
+                        const uniqueIds = Array.from(new Set(matchWalmartIds));
+                        uniqueIds.forEach(itemId => {
+                            collectedItems.push({ 
+                                id: `wmt-${itemId}`, 
+                                sku: itemId, 
+                                price: 1.0, 
+                                title: `${query} (Walmart)`,
+                                retailer: 'walmart'
+                            });
+                        });
+                    }
+                } else {
+                    errorContext += `[Scrape Scoping Exception: ${outcome.reason.message}] `;
+                }
+            });
+
+            rawResults = collectedItems;
+
         } catch (fallbackError: any) {
             errorContext += `[Fallback Network Failure: ${fallbackError.message}]`;
         }
@@ -68,7 +126,6 @@ export async function GET(request: Request) {
 
     // LAYER 3: DYNAMICALLY ISOLATED UNIT TRANSLATION ENGINE
     try {
-        // FIXED: Wrap parsing modules dynamically to catch the ERR_INVALID_URL global crash safely
         const parserModule = await import('@/lib/unit-parser');
         const targetUnit = parserModule.toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
 
@@ -77,7 +134,7 @@ export async function GET(request: Request) {
             
             const currentUnit = parserModule.toCanonicalUnit(p.unit || p.unit_type || '');
             const currentAmount = parseFloat(p.totalAmount || p.amount || p.size || p.volume || 0);
-            const unitPrice = parseFloat(p.price || p.amazon_price || p.retail_price || 0);
+            const unitPrice = parseFloat(p.price || p.amazon_price || p.retail_price || p.price_amount || 0);
             
             let finalAmount = currentAmount;
             let finalUnit = currentUnit;
@@ -106,10 +163,8 @@ export async function GET(request: Request) {
 
         return NextResponse.json(processedResults);
     } catch (parsingError: any) {
-        // FIXED: Safety catch block shields user from unit-parser configuration runtime exceptions
         console.error(`[ISOLATED_UNIT_PARSER_CRASH_RECOVERY]: Intercepted global unit-parser module failure: ${parsingError.message}`);
         
-        // Return raw products directly without unit calculations rather than throwing a hard 500 error
         const structuralFallback = rawResults.map(p => ({
             ...p,
             unitInfo: { value: 0, unit: "unknown", quantity: 1, totalValue: 0, formatted: "Pending Calibration" },
