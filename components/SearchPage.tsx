@@ -75,6 +75,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const urlQueryParam = searchParams.get('q') || '';
     const initialUnit = searchParams.get('u') || '';
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
+
+    const inputRef = useRef<HTMLInputElement>(null);
     
     const [results, setResults] = useState<EnhancedSortingProduct[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
@@ -84,11 +86,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
+    const [disabledUnits] = useState<Set<string>>(new Set());
     const [page, setPage] = useState(1);
 
     useEffect(() => {
         setPage(1);
-    }, [urlQueryParam, selectedUnit]);
+    }, [urlQueryParam, sortBy, selectedUnit]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -151,12 +154,33 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     return (
         <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
             {!isExtension && (
-                <section className="w-full pt-24 pb-12 px-4 flex flex-col items-center text-center">
+                <section className="w-full bg-gradient-to-b from-emerald-50/50 via-background to-background pt-24 pb-12 px-4 flex flex-col items-center text-center">
                     <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight mb-6">Shop by True Value.</h1>
-                    <form onSubmit={handleSearch} className="flex gap-2 max-w-2xl w-full">
-                        <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products..." className="flex-1 p-4 rounded-xl border bg-card text-xl" />
-                        <button type="submit" className="px-8 bg-primary text-white rounded-xl font-bold">Search</button>
-                    </form>
+                    <div className="relative w-full max-w-2xl group z-10">
+                        <form onSubmit={handleSearch} className="relative flex items-center bg-card/80 backdrop-blur-md rounded-2xl border border-border/50 shadow-2xl p-2 transition-all">
+                            <Search className="h-6 w-6 text-muted-foreground ml-4 mr-3" />
+                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products..." className="flex-1 bg-transparent p-4 text-xl outline-none" />
+                            <button type="submit" className="px-8 bg-primary text-white rounded-xl font-bold">Search</button>
+                        </form>
+                        
+                        {!urlQueryParam && !loading && (
+                            <div className="mt-8 animate-in fade-in zoom-in duration-700">
+                                <div className="glass rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl">
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative h-10 w-10 bg-white rounded-lg p-1 border">
+                                            <Image src="/extension-logo.png" alt="Lynx Vision" width={38} height={38} />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-sm font-bold">Lynx Vision</p>
+                                            <p className="text-xs text-muted-foreground">Automatic unit price comparisons.</p>
+                                        </div>
+                                    </div>
+                                    <a href="https://chromewebstore.google.com/detail/lynx-vision/eoihkpljhmakhpecnobkcnjofidebmhl" className="bg-primary text-white text-xs font-bold px-5 py-2 rounded-lg">Add to Chrome</a>
+                                </div>
+                                <LedgerPromo />
+                            </div>
+                        )}
+                    </div>
                 </section>
             )}
 
@@ -178,7 +202,16 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
                     {loading ? Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />) : 
-                     displayData.map((p, i) => <ProductCard key={p.id} product={p as any} index={i} onClick={(p) => setSelectedProduct(p)} onSelect={(id, sel) => setCompareList(prev => sel ? [...prev, id] : prev.filter(item => item !== id))} isSelected={compareList.includes(p.id)} />)}
+                     displayData.map((p, i) => (
+                        <ProductCard 
+                            key={p.id} 
+                            product={p as any} 
+                            index={i} 
+                            onClick={setSelectedProduct}
+                            onSelect={(id, sel) => setCompareList(prev => sel ? [...prev, id] : prev.filter(item => item !== id))}
+                            isSelected={compareList.includes(p.id)}
+                        />
+                    ))}
                 </div>
             </section>
         </div>
