@@ -90,8 +90,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     
     const [page, setPage] = useState(1);
     
-    // Explicit token strings to safely monitor actual network executions
-    const [activeFetchedQuery, setActiveFetchedQuery] = useState<string>(urlQueryParam);
+    // Explicit network query tracking string to isolate dynamic text entry blocks completely
+    const [activeFetchedQuery, setActiveFetchedQuery] = useState<string>('');
 
     useEffect(() => {
         setPage(1);
@@ -124,7 +124,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         router.push(`${currentPath}?${params.toString()}`, { scroll: false });
     };
 
-    // FIXED SUBSEQUENT SEARCH TRIGGER: Listens directly to URL query variations to prevent search freezes
+    // SUBSEQUENT TRIGGER CONTROL ENGINE: Guarantees immediate fetch execution when search text updates
     useEffect(() => {
         async function fetchResults() {
             if (!urlQueryParam) {
@@ -164,85 +164,34 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         fetchResults();
     }, [urlQueryParam]); 
 
-    // COMPREHENSIVE CONVERSION ENGINE: Processes paper-specific sheet/roll metrics dynamically
+    // REAL-TIME DROPDOWN TRANSFORM ENGINE: Cooperates natively with the lib utility
     const convertedResults = useMemo(() => {
         return results.map(product => {
             const baseTitle = String(product.title || product.name || "");
             
-            // Extract baseline amount metric entries safely
-            let baseAmount = product.unitInfo?.value ?? product.unitInfo?.totalValue ?? product.amount ?? product.totalAmount ?? 1;
-            let currentUnitType = toCanonicalUnit(product.unitInfo?.unit ?? product.unit ?? product.unit_type ?? 'count');
+            // Standardize item volume extraction keys
+            const baseAmount = product.unitInfo?.value ?? product.unitInfo?.totalValue ?? product.amount ?? product.totalAmount ?? 1;
+            const currentUnitType = toCanonicalUnit(product.unitInfo?.unit ?? product.unit ?? product.unit_type ?? 'count');
 
-            // Paper Sheet Parser: Pull values from strings like "300 sheets per roll" or "24 rolls"
-            const rollsMatch = baseTitle.match(/(\d+)\s*Total\s*Rolls/i) || baseTitle.match(/(\d+)\s*Rolls/i) || baseTitle.match(/(\d+)\s*pack/i);
-            const sheetsMatch = baseTitle.match(/(\d+)\s*Sheets/i) || baseTitle.match(/(\d+)\s*Count/i);
-            
-            let detectedRolls = rollsMatch ? parseInt(rollsMatch[1], 10) : baseAmount;
-            let detectedSheets = sheetsMatch ? parseInt(sheetsMatch[1], 10) : 0;
-
-            // Normalize unclassified item attributes if paper keywords are matched
-            if (currentUnitType === 'count' || currentUnitType === 'rolls') {
-                const lowerTitle = baseTitle.toLowerCase();
-                if (lowerTitle.includes('toilet paper') || lowerTitle.includes('paper towel') || lowerTitle.includes('sheets') || lowerTitle.includes('rolls')) {
-                    currentUnitType = 'rolls';
-                    baseAmount = detectedRolls;
-                    // Grocery calculation rule fallback if sheets are completely omitted from the item title
-                    if (detectedSheets <= 0) {
-                        detectedSheets = detectedRolls * (lowerTitle.includes('paper towel') ? 120 : 150);
-                    }
-                }
-            }
-
-            // ORIGINAL SELECTION STATE TRACK
+            // ORIGINAL SELECTION STATE PASS
             if (!selectedUnit || selectedUnit === 'unknown') {
+                const verifiedBaseScore = typeof product.score === 'number' ? product.score : (product.price / baseAmount);
                 return {
                     ...product,
-                    pricePerUnitNumeric: product.score ?? (product.price / baseAmount),
-                    totalPriceNumeric: product.price
-                };
-            }
-
-            // Intercept and resolve sheet conversions directly
-            if (selectedUnit === 'sheets' && currentUnitType === 'rolls') {
-                const totalCalculatedSheets = detectedSheets > 0 ? detectedSheets : (baseAmount * 150);
-                const sheetPriceString = `$${(product.price / totalCalculatedSheets).toFixed(4)}/sheet`;
-                return {
-                    ...product,
-                    pricePerUnit: sheetPriceString,
-                    pricePerUnitNumeric: product.price / totalCalculatedSheets,
+                    pricePerUnitNumeric: verifiedBaseScore,
                     totalPriceNumeric: product.price,
-                    ppuFormatted: sheetPriceString,
                     unitInfo: {
-                        formatted: `${totalCalculatedSheets} sheets`,
-                        value: totalCalculatedSheets,
-                        unit: 'sheets',
-                        quantity: 1,
-                        totalValue: totalCalculatedSheets
-                    }
-                };
-            }
-
-            if (selectedUnit === 'rolls' && currentUnitType === 'sheets') {
-                const totalCalculatedRolls = detectedRolls > 0 ? detectedRolls : Math.ceil(baseAmount / 150);
-                const rollPriceString = `$${(product.price / totalCalculatedRolls).toFixed(2)}/roll`;
-                return {
-                    ...product,
-                    pricePerUnit: rollPriceString,
-                    pricePerUnitNumeric: product.price / totalCalculatedRolls,
-                    totalPriceNumeric: product.price,
-                    ppuFormatted: rollPriceString,
-                    unitInfo: {
-                        formatted: `${totalCalculatedRolls} rolls`,
-                        value: totalCalculatedRolls,
-                        unit: 'rolls',
-                        quantity: 1,
-                        totalValue: totalCalculatedRolls
+                        formatted: product.unitInfo?.formatted ?? `${baseAmount} ${currentUnitType}`,
+                        value: baseAmount,
+                        unit: currentUnitType,
+                        quantity: product.unitInfo?.quantity ?? 1,
+                        totalValue: baseAmount
                     }
                 };
             }
             
-            // Fallback strategy for non-paper unit formats
-            const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any);
+            // Call our centralized library system to process paper conversions natively
+            const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any, baseTitle);
             
             if (convertedAmount !== null && convertedAmount > 0) {
                 const newPPUString = calculatePricePerUnit(product.price, convertedAmount, selectedUnit);
@@ -254,7 +203,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     score: product.price / convertedAmount,
                     ppuFormatted: newPPUString,
                     unitInfo: { 
-                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit === 'count' ? 'ea' : selectedUnit}`,
+                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit === 'count' ? 'ea' : selectedUnit === 'rolls' ? 'rolls' : selectedUnit === 'sheets' ? 'sheets' : selectedUnit}`,
                         value: convertedAmount,
                         unit: selectedUnit,
                         quantity: product.unitInfo?.quantity ?? 1,
@@ -281,7 +230,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         });
     }, [results, selectedUnit]);
 
-    // Force sheets/rolls into the available options pool dynamically for paper-related searches
     const availableUnits = useMemo(() => {
         const units = results
             .map(p => toCanonicalUnit(p.unitInfo?.unit ?? p.unit ?? p.unit_type ?? ''))
@@ -298,11 +246,13 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         return Array.from(uniqueSet).sort();
     }, [results, urlQueryParam]);
 
+    // INSTANT LOCAL SORTING ENGINE: Runs without hitting the network API layers
     const sortedAndConvertedResults = useMemo(() => {
         return [...convertedResults].sort((a, b) => {
             if (sortBy === 'price_asc') return a.totalPriceNumeric - b.totalPriceNumeric;
             if (sortBy === 'price_desc') return b.totalPriceNumeric - a.totalPriceNumeric;
             
+            // Fallback strategy: Best Unit Value (score_asc)
             const valA = typeof a.pricePerUnitNumeric === 'number' ? a.pricePerUnitNumeric : 999999;
             const valB = typeof b.pricePerUnitNumeric === 'number' ? b.pricePerUnitNumeric : 999999;
             
@@ -438,7 +388,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 </select>
                             </div>
                             
-                            {/* FIXED SELECT SYNCHRONIZATION: Binds value tokens directly to your active sort states */}
+                            {/* FIXED SELECT SYNCHRONIZATION LAYER */}
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value as any)}
@@ -506,7 +456,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             </section>
 
             {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />}
-            <ComparisonDrawer selectedIds={compareList} products={results as any} onRemove={(id) => setCompareList(p => p.filter(i => i !== id))} onClear={() => setCompareList([])} onCompare={() => setShowComparison(true)} />
+            <ComparisonDrawer selectedIds={compareList} products={results as any} onRemove={(id) => setCompareList(prev => prev.filter(item => item !== id))} onClear={() => setCompareList([])} onCompare={() => setShowComparison(true)} />
             {showComparison && <ComparisonView products={results.filter(p => compareList.includes(p.id)) as any} onClose={() => setShowComparison(false)} />}
         </div>
     );

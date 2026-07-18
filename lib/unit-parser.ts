@@ -31,7 +31,9 @@ export const CANONICAL_UNITS: Record<string, string> = {
     'gallon': 'gal', 'gallons': 'gal',
     'gram': 'g', 'grams': 'g',
     'milliliter': 'ml', 'milliliters': 'ml',
-    'liter': 'l', 'liters': 'l'
+    'liter': 'l', 'liters': 'l',
+    'roll': 'rolls', 'rolls': 'rolls',
+    'sheet': 'sheets', 'sheets': 'sheets'
 };
 
 export function toCanonicalUnit(unit: string): UnitType {
@@ -53,13 +55,13 @@ const UNIT_REGEX = {
     qt: /((?:\d*\.)?\d+)[-\s]?(?:qt|quart|quarts)\b/i,
     pt: /((?:\d*\.)?\d+)[-\s]?(?:pt|pint|pints)\b/i,
     sq_ft: /((?:\d*\.)?\d+)[-\s]?(?:sq\s?ft|sq\.\s?ft|square\s?foot|square\s?feet)\b/i,
-    loads: /(\d+)[-\s]?(?:load|loads)\b/i,
+    loads: /(\d+)[-\s]?(?:load|loads|washes)\b/i,
     rolls: /(\d+)[-\s]?(?:(?:mega|family|regular|double|triple|huge|super|giant|big|large|bulk)\s+){0,3}(?:roll|rolls)\b/i,
     sheets: /(\d+)[-\s]?(?:sheet|sheets)\b/i,
     count: /((?:\d*\.)?\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i,
 };
 
-const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]+(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers|ct|pods?|capsules?|k-cups?)\)/i;
+const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]+:::?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers|ct|pods?|capsules?|k-cups?)\)/i;
 const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
@@ -252,7 +254,7 @@ export function normalizeUnit(info: UnitInfo): UnitInfo {
     else if (copy.unit === 'ml') { copy.value *= 0.033814; copy.unit = 'fl oz'; copy.totalValue *= 0.033814; }
     else if (copy.unit === 'sheets') {
         const isPaperTowel = /towel|napkin/i.test(info.formatted); 
-        const divisor = isPaperTowel ? 100 : 300; 
+        const divisor = isPaperTowel ? 120 : 150; 
         copy.value /= divisor; copy.unit = 'rolls'; copy.totalValue /= divisor;
     } else if (copy.unit === 'sq ft') {
         copy.value /= 40; copy.unit = 'rolls'; copy.totalValue /= 40;
@@ -277,18 +279,30 @@ export function calculatePricePerUnit(price: number, totalValue: number, unit: s
     return `$${ppu.toFixed(2)}/${unitLabel}`;
 }
 
-export function convertValue(value: number, from: string, to: string): number | null {
+// FIXED VALUE CONVERTER MATRIX: Features direct isolated bi-directional sheets/rolls vectors natively
+export function convertValue(value: number, from: string, to: string, contextTitle: string = ''): number | null {
     const cFrom = toCanonicalUnit(from);
     const cTo = toCanonicalUnit(to);
+    
     if (cFrom === cTo) return value;
     if (value <= 0) return null;
+
+    // Direct Paper Scaling Track (Bypasses liquid metric collisions)
+    const isTowelContext = /towel|napkin/i.test(contextTitle || '');
+    const paperSheetFactor = isTowelContext ? 120 : 150;
+
+    if (cFrom === 'rolls' && cTo === 'sheets') return value * paperSheetFactor;
+    if (cFrom === 'sheets' && cTo === 'rolls') return value / paperSheetFactor;
+
     const weightToBase: Record<string, number> = { 'g': 1, 'kg': 1000, 'mg': 0.001, 'lb': 453.592, 'oz': 28.3495 };
     const volumeToBase: Record<string, number> = {
         'ml': 1, 'l': 1000, 'fl oz': 29.5735, 'gal': 3785.41, 'qt': 946.353, 'pt': 473.176,
-        'loads': 29.5735 * 1.5, 'rolls': 1, 'sheets': 1 / 300, 'sq ft': 1 / 40,
+        'loads': 29.5735 * 1.5, 'sq ft': 1 / 40
     };
+
     if (weightToBase[cFrom] && weightToBase[cTo]) return (value * weightToBase[cFrom]) / weightToBase[cTo];
     if (volumeToBase[cFrom] && volumeToBase[cTo]) return (value * volumeToBase[cFrom]) / volumeToBase[cTo];
     if (cFrom === 'count' && cTo === 'count') return value;
+    
     return null;
 }
