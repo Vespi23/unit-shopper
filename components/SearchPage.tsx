@@ -246,18 +246,22 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         return Array.from(uniqueSet).sort();
     }, [results, urlQueryParam]);
 
-    // INSTANT LOCAL SORTING ENGINE: Runs without hitting the network API layers
     const sortedAndConvertedResults = useMemo(() => {
+        // Log to verify the trigger occurs on dropdown change
+        console.log(`[SORT_DEBUG]: Sorting by ${sortBy} with ${convertedResults.length} items`);
+        
         return [...convertedResults].sort((a, b) => {
-            if (sortBy === 'price_asc') return a.totalPriceNumeric - b.totalPriceNumeric;
-            if (sortBy === 'price_desc') return b.totalPriceNumeric - a.totalPriceNumeric;
+            // Strategy 1: Lowest Price
+            if (sortBy === 'price_asc') return (a.price || 0) - (b.price || 0);
             
-            // Fallback strategy: Best Unit Value (score_asc)
-            const valA = typeof a.pricePerUnitNumeric === 'number' ? a.pricePerUnitNumeric : 999999;
-            const valB = typeof b.pricePerUnitNumeric === 'number' ? b.pricePerUnitNumeric : 999999;
+            // Strategy 2: Highest Price
+            if (sortBy === 'price_desc') return (b.price || 0) - (a.price || 0);
             
-            if (valA !== valB) return valA - valB;
-            return a.totalPriceNumeric - b.totalPriceNumeric;
+            // Strategy 3: Best Unit Value (Default)
+            const valA = (typeof a.pricePerUnitNumeric === 'number' && a.pricePerUnitNumeric > 0) ? a.pricePerUnitNumeric : 999999;
+            const valB = (typeof b.pricePerUnitNumeric === 'number' && b.pricePerUnitNumeric > 0) ? b.pricePerUnitNumeric : 999999;
+            
+            return valA - valB;
         });
     }, [convertedResults, sortBy]);
 
