@@ -18,8 +18,14 @@ import {
 } from '@/lib/unit-parser';
 import { generateProductSchema } from '@/lib/schema';
 
+// FIXED TYPE INVERSION LAYER: Safely bind our explicit sorting metrics inline without global type file corruption
+type EnhancedSortingProduct = Product & {
+    pricePerUnitNumeric?: number;
+    totalPriceNumeric?: number;
+};
+
 interface SearchPageProps {
-    initialResults?: Product[];
+    initialResults?: EnhancedSortingProduct[];
     initialQuery?: string;
 }
 
@@ -73,7 +79,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const initialQueryState = urlQueryParam || initialQuery || '';
     const [submittedQuery, setSubmittedQuery] = useState(initialQueryState);
     
-    const [results, setResults] = useState<Product[]>(initialResults);
+    // Bind results state map onto our localized sorted intersection structure securely
+    const [results, setResults] = useState<EnhancedSortingProduct[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
     const [selectedUnit, setSelectedUnit] = useState<string>(initialUnit);
     const [loading, setLoading] = useState(false);
@@ -89,7 +96,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
     useEffect(() => {
         setPage(1);
-    }, [submittedQuery]);
+    }, [submittedQuery, sortBy]); 
 
     useEffect(() => {
         const q = searchParams.get('q') || '';
@@ -109,6 +116,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
         const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
         router.push(`${currentPath}?${params.toString()}`, { scroll: false });
+        
+        lastInitialResultsQuery.current = null;
         setSubmittedQuery(newQuery);
     };
 
@@ -129,8 +138,9 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 setSearched(false);
                 return;
             }
-            if (initialResults.length > 0 && !lastInitialResultsQuery.current && submittedQuery === initialQuery) {
+            if (initialResults.length > 0 && lastInitialResultsQuery.current === null && submittedQuery === initialQuery) {
                 lastInitialResultsQuery.current = submittedQuery;
+                setResults(initialResults);
                 setSearched(true);
                 return;
             }
@@ -141,13 +151,26 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
             try {
                 const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
-                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}${unitParam}`);
+                
+                let sortParamKey = 'unit_value';
+                if (sortBy === 'price_asc') sortParamKey = 'price_asc';
+                if (sortBy === 'price_desc') sortParamKey = 'price_desc';
+
+                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}&sort=${sortParamKey}${unitParam}`, {
+                    method: 'GET',
+                    cache: 'no-store',
+                    headers: {
+                        'Pragma': 'no-cache',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
                 if (!res.ok) throw new Error('Network response was not ok');
                 const data = await res.json();
                 setResults(Array.isArray(data) ? data : []);
                 lastInitialResultsQuery.current = submittedQuery;
             } catch (error) {
-                console.error("Search failed", error);
+                console.error("[BUDGETLYNX_SEARCH_PAGE_FAIL]: Ingestion crashed:", error);
                 setResults([]);
             } finally {
                 setLoading(false);
@@ -155,7 +178,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             }
         }
         fetchResults();
-    }, [submittedQuery]);
+    }, [submittedQuery, sortBy]);
 
     const convertedResults = useMemo(() => {
         return results.map(product => {
@@ -190,12 +213,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             if (sortBy === 'price_asc') return a.price - b.price;
             if (sortBy === 'price_desc') return b.price - a.price;
             
-            // FIXED: Direct lookup tracking numerical values calculated by the backend API router
-            const valA = typeof a.pricePerUnit === 'number' ? a.pricePerUnit : (a.score ?? 999999);
-            const valB = typeof b.pricePerUnit === 'number' ? b.pricePerUnit : (b.score ?? 999999);
+            // FIXED TYPES VALIDATION TRACK: Intersection properties evaluate cleanly with zero ts compiler faults
+            const valA = typeof a.pricePerUnitNumeric === 'number' ? a.pricePerUnitNumeric : (a.score ?? 999999);
+            const valB = typeof b.pricePerUnitNumeric === 'number' ? b.pricePerUnitNumeric : (b.score ?? 999999);
             
             if (valA !== valB) return valA - valB;
-            return a.price - b.price; // Secondary tie-breaker: Lowest absolute price
+            return a.price - b.price;
         });
     }, [convertedResults, sortBy]);
 
@@ -243,8 +266,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 ref={inputRef}
                                 name="searchQuery"
                                 type="text"
-                                key={initialQueryState}
-                                defaultValue={initialQueryState}
                                 placeholder="Search products (e.g. Toilet Paper)..."
                                 className="flex-1 bg-transparent border-none outline-none text-xl h-12 ring-0 focus:ring-0"
                             />
@@ -297,7 +318,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 {!loading && searched && results.length > 0 && (
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full mb-6 animate-in fade-in slide-in-from-top-2">
                         <div className="text-sm text-muted-foreground">
-                            Found {results.length} results for <span className="text-foreground font-semibold">"{submittedQuery || initialQueryState}"</span>
+                            Found {results.length} results for <span className="text-foreground font-semibold">"{submittedQuery || urlQueryParam}"</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-4">
                             <div className="flex items-center gap-3">
@@ -338,7 +359,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     </div>
                 )}
 
-                {/* UNIFIED LAYOUT: Iterates over the globally sorted products directly */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     {loading ? (
                         Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />)
@@ -382,7 +402,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                         </div>
                         <h3 className="text-xl font-bold mb-2">No qualifying results found</h3>
                         <p className="text-muted-foreground max-w-sm mx-auto mb-6">
-                            We couldn't find any verified product value matches (4+ stars, 100+ reviews) for "{submittedQuery || initialQueryState}".
+                            We couldn't find any verified product value matches (4+ stars, 100+ reviews) for "{submittedQuery || urlQueryParam}".
                         </p>
                         
                         <div className="w-full max-w-2xl text-left">
