@@ -35,34 +35,26 @@ const ITEMS_PER_PAGE = 40;
 
 function LedgerPromo() {
     return (
-        <div className="w-full mt-4 p-5 sm:p-6 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-md shadow-sm hover:shadow-md hover:border-primary/20 dark:hover:border-rose-500/20 transition-all duration-300 animate-in fade-in slide-in-from-top-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold tracking-wider text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded uppercase">
-                            Lynx Ledger
-                        </span>
-                        <span className="text-[11px] text-muted-foreground font-medium">
-                            Deep-dive insights & analysis
-                        </span>
-                    </div>
-                    <p className="text-sm font-semibold text-foreground tracking-tight">
-                        Looking for a breakdown on wholesale pricing games and shopping logic?
-                    </p>
-                    <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
+        <div className="w-full mt-8 p-8 rounded-3xl border border-border bg-card/50 backdrop-blur shadow-sm hover:shadow-md transition-all">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                <div className="space-y-2">
+                    <span className="text-[11px] font-bold tracking-widest text-rose-500 bg-rose-500/10 px-3 py-1 rounded-full uppercase">
+                        Lynx Ledger
+                    </span>
+                    <h3 className="text-lg font-bold text-foreground">
+                        Wholesale pricing games and shopping logic.
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xl">
                         Explore our clean, data-backed companion blog for detailed editorial reports, audio analysis logs, and clear media breakdowns tracking how suppliers construct bulk pricing metrics.
                     </p>
                 </div>
-                
-                <div className="shrink-0 flex items-center pt-2 sm:pt-0">
-                    <Link 
-                        href="/ledger"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition-colors group"
-                    >
-                        <span>Browse the ledger articles</span>
-                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                    </Link>
-                </div>
+                <Link 
+                    href="/ledger"
+                    className="shrink-0 flex items-center gap-2 text-sm font-bold text-rose-500 hover:text-rose-600 transition-colors group"
+                >
+                    <span>Browse the ledger</span>
+                    <ArrowRight className="h-4 w-4" />
+                </Link>
             </div>
         </div>
     );
@@ -86,12 +78,9 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
-    const [disabledUnits] = useState<Set<string>>(new Set());
     const [page, setPage] = useState(1);
 
-    useEffect(() => {
-        setPage(1);
-    }, [urlQueryParam, sortBy, selectedUnit]);
+    useEffect(() => { setPage(1); }, [urlQueryParam, sortBy, selectedUnit]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -110,11 +99,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     };
 
     useEffect(() => {
-        if (!urlQueryParam) {
-            setResults([]);
-            setSearched(false);
-            return;
-        }
+        if (!urlQueryParam) { setResults([]); setSearched(false); return; }
         setLoading(true);
         fetch(`/api/search?q=${encodeURIComponent(urlQueryParam)}`)
             .then(res => res.json())
@@ -131,7 +116,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             if (!selectedUnit || selectedUnit === 'unknown') {
                 return { ...product, pricePerUnitNumeric: product.score ?? (product.price / baseAmount), totalPriceNumeric: product.price };
             }
-
             const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any, product.title);
             const ppu = convertedAmount && convertedAmount > 0 ? (product.price / convertedAmount) : 999999;
             return { 
@@ -154,28 +138,31 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     return (
         <div className={`flex flex-col items-center w-full pb-20 ${isExtension ? 'bg-background pt-4' : ''}`}>
             {!isExtension && (
-                <section className="w-full bg-gradient-to-b from-emerald-50/50 via-background to-background pt-24 pb-12 px-4 flex flex-col items-center text-center">
-                    <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight mb-6">Shop by True Value.</h1>
-                    <div className="relative w-full max-w-2xl group z-10">
-                        <form onSubmit={handleSearch} className="relative flex items-center bg-card/80 backdrop-blur-md rounded-2xl border border-border/50 shadow-2xl p-2 transition-all">
-                            <Search className="h-6 w-6 text-muted-foreground ml-4 mr-3" />
-                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products..." className="flex-1 bg-transparent p-4 text-xl outline-none" />
-                            <button type="submit" className="px-8 bg-primary text-white rounded-xl font-bold">Search</button>
+                <section className="w-full pt-32 pb-20 px-4 flex flex-col items-center text-center bg-gradient-to-b from-emerald-50/50 via-background to-background">
+                    <h1 className="text-5xl md:text-8xl font-extrabold tracking-tighter mb-8 text-foreground">
+                        Shop by <span className="text-emerald-600">True Value</span>.
+                    </h1>
+                    
+                    <div className="relative w-full max-w-3xl group z-10">
+                        <form onSubmit={handleSearch} className="flex items-center bg-card shadow-2xl rounded-3xl border border-border p-3 gap-2">
+                            <Search className="h-7 w-7 text-muted-foreground ml-3" />
+                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products (e.g. Toilet Paper)..." className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" />
+                            <button type="submit" className="px-8 py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all">Search</button>
                         </form>
-                        
+
                         {!urlQueryParam && !loading && (
-                            <div className="mt-8 animate-in fade-in zoom-in duration-700">
-                                <div className="glass rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl">
-                                    <div className="flex items-center gap-4">
-                                        <div className="relative h-10 w-10 bg-white rounded-lg p-1 border">
-                                            <Image src="/extension-logo.png" alt="Lynx Vision" width={38} height={38} />
+                            <div className="mt-12 animate-in fade-in zoom-in duration-500">
+                                <div className="bg-card rounded-3xl border border-border p-6 flex items-center justify-between shadow-lg">
+                                    <div className="flex items-center gap-5">
+                                        <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center border shadow-sm">
+                                            <Image src="/extension-logo.png" alt="Lynx" width={48} height={48} />
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-sm font-bold">Lynx Vision</p>
-                                            <p className="text-xs text-muted-foreground">Automatic unit price comparisons.</p>
+                                            <p className="text-lg font-bold text-foreground">Lynx Vision Extension</p>
+                                            <p className="text-sm text-muted-foreground">Compare unit prices automatically while browsing.</p>
                                         </div>
                                     </div>
-                                    <a href="https://chromewebstore.google.com/detail/lynx-vision/eoihkpljhmakhpecnobkcnjofidebmhl" className="bg-primary text-white text-xs font-bold px-5 py-2 rounded-lg">Add to Chrome</a>
+                                    <a href="https://chromewebstore.google.com/detail/lynx-vision/eoihkpljhmakhpecnobkcnjofidebmhl" className="bg-primary text-white font-bold px-8 py-3 rounded-xl hover:bg-emerald-700 transition-all">Add to Chrome</a>
                                 </div>
                                 <LedgerPromo />
                             </div>
@@ -184,23 +171,28 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 </section>
             )}
 
-            <section className="container px-4 mt-4 w-full max-w-7xl">
-                {!loading && searched && results.length > 0 && (
-                    <div className="flex gap-4 mb-6">
-                        <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="p-2 border rounded-full">
-                            <option value="">Original Units</option>
-                            <option value="rolls">Rolls</option>
-                            <option value="sheets">Sheets</option>
-                        </select>
-                        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="p-2 border rounded-full">
-                            <option value="score_asc">Best Unit Value</option>
-                            <option value="price_asc">Lowest Total Price</option>
-                            <option value="price_desc">Highest Total Price</option>
-                        </select>
+            <section className="container px-6 mt-8 w-full max-w-7xl">
+                {searched && results.length > 0 && (
+                    <div className="flex flex-col sm:flex-row gap-6 mb-10 items-center justify-between">
+                        <p className="text-lg text-muted-foreground font-medium">
+                            Found <span className="font-bold text-foreground">{results.length}</span> results for <span className="font-bold text-foreground">"{urlQueryParam}"</span>
+                        </p>
+                        <div className="flex gap-4">
+                            <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <option value="">Original Units</option>
+                                <option value="rolls">Rolls</option>
+                                <option value="sheets">Sheets</option>
+                            </select>
+                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <option value="score_asc">Best Unit Value</option>
+                                <option value="price_asc">Lowest Total Price</option>
+                                <option value="price_desc">Highest Total Price</option>
+                            </select>
+                        </div>
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
                     {loading ? Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />) : 
                      displayData.map((p, i) => (
                         <ProductCard 
