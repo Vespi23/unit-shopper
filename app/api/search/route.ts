@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { parseUnit, normalizeUnit, toCanonicalUnit, convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
 
-// ABSOLUTE SCRIPT RUNTIME ISOLATION DIRECTIVES
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const revalidate = 0;
@@ -23,6 +22,7 @@ function locateDataArray(obj: any): any[] {
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || searchParams.get('query') || '';
+    const sortStrategy = searchParams.get('sort') || 'unit_value'; // Target dropdown key parser
 
     if (!query.trim()) {
         return new NextResponse(JSON.stringify([]), {
@@ -109,8 +109,9 @@ export async function GET(request: Request) {
         const batchOperations: Promise<void>[] = [];
 
         targetPages.forEach((pageNumber) => {
-            // High-entropy cache busting tokens generated on each cycle
-            const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            // FIXED UPSTREAM CACHE BUSTER: Injecting unique search query components straight into the parameters
+            const cleanKeyToken = query.replace(/[^a-zA-Z0-9]/g, '');
+            const cacheBuster = `_cb=${Date.now()}_${cleanKeyToken}_p${pageNumber}_${Math.random().toString(36).substring(4, 9)}`;
 
             // Amazon Template
             const amznTemplateTask = fetch(`${decodoUrl}?${cacheBuster}`, {
@@ -180,7 +181,7 @@ export async function GET(request: Request) {
             .catch(() => {});
             batchOperations.push(wmtTemplateTask);
 
-            // Walmart HTML
+            // Walmart HTML via Script Blocks
             const wmtHtmlTask = fetch(`${decodoUrl}?${cacheBuster}`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
@@ -244,7 +245,7 @@ export async function GET(request: Request) {
         const internalTimeoutGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('VercelTimeGateHit')), 52000));
         await Promise.race([executeMultiPageAggregation(), internalTimeoutGuard]);
     } catch {
-        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations completed up to time limit.`);
+        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations frame finalized.`);
     }
 
     let finalPayload: any[] = [];
@@ -280,7 +281,9 @@ export async function GET(request: Request) {
                 return {
                     ...p,
                     price: unitPrice,
-                    score: numericPPU, 
+                    score: numericPPU, // Retained for frontend legacy components
+                    pricePerUnitNumeric: numericPPU, // Explicit Sorting Metric
+                    totalPriceNumeric: unitPrice,    // Explicit Sorting Metric
                     pricePerUnit: calculatePricePerUnit(unitPrice, finalAmount, finalUnit),
                     ppuFormatted: `$${numericPPU.toFixed(2)}/${displayUnitLabel}`,
                     unitInfo: {
@@ -293,12 +296,18 @@ export async function GET(request: Request) {
                 };
             }).filter(Boolean);
 
-            processedResults.sort((a: any, b: any) => {
-                const valA = a.score || 0;
-                const valB = b.score || 0;
-                if (valA !== valB) return valA - valB;
-                return (a.price || 0) - (b.price || 0);
-            });
+            // FIXED: MULTI-STRATEGY DROPDOWN SORT ENGINE
+            if (sortStrategy === 'price_asc') {
+                processedResults.sort((a: any, b: any) => a.totalPriceNumeric - b.totalPriceNumeric);
+            } else if (sortStrategy === 'price_desc') {
+                processedResults.sort((a: any, b: any) => b.totalPriceNumeric - a.totalPriceNumeric);
+            } else {
+                // Default fallback: best unit value (Price per Unit ascending)
+                processedResults.sort((a: any, b: any) => {
+                    if (a.pricePerUnitNumeric !== b.pricePerUnitNumeric) return a.pricePerUnitNumeric - b.pricePerUnitNumeric;
+                    return a.totalPriceNumeric - b.totalPriceNumeric;
+                });
+            }
 
             finalPayload = processedResults;
         } catch {
@@ -306,7 +315,6 @@ export async function GET(request: Request) {
         }
     }
 
-    // FIXED: Enforce absolute downstream cache busting response headers explicitly
     return new NextResponse(JSON.stringify(finalPayload), {
         status: 200,
         headers: {
