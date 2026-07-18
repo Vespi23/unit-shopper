@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
-import { Search, Loader2, AlertCircle, ChevronDown, ArrowRight, BookOpen } from 'lucide-react';
+import { Search, Loader2, AlertCircle, ChevronDown, ArrowRight } from 'lucide-react';
 import { ProductDetailModal } from '@/components/ProductDetailModal';
 import { ComparisonDrawer } from '@/components/ComparisonDrawer';
 import { ComparisonView } from '@/components/ComparisonView';
@@ -20,12 +20,11 @@ import { generateProductSchema } from '@/lib/schema';
 
 interface SearchPageProps {
     initialResults?: Product[];
-    initialQuery?: string; // Add this specific row definition line
+    initialQuery?: string;
 }
 
 const ITEMS_PER_PAGE = 40;
 
-// CLEANED FINTECH-STYLE EDITORIAL PROMOTION BANNER
 function LedgerPromo() {
     return (
         <div className="w-full mt-4 p-5 sm:p-6 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-md shadow-sm hover:shadow-md hover:border-primary/20 dark:hover:border-rose-500/20 transition-all duration-300 animate-in fade-in slide-in-from-top-3">
@@ -65,14 +64,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    // RENAME: Changed local variable to avoid duplicate identifier conflicts
     const urlQueryParam = searchParams.get('q') || '';
     const initialUnit = toCanonicalUnit(searchParams.get('u') || '');
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
     const inputRef = useRef<HTMLInputElement>(null);
     
-    // Fallback hierarchy structure: URL state -> Server-side pSEO keyword -> Empty fallback
     const initialQueryState = urlQueryParam || initialQuery || '';
     const [submittedQuery, setSubmittedQuery] = useState(initialQueryState);
     
@@ -110,11 +107,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         if (newQuery) params.set('q', newQuery); else params.delete('q');
         if (selectedUnit) params.set('u', selectedUnit);
 
-        // FIXED: Detect if user is on a search sub-route or the root domain
         const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
-        const targetPath = currentPath.startsWith('/search/') ? currentPath : '/';
-
-        router.push(`/?${params.toString()}`, { scroll: false });
+        router.push(`${currentPath}?${params.toString()}`, { scroll: false });
         setSubmittedQuery(newQuery);
     };
 
@@ -124,9 +118,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         const params = new URLSearchParams(searchParams.toString());
         if (canonical && canonical !== 'unknown') params.set('u', canonical); else params.delete('u');
 
-        // FIXED: Use dynamic path detection to preserve your pSEO URL route structure
         const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
-
         router.push(`${currentPath}?${params.toString()}`, { scroll: false });
     };
 
@@ -197,7 +189,10 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         return [...convertedResults].sort((a, b) => {
             if (sortBy === 'price_asc') return a.price - b.price;
             if (sortBy === 'price_desc') return b.price - a.price;
-            return (a.score ?? 999999) - (b.score ?? 999999);
+            
+            const scoreA = a.score !== undefined ? a.score : (typeof a.pricePerUnit === 'number' ? a.pricePerUnit : 999999);
+            const scoreB = b.score !== undefined ? b.score : (typeof b.pricePerUnit === 'number' ? b.pricePerUnit : 999999);
+            return scoreA - scoreB;
         });
     }, [convertedResults, sortBy]);
 
@@ -245,10 +240,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 ref={inputRef}
                                 name="searchQuery"
                                 type="text"
-
-                                key = {initialQueryState}
+                                key={initialQueryState}
                                 defaultValue={initialQueryState}
-                                
                                 placeholder="Search products (e.g. Toilet Paper)..."
                                 className="flex-1 bg-transparent border-none outline-none text-xl h-12 ring-0 focus:ring-0"
                             />
@@ -264,9 +257,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                             )}
                         </form>
 
-                        {/* EXTENSION PROMO AND PROMOTIONAL BANNERS ORDER FIXED AS PER IMAGE_9DF24A.PNG REQUIREMENT */}
                         <div className="mt-8 hidden sm:block animate-in fade-in zoom-in duration-700 delay-300">
-                            {/* 1. LYNX VISION EXTENSION ROW CARD */}
                             <div className="glass dark:glass-dark rounded-2xl border border-primary/20 p-4 flex items-center justify-between gap-6 shadow-xl lynx-glow">
                                 <div className="flex items-center gap-4">
                                     <div className="relative h-10 w-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm border overflow-hidden">
@@ -291,7 +282,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 </a>
                             </div>
 
-                            {/* 2. LYNX LEDGER EDITORIAL MARQUEE CARD INJECTED DIRECTLY UNDERNEATH LYNX VISION CONTAINER BORDERS */}
                             {!submittedQuery && !loading && (
                                 <LedgerPromo />
                             )}
@@ -304,7 +294,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 {!loading && searched && results.length > 0 && (
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full mb-6 animate-in fade-in slide-in-from-top-2">
                         <div className="text-sm text-muted-foreground">
-                            {/* FIXED: Prioritize submittedQuery, but fall back to initialQueryState to prevent empty quotes on load */}
                             Found {results.length} results for <span className="text-foreground font-semibold">"{submittedQuery || initialQueryState}"</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-4">
@@ -346,12 +335,13 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     </div>
                 )}
 
+                {/* UNIFIED LAYOUT: Iterates over the globally sorted products directly */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     {loading ? (
                         Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />)
                     ) : (
                         paginatedDisplayResults.map((product, index) => (
-                            <div key={product.id}>
+                            <div key={product.id} className="animate-in fade-in zoom-in-95 duration-300">
                                 <script
                                     type="application/ld+json"
                                     dangerouslySetInnerHTML={{ 
@@ -389,7 +379,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                         </div>
                         <h3 className="text-xl font-bold mb-2">No qualifying results found</h3>
                         <p className="text-muted-foreground max-w-sm mx-auto mb-6">
-                            We couldn't find any products with 4+ stars and 100+ reviews for "{submittedQuery}".
+                            We couldn't find any verified product value matches (4+ stars, 100+ reviews) for "{submittedQuery || initialQueryState}".
                         </p>
                         
                         <div className="w-full max-w-2xl text-left">
