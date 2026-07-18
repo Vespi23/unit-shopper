@@ -30,26 +30,33 @@ export async function GET(request: Request) {
 
     const processItem = (item: any, source: 'amazon' | 'walmart') => {
         const general = item.general || item || {};
-        const priceObj = item.price || (item.priceInfo ? { price: item.priceInfo.currentPrice?.price } : {});
         const ratingObj = item.rating || {};
 
         let title = String(general.title || item.title || "").trim();
         if (!title || title === "undefined") return;
 
-        let parsedRating = parseFloat(String(ratingObj.rating || item.rating || "0"));
-        let parsedCount = parseInt(String(ratingObj.count || item.reviews || item.review_count || "0"), 10);
+        const parsedRating = parseFloat(String(ratingObj.rating || item.rating || "0"));
+        const parsedCount = parseInt(String(ratingObj.count || item.reviews || item.review_count || "0"), 10);
 
-        // Defensive recovery defaults if live variables fail to parse from raw text nodes
-        if (parsedRating <= 0) parsedRating = 4.5;
-        if (parsedCount <= 0) parsedCount = 148;
-
-        // Enforce strict quality filter gates
-        if (parsedRating < 4.0 || parsedCount < 100) return;
+        // STRICTOR QUALITY FILTERS: Skip any item that fails to explicitly match your required metrics
+        if (isNaN(parsedRating) || parsedRating < 4.0 || isNaN(parsedCount) || parsedCount < 100) return;
 
         const productId = String(general.product_id || item.asin || item.id || "").replace(/[^A-Z0-9]/g, '');
         if (!productId || productId.length < 4) return;
 
-        const price = parseFloat(String(priceObj.price || item.current_price || "19.99").replace(/[^0-9.]/g, '')) || 19.99;
+        // FIXED: Deep Object Scraper to resolve accurate item pricing across schemas
+        let rawPrice: any = null;
+        if (item.priceInfo?.currentPrice?.price !== undefined) rawPrice = item.priceInfo.currentPrice.price;
+        else if (item.priceInfo?.currentPrice !== undefined) rawPrice = item.priceInfo.currentPrice;
+        else if (item.price?.price !== undefined) rawPrice = item.price.price;
+        else if (item.price !== undefined && typeof item.price !== 'object') rawPrice = item.price;
+        else if (item.current_price !== undefined) rawPrice = item.current_price;
+        else if (item.price_info !== undefined) rawPrice = item.price_info;
+        else if (general.price !== undefined) rawPrice = general.price;
+
+        const price = parseFloat(String(rawPrice || "0").replace(/[^0-9.]/g, ''));
+        if (isNaN(price) || price <= 0) return; // Drop items with unparseable or zero values
+
         const image = general.image || item.image || item.thumbnail || "";
         
         const parsedUnitInfo = parseUnit(title);
@@ -99,7 +106,7 @@ export async function GET(request: Request) {
 
         targetPages.forEach((pageNumber) => {
             // =================================================================
-            // AMAZON MULTI-PAGE CHANNELS
+            // AMAZON: CONCURRENT MULTI-PAGE CHANNELS
             // =================================================================
             const amznTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -133,15 +140,17 @@ export async function GET(request: Request) {
 
                     const priceWhole = block.match(/<span class="a-price-whole">([^<]+)<span/i);
                     const priceFraction = block.match(/<span class="a-price-fraction">([^<]+)<\/span>/i);
-                    let price = 14.99;
+                    let price = 0;
                     if (priceWhole) price = parseFloat(priceWhole[1].replace(/[^0-9]/g, '')) + (priceFraction ? parseFloat('0.' + priceFraction[1]) : 0);
+                    if (price <= 0) return;
+
                     const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/i)?.[1] || "";
                     
                     const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*out of 5 stars/i);
                     const countMatch = block.match(/aria-label="([0-9,]+)\s*ratings"/i) || block.match(/<span class="a-size-base[^>]*>([0-9,]+)<\/span>/i);
                     
-                    const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 4.6;
-                    const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 210;
+                    const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
+                    const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 0;
 
                     processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), asin, price, image, rating, reviews }, 'amazon');
                 });
@@ -150,7 +159,7 @@ export async function GET(request: Request) {
             batchOperations.push(amznHtmlTask);
 
             // =================================================================
-            // WALMART MULTI-PAGE CHANNELS
+            // WALMART: CONCURRENT MULTI-PAGE CHANNELS
             // =================================================================
             const wmtTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -184,10 +193,11 @@ export async function GET(request: Request) {
                     if (!titleMatch) return;
 
                     const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/i);
-                    const price = priceMatch ? parseFloat(priceMatch[1]) : 12.99;
+                    if (!priceMatch) return;
+                    const price = parseFloat(priceMatch[1]);
+
                     const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/i) || block.match(/srcset="([^"\s]+)/i);
                     
-                    // FIXED WALMART REGEX: Multi-layered matching templates mapping visual score structures accurately
                     const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*out of 5 stars/i) || 
                                        block.match(/([0-4]\.[0-9]|5\.0)\s*stars/i) || 
                                        block.match(/rating\s*([0-4]\.[0-9]|5\.0)/i);
@@ -196,8 +206,8 @@ export async function GET(request: Request) {
                                      block.match(/\(([0-9,]+)\)\s*<span/i) ||
                                      block.match(/>\s*\(([0-9,]+)\)\s*</i);
 
-                    const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 4.5;
-                    const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 135;
+                    const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
+                    const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 0;
 
                     processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating, reviews }, 'walmart');
                 });
@@ -213,7 +223,7 @@ export async function GET(request: Request) {
         const internalTimeoutGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('VercelTimeGateHit')), 52000));
         await Promise.race([executeMultiPageAggregation(), internalTimeoutGuard]);
     } catch {
-        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations frame processed up to absolute threshold.`);
+        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations completed up to time limit.`);
     }
 
     if (rawResults.length === 0) {
