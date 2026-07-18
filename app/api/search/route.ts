@@ -38,11 +38,11 @@ export async function GET(request: Request) {
         let title = String(general.title || item.title || "").trim();
         if (!title || title === "undefined") return;
 
-        const parsedRating = parseFloat(ratingObj.rating || item.rating) || 4.5;
-        const parsedCount = parseInt(ratingObj.count || item.reviews || item.review_count) || 124;
+        const parsedRating = parseFloat(String(ratingObj.rating || item.rating || "0"));
+        const parsedCount = parseInt(String(ratingObj.count || item.reviews || item.review_count || "0"), 10);
 
-        // Enforce fallback quality filters across incoming elements
-        if (parsedRating < 3.5 || parsedCount < 20) return;
+        // FIXED: Enforce strict quality filter gates (rating >= 4.0 and reviews >= 100)
+        if (parsedRating < 4.0 || parsedCount < 100) return;
 
         const productId = String(general.product_id || item.asin || item.id || "").replace(/[^A-Z0-9]/g, '');
         if (!productId || productId.length < 4) return;
@@ -97,7 +97,7 @@ export async function GET(request: Request) {
 
         targetPages.forEach((pageNumber) => {
             // =================================================================
-            // AMAZON: CONCURRENT MULTI-PAGE STRIPPER PIPELINE
+            // AMAZON: MULTI-PAGE STRIPPER PIPELINE
             // =================================================================
             const amznTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -125,10 +125,8 @@ export async function GET(request: Request) {
                     const asin = block.substring(0, 10);
                     if (!/^[A-Z0-9]{10}$/.test(asin)) return;
 
-                    // Robust Fallback: Pull title from text blocks or raw element image structures
                     const titleMatch = block.match(/alt="([^"]{15,250})"/i) ||
-                                       block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/i) || 
-                                       block.match(/<span class="a-size-medium a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/i);
+                                       block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/i);
                     if (!titleMatch) return;
 
                     const priceWhole = block.match(/<span class="a-price-whole">([^<]+)<span/i);
@@ -137,14 +135,21 @@ export async function GET(request: Request) {
                     if (priceWhole) price = parseFloat(priceWhole[1].replace(/[^0-9]/g, '')) + (priceFraction ? parseFloat('0.' + priceFraction[1]) : 0);
                     const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/i)?.[1] || "";
                     
-                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), asin, price, image, rating: 4.6, reviews: 210 }, 'amazon');
+                    // FIXED: Extract live user metrics from raw Amazon markup chunks dynamically
+                    const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*out of 5 stars/i);
+                    const countMatch = block.match(/aria-label="([0-9,]+)\s*ratings"/i) || block.match(/<span class="a-size-base\s+a-color-secondary"[^>]*>([0-9,]+)<\/span>/i);
+                    
+                    const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
+                    const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 0;
+
+                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), asin, price, image, rating, reviews }, 'amazon');
                 });
             })
             .catch(() => {});
             batchOperations.push(amznHtmlTask);
 
             // =================================================================
-            // WALMART: CONCURRENT MULTI-PAGE STRIPPER PIPELINE
+            // WALMART: MULTI-PAGE STRIPPER PIPELINE
             // =================================================================
             const wmtTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -174,18 +179,21 @@ export async function GET(request: Request) {
                     const id = idMatch[1].replace(/[^0-9A-Za-z]/g, '');
                     if (id.length < 4) return;
 
-                    // ROBUST WALMART HARVESTER: Pull title text directly from the image alt attribute or raw link strings
-                    const titleMatch = block.match(/alt="([^"]{10,250})"/i) ||
-                                       block.match(/title="([^"]+)"/i) || 
-                                       block.match(/Link to\s*([^"]+)"/i) || 
-                                       block.match(/<span class="[^"]*">([^<]{10,120})<\/span>/i);
+                    const titleMatch = block.match(/alt="([^"]{10,250})"/i) || block.match(/title="([^"]+)"/i);
                     if (!titleMatch) return;
 
                     const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/i);
                     const price = priceMatch ? parseFloat(priceMatch[1]) : 12.99;
                     const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/i) || block.match(/srcset="([^"\s]+)/i);
                     
-                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating: 4.5, reviews: 142 }, 'walmart');
+                    // FIXED: Extract live user metrics from raw Walmart markup chunks dynamically
+                    const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*stars/i) || block.match(/rating\s*([0-4]\.[0-9]|5\.0)/i);
+                    const countMatch = block.match(/([0-9,]+)\s*reviews/i);
+
+                    const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
+                    const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 0;
+
+                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating, reviews }, 'walmart');
                 });
             })
             .catch(() => {});
