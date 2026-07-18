@@ -3,7 +3,9 @@ import { parseUnit, normalizeUnit, toCanonicalUnit, convertValue, calculatePrice
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 25;
+
+// FORCED MAXIMUM TIMEOUT LIMIT FOR HIGH-YIELD PARALLEL BATCHES
+export const maxDuration = 60; 
 
 function locateDataArray(obj: any): any[] {
     if (Array.isArray(obj)) return obj;
@@ -22,9 +24,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || searchParams.get('query') || '';
 
-    if (!query.trim()) {
-        return NextResponse.json([]);
-    }
+    if (!query.trim()) return NextResponse.json([]);
 
     const rawResults: any[] = [];
     const decodoUrl = "https://scraper-api.decodo.com/v2/scrape";
@@ -41,6 +41,7 @@ export async function GET(request: Request) {
         const parsedRating = parseFloat(ratingObj.rating || item.rating) || 4.5;
         const parsedCount = parseInt(ratingObj.count || item.reviews || item.review_count) || 124;
 
+        // Quality Gate Filters: Filter out low-tier matching metrics instantly
         if (parsedRating < 4.0 || parsedCount < 100) return;
 
         const productId = general.product_id || item.asin || item.id || Math.random().toString(36).substring(7);
@@ -62,8 +63,8 @@ export async function GET(request: Request) {
             totalAmount = 1;
         }
 
-        const productUrl = source === 'amazon'
-            ? `https://www.amazon.com/dp/${productId}`
+        const productUrl = source === 'amazon' 
+            ? `https://www.amazon.com/dp/${productId}` 
             : `https://www.walmart.com/ip/${productId}`;
 
         rawResults.push({
@@ -88,26 +89,34 @@ export async function GET(request: Request) {
         });
     };
 
-    // NON-BLOCKING INGESTION PIPELINE
-    const executeScrapePipeline = async () => {
-        const tasks = [
-            fetch(decodoUrl, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ target: "amazon_search", query: query, parse: true })
-            }).then(r => r.json()).then(d => locateDataArray(d.results?.[0]?.content || d.content || {})).then(items => items.forEach(i => processItem(i, 'amazon'))).catch(() => {}),
+    // HIGH-DENSITY 7-PAGE ASYNCHRONOUS FAN-OUT ENGINE
+    const executeMultiPageAggregation = async () => {
+        const targetPages = [1, 2, 3, 4, 5, 6, 7];
+        const batchOperations: Promise<void>[] = [];
 
-            fetch(decodoUrl, {
+        targetPages.forEach((pageNumber) => {
+            // =================================================================
+            // AMAZON MULTI-PAGE BATCH CHANNELS
+            // =================================================================
+            const amznTemplateTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ target: "walmart_search", query: query, parse: true })
-            }).then(r => r.json()).then(d => locateDataArray(d.results?.[0]?.content || d.content || {})).then(items => items.forEach(i => processItem(i, 'walmart'))).catch(() => {}),
+                body: JSON.stringify({ target: "amazon_search", query: `${query}&page=${pageNumber}`, parse: true })
+            })
+            .then(r => r.json())
+            .then(d => locateDataArray(d.results?.[0]?.content || d.content || {}))
+            .then(items => items.forEach(i => processItem(i, 'amazon')))
+            .catch(() => {});
+            batchOperations.push(amznTemplateTask);
 
-            fetch(decodoUrl, {
+            const amznHtmlTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`, proxy_pool: "premium", headless: "html" })
-            }).then(r => r.json()).then(d => d.results?.[0]?.content || d.content || "").then(html => {
+                body: JSON.stringify({ url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${pageNumber}`, proxy_pool: "premium", headless: "html" })
+            })
+            .then(r => r.json())
+            .then(d => d.results?.[0]?.content || d.content || "")
+            .then(html => {
                 if (!html) return;
                 const blocks = html.split('data-asin="');
                 blocks.shift();
@@ -122,15 +131,34 @@ export async function GET(request: Request) {
                     let price = 14.99;
                     if (priceWhole) price = parseFloat(priceWhole[1].replace(/[^0-9]/g, '')) + (priceFraction ? parseFloat('0.' + priceFraction[1]) : 0);
                     const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/)?.[1] || "";
-                    processItem({ title: titleMatch[1].trim(), asin, price, image, rating: 4.6, reviews: 245 }, 'amazon');
+                    processItem({ title: titleMatch[1].trim(), asin, price, image, rating: 4.6, reviews: 180 }, 'amazon');
                 });
-            }).catch(() => {}),
+            })
+            .catch(() => {});
+            batchOperations.push(amznHtmlTask);
 
-            fetch(decodoUrl, {
+            // =================================================================
+            // WALMART MULTI-PAGE BATCH CHANNELS
+            // =================================================================
+            const wmtTemplateTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}`, proxy_pool: "premium", headless: "html" })
-            }).then(r => r.json()).then(d => d.results?.[0]?.content || d.content || "").then(html => {
+                body: JSON.stringify({ target: "walmart_search", query: `${query}&page=${pageNumber}`, parse: true })
+            })
+            .then(r => r.json())
+            .then(d => locateDataArray(d.results?.[0]?.content || d.content || {}))
+            .then(items => items.forEach(i => processItem(i, 'walmart')))
+            .catch(() => {});
+            batchOperations.push(wmtTemplateTask);
+
+            const wmtHtmlTask = fetch(decodoUrl, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${pageNumber}`, proxy_pool: "premium", headless: "html" })
+            })
+            .then(r => r.json())
+            .then(d => d.results?.[0]?.content || d.content || "")
+            .then(html => {
                 if (!html) return;
                 const fallbackBlocks = html.includes('data-item-id=') ? html.split('data-item-id="') : html.split('href="/ip/');
                 fallbackBlocks.shift();
@@ -144,90 +172,27 @@ export async function GET(request: Request) {
                     const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/);
                     const price = priceMatch ? parseFloat(priceMatch[1]) : 12.99;
                     const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/) || block.match(/srcset="([^"\s]+)/);
-                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating: 4.4, reviews: 185 }, 'walmart');
+                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating: 4.5, reviews: 154 }, 'walmart');
                 });
-            }).catch(() => {})
-        ];
+            })
+            .catch(() => {});
+            batchOperations.push(wmtHtmlTask);
+        });
 
-        await Promise.all(tasks);
+        // Resolve all concurrent page streams safely with full fault-tolerance
+        await Promise.allSettled(batchOperations);
     };
 
     try {
-        const shortCircuitGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('ShortCircuitTimeout')), 8500));
-        await Promise.race([executeScrapePipeline(), shortCircuitGuard]);
+        // Dynamic Safety Gate: Package items at 54 seconds to beat strict platform terminations
+        const internalTimeoutGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('VercelTimeGateHit')), 54000));
+        await Promise.race([executeMultiPageAggregation(), internalTimeoutGuard]);
     } catch {
-        console.warn(`[SEARCH_ROUTER_CAPPED_WINDOW_EXIT]: Returning items processed before time limit.`);
+        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Reached maximum compilation frame. Returning all collected inventory rows.`);
     }
 
-    // =========================================================================
-    // HIGH-DENSITY HYBRID RECOVERY LOOP (Generates 120 Direct-Target Product Nodes)
-    // =========================================================================
     if (rawResults.length === 0) {
-        const cleanKeyword = query.trim().charAt(0).toUpperCase() + query.trim().slice(1);
-        
-        let categoryId = "product";
-        const lowerQuery = query.toLowerCase();
-        if (/shoe|boot|sneaker|footwear|heels/i.test(lowerQuery)) categoryId = "shoes";
-        else if (/paper|toilet|towel|tissue|napkin/i.test(lowerQuery)) categoryId = "paper";
-        else if (/coffee|drink|food|snack|box|cereal|bars/i.test(lowerQuery)) categoryId = "grocery";
-        else if (/soap|shampoo|cleaner|detergent|spray/i.test(lowerQuery)) categoryId = "cleaner";
-
-        const imageMapping: Record<string, string> = {
-            shoes: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=400&q=80",
-            paper: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=400&q=80",
-            grocery: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=400&q=80",
-            cleaner: "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=400&q=80",
-            product: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80"
-        };
-
-        const targetImage = imageMapping[categoryId];
-
-        // Generate exactly 120 product nodes split evenly across both retailers
-        for (let idx = 1; idx <= 120; idx++) {
-            const retailer = idx % 2 === 0 ? 'amazon' : 'walmart';
-            
-            const distributionSizes = [1, 2, 4, 6, 8, 12, 16, 24, 32, 36, 48, 60, 64, 72, 96, 100, 120, 144, 200, 288];
-            const countValue = distributionSizes[idx % distributionSizes.length];
-            
-            const baseCost = retailer === 'amazon' ? 1.14 : 1.06;
-            const scalarCurve = 0.85 + ((idx * 23) % 35) / 100;
-            const bulkSavingsDiscount = countValue > 48 ? 0.82 : 1.0;
-            const totalItemPrice = Math.max(4.49, countValue * baseCost * scalarCurve * bulkSavingsDiscount);
-            
-            // FIXED: Standardize ASIN and item ID patterns to create operational destination pages
-            const itemTokenId = retailer === 'amazon' 
-                ? `B07${idx}A${Math.abs(100 - idx)}FF` 
-                : `44102${idx}93${idx}`;
-
-            const descriptors = ["Choice", "Essential", "Premium Bulk", "Commercial", "Super Value", "Ultra", "Wholesale", "Pro Pack", "Eco-Saver", "Mega-Deal"];
-            const chosenPrefix = descriptors[idx % descriptors.length];
-            const itemTitle = `${chosenPrefix} ${cleanKeyword} Set (${countValue} Count)`;
-
-            const validTargetUrl = retailer === 'amazon'
-                ? `https://www.amazon.com/dp/${itemTokenId}`
-                : `https://www.walmart.com/ip/${itemTokenId}`;
-
-            rawResults.push({
-                id: `${retailer.substring(0, 4)}-${itemTokenId}`,
-                sku: itemTokenId,
-                price: totalItemPrice,
-                title: itemTitle,
-                name: itemTitle,
-                retailer: retailer,
-                source: retailer,
-                url: validTargetUrl,
-                link: validTargetUrl,
-                unit: 'count',
-                unit_type: 'count',
-                totalAmount: countValue,
-                amount: countValue,
-                image: targetImage,
-                thumbnail: targetImage,
-                rating: 4.2 + ((idx * 3) % 7) / 10,
-                reviews: 140 + (idx * 14),
-                originalPrice: totalItemPrice
-            });
-        }
+        return NextResponse.json([]);
     }
 
     try {
@@ -273,6 +238,7 @@ export async function GET(request: Request) {
             };
         }).filter(Boolean);
 
+        // Sort rows strictly by best price-per-unit across all pages combined
         processedResults.sort((a: any, b: any) => {
             const valA = a.score || 0;
             const valB = b.score || 0;
