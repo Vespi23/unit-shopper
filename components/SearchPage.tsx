@@ -190,9 +190,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             if (sortBy === 'price_asc') return a.price - b.price;
             if (sortBy === 'price_desc') return b.price - a.price;
             
-            const scoreA = a.score !== undefined ? a.score : (typeof a.pricePerUnit === 'number' ? a.pricePerUnit : 999999);
-            const scoreB = b.score !== undefined ? b.score : (typeof b.pricePerUnit === 'number' ? b.pricePerUnit : 999999);
-            return scoreA - scoreB;
+            // FIXED: Direct lookup tracking numerical values calculated by the backend API router
+            const valA = typeof a.pricePerUnit === 'number' ? a.pricePerUnit : (a.score ?? 999999);
+            const valB = typeof b.pricePerUnit === 'number' ? b.pricePerUnit : (b.score ?? 999999);
+            
+            if (valA !== valB) return valA - valB;
+            return a.price - b.price; // Secondary tie-breaker: Lowest absolute price
         });
     }, [convertedResults, sortBy]);
 
