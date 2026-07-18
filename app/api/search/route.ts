@@ -5,15 +5,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
-// High-precision volume extraction module capable of decomposing complex packaging strings
 function extractNormalizedVolume(titleStr: string): { amount: number; unit: string } {
     let amount = 1;
     let unit = 'unit';
     const cleanTitle = titleStr.toLowerCase().replace(/[\s\-_]+/g, ' ');
 
-    // Match Pattern Pattern: [Pack/Count Multiplier] x [Individual Volume] (e.g., "12 pack of 12 oz", "24 ct - 16.9 ounce")
     const multiPackMatch = cleanTitle.match(/(\d+)\s*(?:pack|pk|ct|count|count\b|pcs|bottles|cans)?\s*(?:of|x|\-)?\s*([0-9.]+)\s*(oz|ounce|fl\s*oz|lb|pound|gal|gallon|g|gram|ml|milliliter)/i);
-    
     if (multiPackMatch) {
         const packCount = parseInt(multiPackMatch[1]) || 1;
         const pieceSize = parseFloat(multiPackMatch[2]) || 1;
@@ -22,9 +19,7 @@ function extractNormalizedVolume(titleStr: string): { amount: number; unit: stri
         return { amount, unit };
     }
 
-    // Match Pattern Pattern: [Individual Volume] x [Pack/Count Multiplier] (e.g., "12 oz, 6 pack", "16.9 fl oz (pack of 24)")
     const reversePackMatch = cleanTitle.match(/([0-9.]+)\s*(oz|ounce|fl\s*oz|lb|pound|gal|gallon|g|gram|ml|milliliter)\s*(?:,|\b|\()?.*?(\d+)\s*(?:pack|pk|ct|count|pcs|bottles|cans)/i);
-    
     if (reversePackMatch) {
         const pieceSize = parseFloat(reversePackMatch[1]) || 1;
         unit = reversePackMatch[2].trim().toLowerCase();
@@ -33,7 +28,6 @@ function extractNormalizedVolume(titleStr: string): { amount: number; unit: stri
         return { amount, unit };
     }
 
-    // Standard Singular Matcher Block (e.g., "64 oz", "1.5 gallon", "50 count")
     const singularMatch = cleanTitle.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|g|gram|ml|milliliter|ct|pack|count|pcs)/i);
     if (singularMatch) {
         amount = parseFloat(singularMatch[1]) || 1;
@@ -130,8 +124,6 @@ export async function GET(request: Request) {
                 }
 
                 const image = itemText.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/)?.[1] || "";
-
-                // Align Amazon payload keys with the high-precision calculator engine
                 const measurement = extractNormalizedVolume(title);
 
                 rawResults.push({
@@ -169,7 +161,6 @@ export async function GET(request: Request) {
                 const rating = ratingBlock.rating ? parseFloat(ratingBlock.rating) : 4.5;
                 const reviews = ratingBlock.count ? parseInt(ratingBlock.count) : 25;
 
-                // Decompose product strings and badge data lists to intercept unit parameters
                 const stringToScan = `${title} ${generalBlock.badge ? JSON.stringify(generalBlock.badge) : ''}`;
                 const measurement = extractNormalizedVolume(stringToScan);
 
@@ -205,9 +196,14 @@ export async function GET(request: Request) {
         return NextResponse.json([]);
     }
 
-    // LAYER 3: DYNAMICALLY ISOLATED UNIT TRANSLATION ENGINE
     try {
-        const targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
+        let targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
+
+        // FIXED: Change literal string fallback allocation from 'unit' to a valid UnitType token ('unknown')
+        if (!targetUnit || targetUnit === toCanonicalUnit('')) {
+            const sampleUnit = rawResults.find(r => r.unit && r.unit !== 'unit')?.unit;
+            targetUnit = sampleUnit ? toCanonicalUnit(sampleUnit) : toCanonicalUnit('');
+        }
 
         const processedResults = rawResults.map(p => {
             if (!p) return null;
@@ -219,13 +215,17 @@ export async function GET(request: Request) {
             let finalAmount = currentAmount;
             let finalUnit = currentUnit;
 
-            if (targetUnit !== 'unknown' && currentUnit !== 'unknown') {
+            if (targetUnit && currentUnit && currentUnit !== targetUnit) {
                 const converted = convertValue(currentAmount, currentUnit, targetUnit);
                 if (converted) {
                     finalAmount = converted;
                     finalUnit = targetUnit;
                 }
             }
+
+            const calculatedPPU = finalAmount > 0 
+                ? calculatePricePerUnit(unitPrice, finalAmount, finalUnit)
+                : unitPrice;
 
             return {
                 ...p,
@@ -237,17 +237,23 @@ export async function GET(request: Request) {
                     totalValue: finalAmount,
                     formatted: `${finalAmount.toFixed(2)} ${finalUnit}`
                 },
-                pricePerUnit: calculatePricePerUnit(unitPrice, finalAmount, finalUnit)
+                pricePerUnit: calculatedPPU
             };
         }).filter(Boolean);
 
+        processedResults.sort((a: any, b: any) => {
+            const ppuA = a.pricePerUnit || 0;
+            const ppuB = b.pricePerUnit || 0;
+            
+            if (ppuA !== ppuB) {
+                return ppuA - ppuB;
+            }
+            return (a.price || 0) - (b.price || 0);
+        });
+
         return NextResponse.json(processedResults);
     } catch (parsingError: any) {
-        const structuralFallback = rawResults.map(p => ({
-            ...p,
-            unitInfo: { value: 0, unit: "unknown", quantity: 1, totalValue: 0, formatted: "Pending Calibration" },
-            pricePerUnit: 0
-        }));
-        return NextResponse.json(structuralFallback);
+        console.error(`[UNIFIED_SORTER_MODULE_EXCEPTION_RECOVERY]: ${parsingError.message}`);
+        return NextResponse.json(rawResults);
     }
 }
