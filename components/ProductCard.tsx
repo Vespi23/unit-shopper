@@ -22,10 +22,6 @@ export function ProductCardSkeleton() {
             <div className="p-4 flex flex-col gap-2 flex-1">
                 <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
                 <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
-                <div className="mt-auto flex items-end justify-between pt-4">
-                    <div className="h-8 w-16 bg-muted animate-pulse rounded" />
-                    <div className="h-6 w-12 bg-muted animate-pulse rounded" />
-                </div>
             </div>
         </div>
     );
@@ -54,7 +50,7 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
         e.stopPropagation();
 
         const trackingUrl = `${window.location.origin}/?q=${encodeURIComponent(product.title)}&ref=sharesavings`;
-        const shareSnippet = `🎯 Deal Alert via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.ppuFormatted || product.pricePerUnit} (${product.unitInfo?.formatted || 'N/A'})\n💵 Total Cost: $${product.price.toFixed(2)}\n\nCheck the unit value calculation here:\n👇👇👇\n${trackingUrl}`;
+        const shareSnippet = `🎯 Deal Alert via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.ppuFormatted || product.pricePerUnit || 'N/A'}\n💵 Total Cost: $${product.price.toFixed(2)}\n\nCheck the unit value calculation here:\n👇👇👇\n${trackingUrl}`;
 
         try {
             if (navigator.clipboard && window.isSecureContext) {
@@ -123,22 +119,22 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                     src={product.image}
                     alt={product.title}
                     loading={isPriority ? "eager" : "lazy"}
-                    data-fetchpriority={isPriority ? "high" : "auto"}
+                    decoding="async"
                     className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                 />
 
-                {/* FIXED: Swapped out unformatted string token metrics for real-time rounded `ppuFormatted` attributes */}
+                {/* FIXED: Formats price badges to show accurate currency symbols and rounded values */}
                 <div className="absolute bottom-3 right-3 bg-emerald-600 text-white dark:bg-emerald-500 shadow-xl shadow-emerald-900/20 px-4 py-2 rounded-2xl text-sm font-extrabold backdrop-blur-md border border-emerald-400/30 z-10 transition-all duration-300 group-hover:scale-110 group-hover:shadow-emerald-900/40 flex items-center gap-1.5">
-                    <span className="drop-shadow-md">{product.ppuFormatted || product.pricePerUnit}</span>
+                    <span className="drop-shadow-md">{product.ppuFormatted || product.pricePerUnit || 'N/A'}</span>
                 </div>
                 
-                {/* Store Branding Identifier Ribbon */}
+                {/* FIXED: Swapped retailer reference with standard product.source type string */}
                 <span className={`absolute top-3 right-3 px-2.5 py-0.5 text-[9px] font-black font-mono tracking-widest uppercase rounded-md shadow-sm text-white border z-10 ${
-                    product.retailer === 'amazon' 
+                    product.source === 'amazon' 
                         ? 'bg-orange-500 border-orange-400/30 shadow-orange-500/10' 
                         : 'bg-blue-600 border-blue-400/30 shadow-blue-600/10'
                 }`}>
-                    {product.retailer}
+                    {product.source}
                 </span>
             </div>
 
@@ -152,8 +148,8 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                 
                 <div className="mb-2 flex items-center gap-1 text-xs text-amber-500 font-medium">
                     <Star className="h-3 w-3 fill-current" />
-                    <span>{product.rating}</span>
-                    <span className="text-muted-foreground font-normal">({product.reviews})</span>
+                    <span>{product.rating || 0}</span>
+                    <span className="text-muted-foreground font-normal">({product.reviews || 0})</span>
                 </div>
 
                 <h3 className="line-clamp-2 text-sm font-semibold leading-tight min-h-[2.5rem] tracking-tight text-pretty" title={product.title}>

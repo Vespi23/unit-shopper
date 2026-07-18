@@ -5,7 +5,7 @@ export interface Product {
     currency: string;
     image: string;
     link: string;
-    source: string;
+    source: string; // Used directly as your retailer indicator string ('amazon' | 'walmart')
     rating?: number;
     reviews?: number;
 
@@ -27,6 +27,7 @@ export interface Product {
 
     originalPrice: number;
     pricePerUnit?: string;
+    ppuFormatted?: string; // FIXED: Added to explicitly enable type checking on product badges
     score?: number; 
 }
 
