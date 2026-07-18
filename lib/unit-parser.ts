@@ -61,7 +61,7 @@ const UNIT_REGEX = {
     count: /((?:\d*\.)?\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i,
 };
 
-const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]+:::?(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers|ct|pods?|capsules?|k-cups?)\)/i;
+const PACK_REGEX = /pack of (\d+)|(\d+)[-\s]?pack|\((?:pack of )?(\d+)[-\s]+(?:cans?|boxes?|bottles?|pouches?|packs?|counts?|rolls?|dispensers?|patches|stickers|ct|pods?|capsules?|k-cups?)\)/i;
 const COUNT_AS_QUANTITY_REGEX = /(?:^|\s|,)(\d+)[-\s]?(?:counts?|ct|pcs|bars?|cups?|cans?|bottles?|boxes?|pouches?|dispensers?|patches|stickers|tissues?|wipes?|diapers?|pads?|pods?|capsules?|k-cups?)\b/i;
 const MULTIPLIER_REGEX = /(\d+)\s?x\s?/i;
 
@@ -279,7 +279,6 @@ export function calculatePricePerUnit(price: number, totalValue: number, unit: s
     return `$${ppu.toFixed(2)}/${unitLabel}`;
 }
 
-// FIXED VALUE CONVERTER MATRIX: Features direct isolated bi-directional sheets/rolls vectors natively
 export function convertValue(value: number, from: string, to: string, contextTitle: string = ''): number | null {
     const cFrom = toCanonicalUnit(from);
     const cTo = toCanonicalUnit(to);
@@ -287,7 +286,6 @@ export function convertValue(value: number, from: string, to: string, contextTit
     if (cFrom === cTo) return value;
     if (value <= 0) return null;
 
-    // Direct Paper Scaling Track (Bypasses liquid metric collisions)
     const isTowelContext = /towel|napkin/i.test(contextTitle || '');
     const paperSheetFactor = isTowelContext ? 120 : 150;
 
