@@ -89,11 +89,18 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const [disabledUnits] = useState<Set<string>>(new Set());
     
     const [page, setPage] = useState(1);
-    const lastFetchedQuery = useRef<string | null>(null);
+    
+    // Explicit token strings to safely monitor actual network executions
+    const [activeFetchedQuery, setActiveFetchedQuery] = useState<string>(urlQueryParam);
 
     useEffect(() => {
         setPage(1);
     }, [urlQueryParam, sortBy, selectedUnit]);
+
+    useEffect(() => {
+        const u = searchParams.get('u') || '';
+        if (u !== selectedUnit) setSelectedUnit(u);
+    }, [searchParams]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -117,16 +124,15 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         router.push(`${currentPath}?${params.toString()}`, { scroll: false });
     };
 
+    // FIXED SUBSEQUENT SEARCH TRIGGER: Listens directly to URL query variations to prevent search freezes
     useEffect(() => {
         async function fetchResults() {
             if (!urlQueryParam) {
                 setResults([]);
                 setSearched(false);
-                lastFetchedQuery.current = null;
+                setActiveFetchedQuery('');
                 return;
             }
-
-            if (urlQueryParam === lastFetchedQuery.current) return;
 
             setLoading(true);
             setSearched(false);
@@ -146,7 +152,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 if (!res.ok) throw new Error('Network response failure');
                 const data = await res.json();
                 setResults(Array.isArray(data) ? data : []);
-                lastFetchedQuery.current = urlQueryParam;
+                setActiveFetchedQuery(urlQueryParam);
             } catch (error) {
                 console.error("[BUDGETLYNX_SCRAPE_DROP]: Fetch task failed:", error);
                 setResults([]);
@@ -158,26 +164,84 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         fetchResults();
     }, [urlQueryParam]); 
 
+    // COMPREHENSIVE CONVERSION ENGINE: Processes paper-specific sheet/roll metrics dynamically
     const convertedResults = useMemo(() => {
         return results.map(product => {
-            const baseAmount = product.unitInfo?.value ?? product.unitInfo?.totalValue ?? product.amount ?? product.totalAmount ?? 1;
-            const currentUnitType = toCanonicalUnit(product.unitInfo?.unit ?? product.unit ?? product.unit_type ?? 'count');
+            const baseTitle = String(product.title || product.name || "");
+            
+            // Extract baseline amount metric entries safely
+            let baseAmount = product.unitInfo?.value ?? product.unitInfo?.totalValue ?? product.amount ?? product.totalAmount ?? 1;
+            let currentUnitType = toCanonicalUnit(product.unitInfo?.unit ?? product.unit ?? product.unit_type ?? 'count');
 
+            // Paper Sheet Parser: Pull values from strings like "300 sheets per roll" or "24 rolls"
+            const rollsMatch = baseTitle.match(/(\d+)\s*Total\s*Rolls/i) || baseTitle.match(/(\d+)\s*Rolls/i) || baseTitle.match(/(\d+)\s*pack/i);
+            const sheetsMatch = baseTitle.match(/(\d+)\s*Sheets/i) || baseTitle.match(/(\d+)\s*Count/i);
+            
+            let detectedRolls = rollsMatch ? parseInt(rollsMatch[1], 10) : baseAmount;
+            let detectedSheets = sheetsMatch ? parseInt(sheetsMatch[1], 10) : 0;
+
+            // Normalize unclassified item attributes if paper keywords are matched
+            if (currentUnitType === 'count' || currentUnitType === 'rolls') {
+                const lowerTitle = baseTitle.toLowerCase();
+                if (lowerTitle.includes('toilet paper') || lowerTitle.includes('paper towel') || lowerTitle.includes('sheets') || lowerTitle.includes('rolls')) {
+                    currentUnitType = 'rolls';
+                    baseAmount = detectedRolls;
+                    // Grocery calculation rule fallback if sheets are completely omitted from the item title
+                    if (detectedSheets <= 0) {
+                        detectedSheets = detectedRolls * (lowerTitle.includes('paper towel') ? 120 : 150);
+                    }
+                }
+            }
+
+            // ORIGINAL SELECTION STATE TRACK
             if (!selectedUnit || selectedUnit === 'unknown') {
                 return {
                     ...product,
                     pricePerUnitNumeric: product.score ?? (product.price / baseAmount),
+                    totalPriceNumeric: product.price
+                };
+            }
+
+            // Intercept and resolve sheet conversions directly
+            if (selectedUnit === 'sheets' && currentUnitType === 'rolls') {
+                const totalCalculatedSheets = detectedSheets > 0 ? detectedSheets : (baseAmount * 150);
+                const sheetPriceString = `$${(product.price / totalCalculatedSheets).toFixed(4)}/sheet`;
+                return {
+                    ...product,
+                    pricePerUnit: sheetPriceString,
+                    pricePerUnitNumeric: product.price / totalCalculatedSheets,
                     totalPriceNumeric: product.price,
+                    ppuFormatted: sheetPriceString,
                     unitInfo: {
-                        formatted: product.unitInfo?.formatted ?? `${baseAmount} ${currentUnitType}`,
-                        value: baseAmount,
-                        unit: currentUnitType,
-                        quantity: product.unitInfo?.quantity ?? 1,
-                        totalValue: baseAmount
+                        formatted: `${totalCalculatedSheets} sheets`,
+                        value: totalCalculatedSheets,
+                        unit: 'sheets',
+                        quantity: 1,
+                        totalValue: totalCalculatedSheets
+                    }
+                };
+            }
+
+            if (selectedUnit === 'rolls' && currentUnitType === 'sheets') {
+                const totalCalculatedRolls = detectedRolls > 0 ? detectedRolls : Math.ceil(baseAmount / 150);
+                const rollPriceString = `$${(product.price / totalCalculatedRolls).toFixed(2)}/roll`;
+                return {
+                    ...product,
+                    pricePerUnit: rollPriceString,
+                    pricePerUnitNumeric: product.price / totalCalculatedRolls,
+                    totalPriceNumeric: product.price,
+                    ppuFormatted: rollPriceString,
+                    unitInfo: {
+                        formatted: `${totalCalculatedRolls} rolls`,
+                        value: totalCalculatedRolls,
+                        unit: 'rolls',
+                        quantity: 1,
+                        totalValue: totalCalculatedRolls
                     }
                 };
             }
             
+            // Fallback strategy for non-paper unit formats
             const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any);
             
             if (convertedAmount !== null && convertedAmount > 0) {
@@ -199,7 +263,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 };
             }
 
-            // FIXED COMPILER SAFETY HOOK: Assign concrete fallbacks to pass Product model type validation rules
             return {
                 ...product,
                 pricePerUnit: 'Incompatible',
@@ -218,12 +281,22 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         });
     }, [results, selectedUnit]);
 
+    // Force sheets/rolls into the available options pool dynamically for paper-related searches
     const availableUnits = useMemo(() => {
         const units = results
             .map(p => toCanonicalUnit(p.unitInfo?.unit ?? p.unit ?? p.unit_type ?? ''))
             .filter(u => u !== 'unknown') as string[];
-        return Array.from(new Set(units)).sort();
-    }, [results]);
+            
+        const uniqueSet = new Set(units);
+        const queryLower = urlQueryParam.toLowerCase();
+        
+        if (queryLower.includes('toilet') || queryLower.includes('paper') || queryLower.includes('tissue') || queryLower.includes('towel') || queryLower.includes('wipe')) {
+            uniqueSet.add('rolls');
+            uniqueSet.add('sheets');
+        }
+        
+        return Array.from(uniqueSet).sort();
+    }, [results, urlQueryParam]);
 
     const sortedAndConvertedResults = useMemo(() => {
         return [...convertedResults].sort((a, b) => {
@@ -351,7 +424,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                         <optgroup label="Detected in Results">
                                             {availableUnits.map(unit => (
                                                 <option key={unit} value={unit}>
-                                                    {unit === 'count' ? 'Each (ea)' : unit}
+                                                    {unit === 'count' ? 'Each (ea)' : unit === 'rolls' ? 'Rolls (roll)' : unit === 'sheets' ? 'Sheets (sh)' : unit}
                                                 </option>
                                             ))}
                                         </optgroup>
@@ -364,10 +437,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                     </optgroup>
                                 </select>
                             </div>
+                            
+                            {/* FIXED SELECT SYNCHRONIZATION: Binds value tokens directly to your active sort states */}
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value as any)}
-                                className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer transition-colors text-foreground"
+                                className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer transition-colors text-foreground font-semibold"
                             >
                                 <option value="score_asc">Best Unit Value</option>
                                 <option value="price_asc">Lowest Total Price</option>
