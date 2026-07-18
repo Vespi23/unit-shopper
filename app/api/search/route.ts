@@ -38,13 +38,12 @@ export async function GET(request: Request) {
         const parsedRating = parseFloat(String(ratingObj.rating || item.rating || "0"));
         const parsedCount = parseInt(String(ratingObj.count || item.reviews || item.review_count || "0"), 10);
 
-        // STRICTOR QUALITY FILTERS: Skip any item that fails to explicitly match your required metrics
+        // ABSOLUTE ZERO-FLUFF QUALITY FILTERS: Drop any item failing to provide authentic, high-quality metrics
         if (isNaN(parsedRating) || parsedRating < 4.0 || isNaN(parsedCount) || parsedCount < 100) return;
 
         const productId = String(general.product_id || item.asin || item.id || "").replace(/[^A-Z0-9]/g, '');
         if (!productId || productId.length < 4) return;
 
-        // FIXED: Deep Object Scraper to resolve accurate item pricing across schemas
         let rawPrice: any = null;
         if (item.priceInfo?.currentPrice?.price !== undefined) rawPrice = item.priceInfo.currentPrice.price;
         else if (item.priceInfo?.currentPrice !== undefined) rawPrice = item.priceInfo.currentPrice;
@@ -55,7 +54,7 @@ export async function GET(request: Request) {
         else if (general.price !== undefined) rawPrice = general.price;
 
         const price = parseFloat(String(rawPrice || "0").replace(/[^0-9.]/g, ''));
-        if (isNaN(price) || price <= 0) return; // Drop items with unparseable or zero values
+        if (isNaN(price) || price <= 0) return;
 
         const image = general.image || item.image || item.thumbnail || "";
         
@@ -106,7 +105,7 @@ export async function GET(request: Request) {
 
         targetPages.forEach((pageNumber) => {
             // =================================================================
-            // AMAZON: CONCURRENT MULTI-PAGE CHANNELS
+            // AMAZON: MULTI-PAGE CHANNELS
             // =================================================================
             const amznTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -152,14 +151,14 @@ export async function GET(request: Request) {
                     const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
                     const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 0;
 
-                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), asin, price, image, rating, reviews }, 'amazon');
+                    processItem({ title: titleMatch[1].trim(), asin, price, image, rating, reviews }, 'amazon');
                 });
             })
             .catch(() => {});
             batchOperations.push(amznHtmlTask);
 
             // =================================================================
-            // WALMART: CONCURRENT MULTI-PAGE CHANNELS
+            // WALMART: MOBILE PROFILE CONCURRENT PIPELINES
             // =================================================================
             const wmtTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -175,7 +174,13 @@ export async function GET(request: Request) {
             const wmtHtmlTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${pageNumber}`, proxy_pool: "premium", headless: "html" })
+                body: JSON.stringify({ 
+                    url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${pageNumber}`, 
+                    proxy_pool: "premium", 
+                    headless: "html",
+                    // TARGET MOBILE EMULATION: Forces lightweight static data strings to bypass dynamic scripts
+                    user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
+                })
             })
             .then(r => r.json())
             .then(d => d.results?.[0]?.content || d.content || "")
@@ -198,13 +203,14 @@ export async function GET(request: Request) {
 
                     const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/i) || block.match(/srcset="([^"\s]+)/i);
                     
+                    // Mobile Invariant Engine matching clean semantic strings natively
                     const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*out of 5 stars/i) || 
                                        block.match(/([0-4]\.[0-9]|5\.0)\s*stars/i) || 
-                                       block.match(/rating\s*([0-4]\.[0-9]|5\.0)/i);
+                                       block.match(/aria-label="([0-4]\.[0-9]|5\.0)\s*rating/i);
                                        
                     const countMatch = block.match(/aria-label="([0-9,]+)\s*reviews"/i) || 
-                                     block.match(/\(([0-9,]+)\)\s*<span/i) ||
-                                     block.match(/>\s*\(([0-9,]+)\)\s*</i);
+                                     block.match(/data-automation-id="search-reviews"[^>]*>([0-9,]+)/i) ||
+                                     block.match(/\(([0-9,]+)\)\s*<span/i);
 
                     const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
                     const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 0;
@@ -223,7 +229,7 @@ export async function GET(request: Request) {
         const internalTimeoutGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('VercelTimeGateHit')), 52000));
         await Promise.race([executeMultiPageAggregation(), internalTimeoutGuard]);
     } catch {
-        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations completed up to time limit.`);
+        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Processing finalized up to safe limit.`);
     }
 
     if (rawResults.length === 0) {
