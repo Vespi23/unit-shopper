@@ -18,10 +18,13 @@ import {
 } from '@/lib/unit-parser';
 import { generateProductSchema } from '@/lib/schema';
 
-// FIXED TYPE INVERSION LAYER: Safely bind our explicit sorting metrics inline without global type file corruption
+// FIXED TYPE LAYER: Add indexable property mapping to allow any backend layout parameters safely
 type EnhancedSortingProduct = Product & {
     pricePerUnitNumeric?: number;
     totalPriceNumeric?: number;
+    unit_type?: string;
+    totalAmount?: number;
+    [key: string]: any;
 };
 
 interface SearchPageProps {
@@ -76,34 +79,22 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
     const inputRef = useRef<HTMLInputElement>(null);
     
-    const initialQueryState = urlQueryParam || initialQuery || '';
-    const [submittedQuery, setSubmittedQuery] = useState(initialQueryState);
-    
-    // Bind results state map onto our localized sorted intersection structure securely
     const [results, setResults] = useState<EnhancedSortingProduct[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
     const [selectedUnit, setSelectedUnit] = useState<string>(initialUnit);
     const [loading, setLoading] = useState(false);
-    const [searched, setSearched] = useState(!!initialQueryState);
+    const [searched, setSearched] = useState(!!urlQueryParam);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [compareList, setCompareList] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
     const [disabledUnits] = useState<Set<string>>(new Set());
     
     const [page, setPage] = useState(1);
-    
-    const lastInitialResultsQuery = useRef<string | null>(null);
+    const lastFetchedQuery = useRef<string | null>(null);
 
     useEffect(() => {
         setPage(1);
-    }, [submittedQuery, sortBy]); 
-
-    useEffect(() => {
-        const q = searchParams.get('q') || '';
-        const u = toCanonicalUnit(searchParams.get('u') || '');
-        if (q !== submittedQuery) setSubmittedQuery(q);
-        if (u !== selectedUnit) setSelectedUnit(u);
-    }, [searchParams]);
+    }, [urlQueryParam, sortBy, selectedUnit]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -116,9 +107,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
         const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
         router.push(`${currentPath}?${params.toString()}`, { scroll: false });
-        
-        lastInitialResultsQuery.current = null;
-        setSubmittedQuery(newQuery);
     };
 
     const handleUnitChange = (unit: string) => {
@@ -133,30 +121,22 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
     useEffect(() => {
         async function fetchResults() {
-            if (!submittedQuery) {
+            if (!urlQueryParam) {
                 setResults([]);
                 setSearched(false);
+                lastFetchedQuery.current = null;
                 return;
             }
-            if (initialResults.length > 0 && lastInitialResultsQuery.current === null && submittedQuery === initialQuery) {
-                lastInitialResultsQuery.current = submittedQuery;
-                setResults(initialResults);
-                setSearched(true);
-                return;
-            }
+
+            if (urlQueryParam === lastFetchedQuery.current) return;
 
             setLoading(true);
             setSearched(false);
-            setResults([]);
+            setResults([]); 
 
             try {
                 const unitParam = selectedUnit ? `&u=${encodeURIComponent(selectedUnit)}` : '';
-                
-                let sortParamKey = 'unit_value';
-                if (sortBy === 'price_asc') sortParamKey = 'price_asc';
-                if (sortBy === 'price_desc') sortParamKey = 'price_desc';
-
-                const res = await fetch(`/api/search?q=${encodeURIComponent(submittedQuery)}&sort=${sortParamKey}${unitParam}`, {
+                const res = await fetch(`/api/search?q=${encodeURIComponent(urlQueryParam)}${unitParam}`, {
                     method: 'GET',
                     cache: 'no-store',
                     headers: {
@@ -165,12 +145,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     }
                 });
                 
-                if (!res.ok) throw new Error('Network response was not ok');
+                if (!res.ok) throw new Error('Network response failure');
                 const data = await res.json();
                 setResults(Array.isArray(data) ? data : []);
-                lastInitialResultsQuery.current = submittedQuery;
+                lastFetchedQuery.current = urlQueryParam;
             } catch (error) {
-                console.error("[BUDGETLYNX_SEARCH_PAGE_FAIL]: Ingestion crashed:", error);
+                console.error("[BUDGETLYNX_SCRAPE_DROP]: Fetch task failed:", error);
                 setResults([]);
             } finally {
                 setLoading(false);
@@ -178,24 +158,39 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             }
         }
         fetchResults();
-    }, [submittedQuery, sortBy]);
+    }, [urlQueryParam]); 
 
     const convertedResults = useMemo(() => {
         return results.map(product => {
             if (!selectedUnit || selectedUnit === 'unknown' || !product.unitInfo) return product;
-            const convertedAmount = convertValue(product.unitInfo.totalValue, product.unitInfo.unit as any, selectedUnit as any);
+            
+            const baseAmount = product.amount || product.totalAmount || product.unitInfo.totalValue || 1;
+            const currentUnitType = product.unit || product.unit_type || product.unitInfo.unit || 'count';
+            
+            const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any);
+            
             if (convertedAmount !== null && convertedAmount > 0) {
+                const newPPUString = calculatePricePerUnit(product.price, convertedAmount, selectedUnit);
                 return {
                     ...product,
-                    pricePerUnit: calculatePricePerUnit(product.price, convertedAmount, selectedUnit),
-                    score: product.price / convertedAmount, 
-                    unitInfo: { ...product.unitInfo, formatted: `${convertedAmount.toFixed(2)} ${selectedUnit}` }
+                    pricePerUnit: newPPUString, 
+                    pricePerUnitNumeric: product.price / convertedAmount,
+                    score: product.price / convertedAmount,
+                    ppuFormatted: newPPUString,
+                    unitInfo: { 
+                        ...product.unitInfo, 
+                        unit: selectedUnit,
+                        totalValue: convertedAmount,
+                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit === 'count' ? 'ea' : selectedUnit}` 
+                    }
                 };
             }
             return {
                 ...product,
-                pricePerUnit: 'N/A',
-                score: 999999, 
+                pricePerUnit: 'Incompatible',
+                pricePerUnitNumeric: 999999,
+                score: 999999,
+                ppuFormatted: 'Incompatible',
                 unitInfo: { ...product.unitInfo, formatted: `Incompatible w/ ${selectedUnit}` }
             };
         });
@@ -203,7 +198,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
     const availableUnits = useMemo(() => {
         const units = results
-            .map(p => toCanonicalUnit(p.unitInfo?.unit || ''))
+            .map(p => toCanonicalUnit(p.unit || p.unit_type || p.unitInfo?.unit || ''))
             .filter(u => u !== 'unknown') as string[];
         return Array.from(new Set(units)).sort();
     }, [results]);
@@ -213,7 +208,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             if (sortBy === 'price_asc') return a.price - b.price;
             if (sortBy === 'price_desc') return b.price - a.price;
             
-            // FIXED TYPES VALIDATION TRACK: Intersection properties evaluate cleanly with zero ts compiler faults
             const valA = typeof a.pricePerUnitNumeric === 'number' ? a.pricePerUnitNumeric : (a.score ?? 999999);
             const valB = typeof b.pricePerUnitNumeric === 'number' ? b.pricePerUnitNumeric : (b.score ?? 999999);
             
@@ -266,8 +260,10 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 ref={inputRef}
                                 name="searchQuery"
                                 type="text"
+                                key={urlQueryParam}
+                                defaultValue={urlQueryParam}
                                 placeholder="Search products (e.g. Toilet Paper)..."
-                                className="flex-1 bg-transparent border-none outline-none text-xl h-12 ring-0 focus:ring-0"
+                                className="flex-1 bg-transparent border-none outline-none text-xl h-12 ring-0 focus:ring-0 text-foreground"
                             />
                             {loading ? (
                                 <div className="flex items-center gap-2 mr-4">
@@ -306,7 +302,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 </a>
                             </div>
 
-                            {!submittedQuery && !loading && (
+                            {!urlQueryParam && !loading && (
                                 <LedgerPromo />
                             )}
                         </div>
@@ -318,7 +314,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                 {!loading && searched && results.length > 0 && (
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between w-full mb-6 animate-in fade-in slide-in-from-top-2">
                         <div className="text-sm text-muted-foreground">
-                            Found {results.length} results for <span className="text-foreground font-semibold">"{submittedQuery || urlQueryParam}"</span>
+                            Found {results.length} results for <span className="text-foreground font-semibold">"{urlQueryParam}"</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-4">
                             <div className="flex items-center gap-3">
@@ -326,7 +322,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                 <select
                                     value={selectedUnit}
                                     onChange={(e) => handleUnitChange(e.target.value)}
-                                    className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer transition-colors"
+                                    className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer transition-colors text-foreground"
                                 >
                                     <option value="">Original Units</option>
                                     {availableUnits.length > 0 && (
@@ -349,7 +345,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value as any)}
-                                className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent cursor-pointer transition-colors"
+                                className="h-10 pl-4 pr-10 rounded-full border border-border bg-card text-sm font-medium shadow-sm hover:bg-accent focus:outline-none cursor-pointer transition-colors text-foreground"
                             >
                                 <option value="score_asc">Best Unit Value</option>
                                 <option value="price_asc">Lowest Total Price</option>
@@ -387,7 +383,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     <div className="flex justify-center mt-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         <button 
                             onClick={() => setPage(prev => prev + 1)}
-                            className="group flex items-center gap-2 px-8 py-4 bg-card border border-border rounded-2xl font-bold shadow-xl hover:bg-accent hover:border-primary/30 transition-all active:scale-95"
+                            className="group flex items-center gap-2 px-8 py-4 bg-card border border-border rounded-2xl font-bold shadow-xl hover:bg-accent hover:border-primary/30 transition-all active:scale-95 text-foreground"
                         >
                             <span>Load More Products</span>
                             <ChevronDown className="h-5 w-5 text-primary group-hover:translate-y-0.5 transition-transform" />
@@ -402,7 +398,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                         </div>
                         <h3 className="text-xl font-bold mb-2">No qualifying results found</h3>
                         <p className="text-muted-foreground max-w-sm mx-auto mb-6">
-                            We couldn't find any verified product value matches (4+ stars, 100+ reviews) for "{submittedQuery || urlQueryParam}".
+                            We couldn't find any verified product value matches (4+ stars, 100+ reviews) for "{urlQueryParam}".
                         </p>
                         
                         <div className="w-full max-w-2xl text-left">
