@@ -32,16 +32,16 @@ export async function GET(request: Request) {
         const general = item.general || item || {};
         const ratingObj = item.rating || {};
 
-        let title = String(general.title || item.title || "").trim();
+        let title = String(general.title || item.title || item.name || "").trim();
         if (!title || title === "undefined") return;
 
-        const parsedRating = parseFloat(String(ratingObj.rating || item.rating || "0"));
-        const parsedCount = parseInt(String(ratingObj.count || item.reviews || item.review_count || "0"), 10);
+        // EXTRACT TRUE METRICS: Accept only verified numeric values
+        const parsedRating = parseFloat(String(ratingObj.averageRating || ratingObj.rating || item.averageRating || item.rating || "0"));
+        const parsedCount = parseInt(String(ratingObj.numberOfReviews || ratingObj.count || item.numberOfReviews || item.reviews || item.review_count || "0"), 10);
 
-        // ABSOLUTE ZERO-FLUFF QUALITY FILTERS: Drop any item failing to provide authentic, high-quality metrics
         if (isNaN(parsedRating) || parsedRating < 4.0 || isNaN(parsedCount) || parsedCount < 100) return;
 
-        const productId = String(general.product_id || item.asin || item.id || "").replace(/[^A-Z0-9]/g, '');
+        const productId = String(general.product_id || item.asin || item.usItemId || item.id || "").replace(/[^A-Z0-9]/g, '');
         if (!productId || productId.length < 4) return;
 
         let rawPrice: any = null;
@@ -50,13 +50,12 @@ export async function GET(request: Request) {
         else if (item.price?.price !== undefined) rawPrice = item.price.price;
         else if (item.price !== undefined && typeof item.price !== 'object') rawPrice = item.price;
         else if (item.current_price !== undefined) rawPrice = item.current_price;
-        else if (item.price_info !== undefined) rawPrice = item.price_info;
         else if (general.price !== undefined) rawPrice = general.price;
 
         const price = parseFloat(String(rawPrice || "0").replace(/[^0-9.]/g, ''));
         if (isNaN(price) || price <= 0) return;
 
-        const image = general.image || item.image || item.thumbnail || "";
+        const image = general.image || item.image || item.thumbnail || item.thumbnailUrl || "";
         
         const parsedUnitInfo = parseUnit(title);
         let unit = 'unknown';
@@ -105,7 +104,7 @@ export async function GET(request: Request) {
 
         targetPages.forEach((pageNumber) => {
             // =================================================================
-            // AMAZON: MULTI-PAGE CHANNELS
+            // AMAZON CONCURRENT BATCH PIPELINES
             // =================================================================
             const amznTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -133,8 +132,7 @@ export async function GET(request: Request) {
                     const asin = block.substring(0, 10);
                     if (!/^[A-Z0-9]{10}$/.test(asin)) return;
 
-                    const titleMatch = block.match(/alt="([^"]{15,250})"/i) ||
-                                       block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/i);
+                    const titleMatch = block.match(/alt="([^"]{15,250})"/i) || block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/i);
                     if (!titleMatch) return;
 
                     const priceWhole = block.match(/<span class="a-price-whole">([^<]+)<span/i);
@@ -144,7 +142,6 @@ export async function GET(request: Request) {
                     if (price <= 0) return;
 
                     const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/i)?.[1] || "";
-                    
                     const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*out of 5 stars/i);
                     const countMatch = block.match(/aria-label="([0-9,]+)\s*ratings"/i) || block.match(/<span class="a-size-base[^>]*>([0-9,]+)<\/span>/i);
                     
@@ -158,7 +155,7 @@ export async function GET(request: Request) {
             batchOperations.push(amznHtmlTask);
 
             // =================================================================
-            // WALMART: MOBILE PROFILE CONCURRENT PIPELINES
+            // WALMART NATIVE DATA EXTRACTOR (Parses Hidden Next.js Payload Maps)
             // =================================================================
             const wmtTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -177,45 +174,52 @@ export async function GET(request: Request) {
                 body: JSON.stringify({ 
                     url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${pageNumber}`, 
                     proxy_pool: "premium", 
-                    headless: "html",
-                    // TARGET MOBILE EMULATION: Forces lightweight static data strings to bypass dynamic scripts
-                    user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
+                    headless: "html"
                 })
             })
             .then(r => r.json())
             .then(d => d.results?.[0]?.content || d.content || "")
             .then(html => {
                 if (!html) return;
-                const fallbackBlocks = html.includes('data-item-id=') ? html.split('data-item-id="') : html.split('href="/ip/');
+
+                // FIXED: Extract true verified object fields from Next.js payload script tags
+                const jsonBlockMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+                if (jsonBlockMatch) {
+                    try {
+                        const parsedData = JSON.parse(jsonBlockMatch[1]);
+                        
+                        // Drill down inside the data schema to pull items safely
+                        const itemGrid = parsedData.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
+                        if (Array.isArray(itemGrid) && itemGrid.length > 0) {
+                            itemGrid.forEach(item => processItem(item, 'walmart'));
+                            return; // Target found, exit block
+                        }
+                    } catch {}
+                }
+
+                // Inline Fallback: Parse item segments if the Next.js block is missing
+                const fallbackBlocks = html.split('data-item-id="');
                 fallbackBlocks.shift();
                 fallbackBlocks.forEach((block: string) => {
-                    const idMatch = block.match(/^([^"/\s?]+)/);
+                    const idMatch = block.match(/^([0-9]+)"/);
                     if (!idMatch) return;
-                    const id = idMatch[1].replace(/[^0-9A-Za-z]/g, '');
-                    if (id.length < 4) return;
+                    const id = idMatch[1];
 
-                    const titleMatch = block.match(/alt="([^"]{10,250})"/i) || block.match(/title="([^"]+)"/i);
+                    const titleMatch = block.match(/data-automation-id="product-title"[^>]*>([^<]+)</i) || block.match(/alt="([^"]+)"/i);
                     if (!titleMatch) return;
 
-                    const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/i);
+                    const priceMatch = block.match(/"current price\s*\$?([0-9.]+)"/i) || block.match(/\$(\d+(?:\.\d{2})?)/);
                     if (!priceMatch) return;
-                    const price = parseFloat(priceMatch[1]);
+                    const price = parseFloat(priceMatch[1].replace(/[^0-9.]/g, ''));
 
-                    const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/i) || block.match(/srcset="([^"\s]+)/i);
-                    
-                    // Mobile Invariant Engine matching clean semantic strings natively
-                    const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*out of 5 stars/i) || 
-                                       block.match(/([0-4]\.[0-9]|5\.0)\s*stars/i) || 
-                                       block.match(/aria-label="([0-4]\.[0-9]|5\.0)\s*rating/i);
-                                       
-                    const countMatch = block.match(/aria-label="([0-9,]+)\s*reviews"/i) || 
-                                     block.match(/data-automation-id="search-reviews"[^>]*>([0-9,]+)/i) ||
-                                     block.match(/\(([0-9,]+)\)\s*<span/i);
+                    const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/i);
+                    const ratingMatch = block.match(/([0-4]\.[0-9]|5\.0)\s*out of 5 Stars/i);
+                    const countMatch = block.match(/data-value="(\d+)"/i) || block.match(/(\d+)\s*reviews/i);
 
                     const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
-                    const reviews = countMatch ? parseInt(countMatch[1].replace(/[^0-9]/g, ''), 10) : 0;
+                    const reviews = countMatch ? parseInt(countMatch[1], 10) : 0;
 
-                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating, reviews }, 'walmart');
+                    processItem({ name: titleMatch[1].trim(), id, price, thumbnail: imageMatch ? imageMatch[1] : "", rating, reviews }, 'walmart');
                 });
             })
             .catch(() => {});
@@ -229,7 +233,7 @@ export async function GET(request: Request) {
         const internalTimeoutGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('VercelTimeGateHit')), 52000));
         await Promise.race([executeMultiPageAggregation(), internalTimeoutGuard]);
     } catch {
-        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Processing finalized up to safe limit.`);
+        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations completed up to time limit.`);
     }
 
     if (rawResults.length === 0) {
