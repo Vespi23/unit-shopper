@@ -25,7 +25,15 @@ async function executeScrapeTask(decodoUrl: string, decodoToken: string, source:
         const data = await res.json();
         
         const outerBlock = data.results?.[0]?.content || data.content || {};
-        const items = outerBlock?.results?.results || outerBlock?.results?.organic || outerBlock?.products || [];
+        
+        // RE-CALIBRATED TARGET COORDINATES: Split data path evaluations by store to fix empty lookups
+        let items: any[] = [];
+        if (source === 'amazon') {
+            items = outerBlock?.search_results || outerBlock?.products || outerBlock?.results || [];
+        } else {
+            items = outerBlock?.results?.results || outerBlock?.results?.organic || outerBlock?.results || [];
+        }
+        
         return { source, items: Array.isArray(items) ? items : [], error: null };
     } catch (err: any) {
         return { source, items: [], error: err.message };
@@ -45,7 +53,6 @@ export async function GET(request: Request) {
     const decodoUrl = "https://scraper-api.decodo.com/v2/scrape";
     const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
 
-    // Concurrently trigger both Amazon and Walmart structured template extractions
     const scraperTasks = [
         executeScrapeTask(decodoUrl, decodoToken, 'amazon', query),
         executeScrapeTask(decodoUrl, decodoToken, 'walmart', query)
@@ -62,7 +69,6 @@ export async function GET(request: Request) {
             const priceBlock = item.price || {};
             const ratingBlock = item.rating || {};
 
-            // Secure un-truncated titles exactly as they appear on the target platform
             const title = generalBlock.title || item.title || "";
             if (!title) return;
 
@@ -77,15 +83,14 @@ export async function GET(request: Request) {
             const rating = parsedRating >= 4.0 ? parsedRating : 4.6;
             const reviews = parsedCount >= 100 ? parsedCount : 124;
 
-            // Pass the absolute clean title string into your library's core extraction algorithm
             const parsedUnitInfo = parseUnit(title);
             let unit = 'unknown';
             let totalAmount = 1;
 
             if (parsedUnitInfo) {
-                // Execute standard normalization to resolve store variations (e.g. converting lbs to oz)
                 const normalized = normalizeUnit(parsedUnitInfo);
-                unit = normalized.unit;
+                // STANDARD BADGE NORMALIZATION: Ensure units always match your library's exact canonical options
+                unit = toCanonicalUnit(normalized.unit);
                 totalAmount = normalized.totalValue;
             }
 
@@ -145,27 +150,28 @@ export async function GET(request: Request) {
                 }
             }
 
-            // Enforce clean numerical values to protect the frontend sorting loop
             const numericPPU = finalAmount > 0 ? (unitPrice / finalAmount) : unitPrice;
+            
+            // Standardize output short labels for UI elements
             let displayUnitLabel = finalUnit === 'count' ? 'ea' : finalUnit;
 
             return {
                 ...p,
                 price: unitPrice,
-                score: numericPPU, // Synchronizes value parameters with search page state rules
+                score: numericPPU, 
                 pricePerUnit: numericPPU,
+                // FIXED: Enforce accurate currency symbol string injection and force rounding rules to the second decimal place
                 ppuFormatted: `$${numericPPU.toFixed(2)}/${displayUnitLabel}`,
                 unitInfo: {
                     value: finalAmount, 
                     unit: finalUnit,
                     quantity: 1, 
                     totalValue: finalAmount,
-                    formatted: `${finalAmount.toFixed(2)} ${finalUnit}`
+                    formatted: `${parseFloat(finalAmount.toFixed(2))} ${finalUnit === 'count' ? 'count' : finalUnit}`
                 }
             };
         }).filter(Boolean);
 
-        // STABILIZED CONCURRENT MASTER SORT: Drops store columns and prioritizes absolute unit metrics
         processedResults.sort((a: any, b: any) => {
             const valA = a.pricePerUnit || 0;
             const valB = b.pricePerUnit || 0;
