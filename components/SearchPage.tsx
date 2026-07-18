@@ -67,8 +67,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const urlQueryParam = searchParams.get('q') || '';
     const initialUnit = searchParams.get('u') || '';
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
-
-    const inputRef = useRef<HTMLInputElement>(null);
     
     const [results, setResults] = useState<EnhancedSortingProduct[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
@@ -80,16 +78,24 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const [showComparison, setShowComparison] = useState(false);
     const [page, setPage] = useState(1);
 
+    // SYNC: Update local results if props change (Handles stale server-rendered props)
+    useEffect(() => {
+        if (initialResults && initialResults.length > 0) {
+            setResults(initialResults);
+        }
+    }, [initialResults]);
+
     useEffect(() => { setPage(1); }, [urlQueryParam, sortBy, selectedUnit]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
         const newQuery = (formData.get('searchQuery') as string).trim();
-        
         if (!newQuery) return;
-
-        setLoading(true); // Provide immediate feedback
+        
+        setLoading(true);
+        setResults([]); // Force-clear to prevent stale "stuck" products
+        
         const params = new URLSearchParams(searchParams.toString());
         params.set('q', newQuery);
         router.push(`/?${params.toString()}`, { scroll: false });
@@ -131,9 +137,10 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             };
         });
 
+        // STABLE SORTING: Ensure sort order re-calculates explicitly on every change
         processed.sort((a, b) => {
-            if (sortBy === 'price_asc') return a.totalPriceNumeric - b.totalPriceNumeric;
-            if (sortBy === 'price_desc') return b.totalPriceNumeric - a.totalPriceNumeric;
+            if (sortBy === 'price_asc') return (a.totalPriceNumeric ?? 0) - (b.totalPriceNumeric ?? 0);
+            if (sortBy === 'price_desc') return (b.totalPriceNumeric ?? 0) - (a.totalPriceNumeric ?? 0);
             return (a.pricePerUnitNumeric ?? 999999) - (b.pricePerUnitNumeric ?? 999999);
         });
 
@@ -151,39 +158,9 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     <div className="relative w-full max-w-3xl group z-10">
                         <form onSubmit={handleSearch} className="flex items-center bg-card shadow-2xl rounded-3xl border border-border p-3 gap-2">
                             <Search className="h-7 w-7 text-muted-foreground ml-3" />
-                            <input 
-                                name="searchQuery" 
-                                defaultValue={urlQueryParam} 
-                                disabled={loading}
-                                placeholder={loading ? "Deep Scraping..." : "Search products (e.g. Toilet Paper)..."} 
-                                className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" 
-                            />
-                            <button 
-                                type="submit" 
-                                disabled={loading}
-                                className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all ${loading ? 'bg-muted text-muted-foreground' : 'bg-primary text-white hover:bg-emerald-700'}`}
-                            >
-                                {loading ? <Loader2 className="animate-spin h-6 w-6" /> : "Search"}
-                            </button>
+                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products (e.g. Toilet Paper)..." className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" />
+                            <button type="submit" className="px-8 py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all">Search</button>
                         </form>
-
-                        {!urlQueryParam && !loading && (
-                            <div className="mt-12 animate-in fade-in zoom-in duration-500">
-                                <div className="bg-card rounded-3xl border border-border p-6 flex items-center justify-between shadow-lg">
-                                    <div className="flex items-center gap-5">
-                                        <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center border shadow-sm">
-                                            <Image src="/extension-logo.png" alt="Lynx" width={48} height={48} />
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="text-lg font-bold text-foreground">Lynx Vision Extension</p>
-                                            <p className="text-sm text-muted-foreground">Compare unit prices automatically while browsing.</p>
-                                        </div>
-                                    </div>
-                                    <a href="https://chromewebstore.google.com/detail/lynx-vision/eoihkpljhmakhpecnobkcnjofidebmhl" className="bg-primary text-white font-bold px-8 py-3 rounded-xl hover:bg-emerald-700 transition-all">Add to Chrome</a>
-                                </div>
-                                <LedgerPromo />
-                            </div>
-                        )}
                     </div>
                 </section>
             )}
@@ -195,12 +172,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                             Found <span className="font-bold text-foreground">{results.length}</span> results for <span className="font-bold text-foreground">"{urlQueryParam}"</span>
                         </p>
                         <div className="flex gap-4">
-                            <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                            <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm outline-none">
                                 <option value="">Original Units</option>
                                 <option value="rolls">Rolls</option>
                                 <option value="sheets">Sheets</option>
                             </select>
-                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm outline-none">
                                 <option value="score_asc">Best Unit Value</option>
                                 <option value="price_asc">Lowest Total Price</option>
                                 <option value="price_desc">Highest Total Price</option>
@@ -213,7 +190,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     {loading ? Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />) : 
                      displayData.map((p, i) => (
                         <ProductCard 
-                            key={p.id} 
+                            key={`${p.id}-${i}`} 
                             product={p as any} 
                             index={i} 
                             onClick={setSelectedProduct}
