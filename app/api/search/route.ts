@@ -5,6 +5,44 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
+// High-precision volume extraction module capable of decomposing complex packaging strings
+function extractNormalizedVolume(titleStr: string): { amount: number; unit: string } {
+    let amount = 1;
+    let unit = 'unit';
+    const cleanTitle = titleStr.toLowerCase().replace(/[\s\-_]+/g, ' ');
+
+    // Match Pattern Pattern: [Pack/Count Multiplier] x [Individual Volume] (e.g., "12 pack of 12 oz", "24 ct - 16.9 ounce")
+    const multiPackMatch = cleanTitle.match(/(\d+)\s*(?:pack|pk|ct|count|count\b|pcs|bottles|cans)?\s*(?:of|x|\-)?\s*([0-9.]+)\s*(oz|ounce|fl\s*oz|lb|pound|gal|gallon|g|gram|ml|milliliter)/i);
+    
+    if (multiPackMatch) {
+        const packCount = parseInt(multiPackMatch[1]) || 1;
+        const pieceSize = parseFloat(multiPackMatch[2]) || 1;
+        unit = multiPackMatch[3].trim().toLowerCase();
+        amount = packCount * pieceSize;
+        return { amount, unit };
+    }
+
+    // Match Pattern Pattern: [Individual Volume] x [Pack/Count Multiplier] (e.g., "12 oz, 6 pack", "16.9 fl oz (pack of 24)")
+    const reversePackMatch = cleanTitle.match(/([0-9.]+)\s*(oz|ounce|fl\s*oz|lb|pound|gal|gallon|g|gram|ml|milliliter)\s*(?:,|\b|\()?.*?(\d+)\s*(?:pack|pk|ct|count|pcs|bottles|cans)/i);
+    
+    if (reversePackMatch) {
+        const pieceSize = parseFloat(reversePackMatch[1]) || 1;
+        unit = reversePackMatch[2].trim().toLowerCase();
+        const packCount = parseInt(reversePackMatch[3]) || 1;
+        amount = packCount * pieceSize;
+        return { amount, unit };
+    }
+
+    // Standard Singular Matcher Block (e.g., "64 oz", "1.5 gallon", "50 count")
+    const singularMatch = cleanTitle.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|g|gram|ml|milliliter|ct|pack|count|pcs)/i);
+    if (singularMatch) {
+        amount = parseFloat(singularMatch[1]) || 1;
+        unit = singularMatch[2].trim().toLowerCase();
+    }
+
+    return { amount, unit };
+}
+
 async function executeScrapeTask(decodoUrl: string, decodoToken: string, source: 'amazon' | 'walmart', body: any) {
     try {
         const res = await fetch(decodoUrl, {
@@ -25,7 +63,6 @@ async function executeScrapeTask(decodoUrl: string, decodoToken: string, source:
             return { source, items: [], rawHtml: htmlContent, error: null };
         } else {
             const outerBlock = data.results?.[0]?.content || data.content || {};
-            // RE-CALIBRATED TARGET PATH MATRIX: Maps straight into decodo's real nested .results.results array block
             const items = outerBlock?.results?.results || outerBlock?.results?.organic || outerBlock?.results || [];
             return { source, items: Array.isArray(items) ? items : [], rawHtml: "", error: null };
         }
@@ -94,13 +131,8 @@ export async function GET(request: Request) {
 
                 const image = itemText.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/)?.[1] || "";
 
-                let totalAmount = 1;
-                let unit = 'unit';
-                const volumeMatch = title.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|ct|pack)/i);
-                if (volumeMatch) {
-                    totalAmount = parseFloat(volumeMatch[1]);
-                    unit = volumeMatch[2].toLowerCase();
-                }
+                // Align Amazon payload keys with the high-precision calculator engine
+                const measurement = extractNormalizedVolume(title);
 
                 rawResults.push({
                     id: `amzn-${asin}`,
@@ -112,10 +144,10 @@ export async function GET(request: Request) {
                     source: 'amazon',
                     url: `https://www.amazon.com/dp/${asin}`,
                     link: `https://www.amazon.com/dp/${asin}`,
-                    unit,
-                    unit_type: unit,
-                    totalAmount,
-                    amount: totalAmount,
+                    unit: measurement.unit,
+                    unit_type: measurement.unit,
+                    totalAmount: measurement.amount,
+                    amount: measurement.amount,
                     image,
                     thumbnail: image,
                     rating: 4.8, 
@@ -131,21 +163,15 @@ export async function GET(request: Request) {
 
                 const productId = generalBlock.product_id || Math.random().toString(36).substring(7);
                 const title = generalBlock.title || `${query} (Walmart Product)`;
-                
-                // Read price directly from item.price.price to align with Decodo's target schema layout
                 const price = parseFloat(String(priceBlock.price || "0.00")) || 19.99;
                 const image = generalBlock.image || "";
                 
                 const rating = ratingBlock.rating ? parseFloat(ratingBlock.rating) : 4.5;
                 const reviews = ratingBlock.count ? parseInt(ratingBlock.count) : 25;
 
-                let totalAmount = 1;
-                let unit = 'unit';
-                const volumeMatch = title.match(/([0-9.]+)\s*(oz|ounce|lb|pound|fl\s*oz|gal|gallon|ct|pack|count)/i);
-                if (volumeMatch) {
-                    totalAmount = parseFloat(volumeMatch[1]);
-                    unit = volumeMatch[2].toLowerCase();
-                }
+                // Decompose product strings and badge data lists to intercept unit parameters
+                const stringToScan = `${title} ${generalBlock.badge ? JSON.stringify(generalBlock.badge) : ''}`;
+                const measurement = extractNormalizedVolume(stringToScan);
 
                 const cleanUrl = generalBlock.url 
                     ? (generalBlock.url.startsWith('http') ? generalBlock.url : `https://www.walmart.com${generalBlock.url}`)
@@ -161,10 +187,10 @@ export async function GET(request: Request) {
                     source: 'walmart',
                     url: cleanUrl,
                     link: cleanUrl,
-                    unit,
-                    unit_type: unit,
-                    totalAmount,
-                    amount: totalAmount,
+                    unit: measurement.unit,
+                    unit_type: measurement.unit,
+                    totalAmount: measurement.amount,
+                    amount: measurement.amount,
                     image,
                     thumbnail: image,
                     rating,
