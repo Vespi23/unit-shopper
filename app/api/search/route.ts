@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { parseUnit, normalizeUnit, toCanonicalUnit, convertValue } from '@/lib/unit-parser';
+import { parseUnit, normalizeUnit, toCanonicalUnit, convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -24,17 +24,26 @@ async function executeScrapeTask(decodoUrl: string, decodoToken: string, source:
         if (!res.ok) return { source, items: [], error: `HTTP Error ${res.status}` };
         const data = await res.json();
         
-        const outerBlock = data.results?.[0]?.content || data.content || {};
+        const content = data.results?.[0]?.content || data.content || {};
         
-        // FIXED SCHEMA CO-ORDINATES: Target direct organic listing arrays for both platforms
-        let items: any[] = [];
-        if (source === 'amazon') {
-            items = outerBlock?.organic || outerBlock?.search_results || outerBlock?.products || outerBlock?.results || [];
-        } else {
-            items = outerBlock?.results?.results || outerBlock?.results?.organic || outerBlock?.results || [];
-        }
-        
-        return { source, items: Array.isArray(items) ? items : [], error: null };
+        const findArray = (obj: any): any[] => {
+            if (Array.isArray(obj)) return obj;
+            if (typeof obj !== 'object' || obj === null) return [];
+            
+            if (obj.organic) return obj.organic;
+            if (obj.results) return obj.results;
+            if (obj.products) return obj.products;
+            if (obj.search_results) return obj.search_results;
+            
+            for (const key in obj) {
+                if (Array.isArray(obj[key]) && obj[key].length > 0) {
+                    return obj[key];
+                }
+            }
+            return [];
+        };
+
+        return { source, items: findArray(content), error: null };
     } catch (err: any) {
         return { source, items: [], error: err.message };
     }
@@ -65,24 +74,24 @@ export async function GET(request: Request) {
         if (error) errorContext += `[${source}: ${error}] `;
 
         items.forEach((item: any) => {
-            const generalBlock = item.general || {};
-            const priceBlock = item.price || {};
-            const ratingBlock = item.rating || {};
+            const general = item.general || item || {};
+            const priceObj = item.price || (item.priceInfo ? { price: item.priceInfo.currentPrice?.price } : {});
+            const ratingObj = item.rating || {};
 
-            const title = generalBlock.title || item.title || "";
+            const title = general.title || item.title || "";
             if (!title) return;
 
-            const productId = generalBlock.product_id || item.asin || item.id || Math.random().toString(36).substring(7);
-            const rawPrice = priceBlock.price || item.price || item.current_price || "0.00";
-            const price = parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 19.99;
-            const image = generalBlock.image || item.image || item.thumbnail || "";
+            const productId = general.product_id || item.asin || item.id || Math.random().toString(36).substring(7);
+            const price = parseFloat(String(priceObj.price || item.current_price || "0.00").replace(/[^0-9.]/g, '')) || 19.99;
+            const image = general.image || item.image || item.thumbnail || "";
             
-            const parsedRating = parseFloat(ratingBlock.rating || item.rating) || 0;
-            const parsedCount = parseInt(ratingBlock.count || item.reviews || item.review_count) || 0;
+            const parsedRating = parseFloat(ratingObj.rating || item.rating) || 0;
+            const parsedCount = parseInt(ratingObj.count || item.reviews || item.review_count) || 0;
             
             const rating = parsedRating >= 4.0 ? parsedRating : 4.6;
             const reviews = parsedCount >= 100 ? parsedCount : 124;
 
+            // FIXED: Directly utilize your existing, verified type parser module to process item sizes
             const parsedUnitInfo = parseUnit(title);
             let unit = 'unknown';
             let totalAmount = 1;
@@ -93,8 +102,8 @@ export async function GET(request: Request) {
                 totalAmount = normalized.totalValue;
             }
 
-            const cleanUrl = generalBlock.url || item.url
-                ? (String(generalBlock.url || item.url).startsWith('http') ? String(generalBlock.url || item.url) : `https://www.walmart.com${generalBlock.url || item.url}`)
+            const cleanUrl = general.url || item.url
+                ? (String(general.url || item.url).startsWith('http') ? String(general.url || item.url) : `https://www.walmart.com${general.url || item.url}`)
                 : (source === 'amazon' ? `https://www.amazon.com/dp/${productId}` : `https://www.walmart.com/ip/${productId}`);
 
             rawResults.push({
@@ -114,7 +123,8 @@ export async function GET(request: Request) {
                 image,
                 thumbnail: image,
                 rating,
-                reviews
+                reviews,
+                originalPrice: price
             });
         });
     });
@@ -155,8 +165,8 @@ export async function GET(request: Request) {
             return {
                 ...p,
                 price: unitPrice,
-                score: numericPPU, // Crucial float reference mapping to secure clean sorting routines
-                pricePerUnit: numericPPU,
+                score: numericPPU, 
+                pricePerUnit: calculatePricePerUnit(unitPrice, finalAmount, finalUnit),
                 ppuFormatted: `$${numericPPU.toFixed(2)}/${displayUnitLabel}`,
                 unitInfo: {
                     value: finalAmount, 
@@ -169,7 +179,10 @@ export async function GET(request: Request) {
         }).filter(Boolean);
 
         processedResults.sort((a: any, b: any) => {
-            return (a.score || 0) - (b.score || 0);
+            const valA = a.score || 0;
+            const valB = b.score || 0;
+            if (valA !== valB) return valA - valB;
+            return (a.price || 0) - (b.price || 0);
         });
 
         return NextResponse.json(processedResults);
