@@ -4,7 +4,7 @@ import { parseUnit, normalizeUnit, toCanonicalUnit, convertValue, calculatePrice
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// FORCED MAXIMUM TIMEOUT LIMIT FOR HIGH-YIELD PARALLEL BATCHES
+// Enforce maximum allowable execution time window for parallel pipelines
 export const maxDuration = 60; 
 
 function locateDataArray(obj: any): any[] {
@@ -35,17 +35,19 @@ export async function GET(request: Request) {
         const priceObj = item.price || (item.priceInfo ? { price: item.priceInfo.currentPrice?.price } : {});
         const ratingObj = item.rating || {};
 
-        const title = general.title || item.title || "";
-        if (!title) return;
+        let title = String(general.title || item.title || "").trim();
+        if (!title || title === "undefined") return;
 
         const parsedRating = parseFloat(ratingObj.rating || item.rating) || 4.5;
         const parsedCount = parseInt(ratingObj.count || item.reviews || item.review_count) || 124;
 
-        // Quality Gate Filters: Filter out low-tier matching metrics instantly
-        if (parsedRating < 4.0 || parsedCount < 100) return;
+        // Enforce fallback quality filters across incoming elements
+        if (parsedRating < 3.5 || parsedCount < 20) return;
 
-        const productId = general.product_id || item.asin || item.id || Math.random().toString(36).substring(7);
-        const price = parseFloat(String(priceObj.price || item.current_price || "0.00").replace(/[^0-9.]/g, '')) || 19.99;
+        const productId = String(general.product_id || item.asin || item.id || "").replace(/[^A-Z0-9]/g, '');
+        if (!productId || productId.length < 4) return;
+
+        const price = parseFloat(String(priceObj.price || item.current_price || "19.99").replace(/[^0-9.]/g, '')) || 19.99;
         const image = general.image || item.image || item.thumbnail || "";
         
         const parsedUnitInfo = parseUnit(title);
@@ -89,14 +91,13 @@ export async function GET(request: Request) {
         });
     };
 
-    // HIGH-DENSITY 7-PAGE ASYNCHRONOUS FAN-OUT ENGINE
     const executeMultiPageAggregation = async () => {
         const targetPages = [1, 2, 3, 4, 5, 6, 7];
         const batchOperations: Promise<void>[] = [];
 
         targetPages.forEach((pageNumber) => {
             // =================================================================
-            // AMAZON MULTI-PAGE BATCH CHANNELS
+            // AMAZON: CONCURRENT MULTI-PAGE STRIPPER PIPELINE
             // =================================================================
             const amznTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -123,22 +124,27 @@ export async function GET(request: Request) {
                 blocks.forEach((block: string) => {
                     const asin = block.substring(0, 10);
                     if (!/^[A-Z0-9]{10}$/.test(asin)) return;
-                    const titleMatch = block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/) || 
-                                       block.match(/<span class="a-size-medium a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/);
+
+                    // Robust Fallback: Pull title from text blocks or raw element image structures
+                    const titleMatch = block.match(/alt="([^"]{15,250})"/i) ||
+                                       block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/i) || 
+                                       block.match(/<span class="a-size-medium a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/i);
                     if (!titleMatch) return;
-                    const priceWhole = block.match(/<span class="a-price-whole">([^<]+)<span/);
-                    const priceFraction = block.match(/<span class="a-price-fraction">([^<]+)<\/span>/);
+
+                    const priceWhole = block.match(/<span class="a-price-whole">([^<]+)<span/i);
+                    const priceFraction = block.match(/<span class="a-price-fraction">([^<]+)<\/span>/i);
                     let price = 14.99;
                     if (priceWhole) price = parseFloat(priceWhole[1].replace(/[^0-9]/g, '')) + (priceFraction ? parseFloat('0.' + priceFraction[1]) : 0);
-                    const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/)?.[1] || "";
-                    processItem({ title: titleMatch[1].trim(), asin, price, image, rating: 4.6, reviews: 180 }, 'amazon');
+                    const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/i)?.[1] || "";
+                    
+                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), asin, price, image, rating: 4.6, reviews: 210 }, 'amazon');
                 });
             })
             .catch(() => {});
             batchOperations.push(amznHtmlTask);
 
             // =================================================================
-            // WALMART MULTI-PAGE BATCH CHANNELS
+            // WALMART: CONCURRENT MULTI-PAGE STRIPPER PIPELINE
             // =================================================================
             const wmtTemplateTask = fetch(decodoUrl, {
                 method: "POST",
@@ -167,28 +173,33 @@ export async function GET(request: Request) {
                     if (!idMatch) return;
                     const id = idMatch[1].replace(/[^0-9A-Za-z]/g, '');
                     if (id.length < 4) return;
-                    const titleMatch = block.match(/title="([^"]+)"/) || block.match(/Link to\s*([^"]+)"/) || block.match(/<span class="[^"]*">([^<]{10,90})<\/span>/);
+
+                    // ROBUST WALMART HARVESTER: Pull title text directly from the image alt attribute or raw link strings
+                    const titleMatch = block.match(/alt="([^"]{10,250})"/i) ||
+                                       block.match(/title="([^"]+)"/i) || 
+                                       block.match(/Link to\s*([^"]+)"/i) || 
+                                       block.match(/<span class="[^"]*">([^<]{10,120})<\/span>/i);
                     if (!titleMatch) return;
-                    const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/);
+
+                    const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/i);
                     const price = priceMatch ? parseFloat(priceMatch[1]) : 12.99;
-                    const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/) || block.match(/srcset="([^"\s]+)/);
-                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating: 4.5, reviews: 154 }, 'walmart');
+                    const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/i) || block.match(/srcset="([^"\s]+)/i);
+                    
+                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "", rating: 4.5, reviews: 142 }, 'walmart');
                 });
             })
             .catch(() => {});
             batchOperations.push(wmtHtmlTask);
         });
 
-        // Resolve all concurrent page streams safely with full fault-tolerance
         await Promise.allSettled(batchOperations);
     };
 
     try {
-        // Dynamic Safety Gate: Package items at 54 seconds to beat strict platform terminations
-        const internalTimeoutGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('VercelTimeGateHit')), 54000));
+        const internalTimeoutGuard = new Promise((_, reject) => setTimeout(() => reject(new Error('VercelTimeGateHit')), 52000));
         await Promise.race([executeMultiPageAggregation(), internalTimeoutGuard]);
     } catch {
-        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Reached maximum compilation frame. Returning all collected inventory rows.`);
+        console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations completed up to time limit.`);
     }
 
     if (rawResults.length === 0) {
@@ -238,7 +249,6 @@ export async function GET(request: Request) {
             };
         }).filter(Boolean);
 
-        // Sort rows strictly by best price-per-unit across all pages combined
         processedResults.sort((a: any, b: any) => {
             const valA = a.score || 0;
             const valB = b.score || 0;
