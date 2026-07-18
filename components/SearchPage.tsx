@@ -18,7 +18,6 @@ import {
 } from '@/lib/unit-parser';
 import { generateProductSchema } from '@/lib/schema';
 
-// FIXED TYPE LAYER: Add indexable property mapping to allow any backend layout parameters safely
 type EnhancedSortingProduct = Product & {
     pricePerUnitNumeric?: number;
     totalPriceNumeric?: number;
@@ -74,7 +73,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const searchParams = useSearchParams();
 
     const urlQueryParam = searchParams.get('q') || '';
-    const initialUnit = toCanonicalUnit(searchParams.get('u') || '');
+    const initialUnit = searchParams.get('u') || '';
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
 
     const inputRef = useRef<HTMLInputElement>(null);
@@ -110,10 +109,9 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     };
 
     const handleUnitChange = (unit: string) => {
-        const canonical = toCanonicalUnit(unit);
-        setSelectedUnit(canonical);
+        setSelectedUnit(unit);
         const params = new URLSearchParams(searchParams.toString());
-        if (canonical && canonical !== 'unknown') params.set('u', canonical); else params.delete('u');
+        if (unit) params.set('u', unit); else params.delete('u');
 
         const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
         router.push(`${currentPath}?${params.toString()}`, { scroll: false });
@@ -162,10 +160,23 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
 
     const convertedResults = useMemo(() => {
         return results.map(product => {
-            if (!selectedUnit || selectedUnit === 'unknown' || !product.unitInfo) return product;
-            
-            const baseAmount = product.amount || product.totalAmount || product.unitInfo.totalValue || 1;
-            const currentUnitType = product.unit || product.unit_type || product.unitInfo.unit || 'count';
+            const baseAmount = product.unitInfo?.value ?? product.unitInfo?.totalValue ?? product.amount ?? product.totalAmount ?? 1;
+            const currentUnitType = toCanonicalUnit(product.unitInfo?.unit ?? product.unit ?? product.unit_type ?? 'count');
+
+            if (!selectedUnit || selectedUnit === 'unknown') {
+                return {
+                    ...product,
+                    pricePerUnitNumeric: product.score ?? (product.price / baseAmount),
+                    totalPriceNumeric: product.price,
+                    unitInfo: {
+                        formatted: product.unitInfo?.formatted ?? `${baseAmount} ${currentUnitType}`,
+                        value: baseAmount,
+                        unit: currentUnitType,
+                        quantity: product.unitInfo?.quantity ?? 1,
+                        totalValue: baseAmount
+                    }
+                };
+            }
             
             const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any);
             
@@ -175,44 +186,55 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     ...product,
                     pricePerUnit: newPPUString, 
                     pricePerUnitNumeric: product.price / convertedAmount,
+                    totalPriceNumeric: product.price,
                     score: product.price / convertedAmount,
                     ppuFormatted: newPPUString,
                     unitInfo: { 
-                        ...product.unitInfo, 
+                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit === 'count' ? 'ea' : selectedUnit}`,
+                        value: convertedAmount,
                         unit: selectedUnit,
-                        totalValue: convertedAmount,
-                        formatted: `${convertedAmount.toFixed(2)} ${selectedUnit === 'count' ? 'ea' : selectedUnit}` 
+                        quantity: product.unitInfo?.quantity ?? 1,
+                        totalValue: convertedAmount
                     }
                 };
             }
+
+            // FIXED COMPILER SAFETY HOOK: Assign concrete fallbacks to pass Product model type validation rules
             return {
                 ...product,
                 pricePerUnit: 'Incompatible',
                 pricePerUnitNumeric: 999999,
+                totalPriceNumeric: product.price,
                 score: 999999,
                 ppuFormatted: 'Incompatible',
-                unitInfo: { ...product.unitInfo, formatted: `Incompatible w/ ${selectedUnit}` }
+                unitInfo: { 
+                    formatted: `Incompatible w/ ${selectedUnit}`,
+                    value: baseAmount,
+                    unit: currentUnitType,
+                    quantity: product.unitInfo?.quantity ?? 1,
+                    totalValue: baseAmount
+                }
             };
         });
     }, [results, selectedUnit]);
 
     const availableUnits = useMemo(() => {
         const units = results
-            .map(p => toCanonicalUnit(p.unit || p.unit_type || p.unitInfo?.unit || ''))
+            .map(p => toCanonicalUnit(p.unitInfo?.unit ?? p.unit ?? p.unit_type ?? ''))
             .filter(u => u !== 'unknown') as string[];
         return Array.from(new Set(units)).sort();
     }, [results]);
 
     const sortedAndConvertedResults = useMemo(() => {
         return [...convertedResults].sort((a, b) => {
-            if (sortBy === 'price_asc') return a.price - b.price;
-            if (sortBy === 'price_desc') return b.price - a.price;
+            if (sortBy === 'price_asc') return a.totalPriceNumeric - b.totalPriceNumeric;
+            if (sortBy === 'price_desc') return b.totalPriceNumeric - a.totalPriceNumeric;
             
-            const valA = typeof a.pricePerUnitNumeric === 'number' ? a.pricePerUnitNumeric : (a.score ?? 999999);
-            const valB = typeof b.pricePerUnitNumeric === 'number' ? b.pricePerUnitNumeric : (b.score ?? 999999);
+            const valA = typeof a.pricePerUnitNumeric === 'number' ? a.pricePerUnitNumeric : 999999;
+            const valB = typeof b.pricePerUnitNumeric === 'number' ? b.pricePerUnitNumeric : 999999;
             
             if (valA !== valB) return valA - valB;
-            return a.price - b.price;
+            return a.totalPriceNumeric - b.totalPriceNumeric;
         });
     }, [convertedResults, sortBy]);
 
@@ -368,7 +390,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                                     }}
                                 />
                                 <ProductCard
-                                    product={product}
+                                    product={product as any}
                                     index={index}
                                     onClick={(p) => setSelectedProduct(p)}
                                     onSelect={(id, sel) => setCompareList(prev => sel ? [...prev, id] : prev.filter(i => i !== id))}
@@ -409,8 +431,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             </section>
 
             {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />}
-            <ComparisonDrawer selectedIds={compareList} products={results} onRemove={(id) => setCompareList(p => p.filter(i => i !== id))} onClear={() => setCompareList([])} onCompare={() => setShowComparison(true)} />
-            {showComparison && <ComparisonView products={results.filter(p => compareList.includes(p.id))} onClose={() => setShowComparison(false)} />}
+            <ComparisonDrawer selectedIds={compareList} products={results as any} onRemove={(id) => setCompareList(p => p.filter(i => i !== id))} onClear={() => setCompareList([])} onCompare={() => setShowComparison(true)} />
+            {showComparison && <ComparisonView products={results.filter(p => compareList.includes(p.id)) as any} onClose={() => setShowComparison(false)} />}
         </div>
     );
 }
