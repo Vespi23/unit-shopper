@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
-// High-speed array locator block designed to trace inventory matrices across shifting response schemas
 function locateDataArray(obj: any): any[] {
     if (Array.isArray(obj)) return obj;
     if (typeof obj !== 'object' || obj === null) return [];
@@ -48,7 +47,6 @@ async function fetchTemplateTask(decodoUrl: string, decodoToken: string, source:
     }
 }
 
-// ADVERSARIAL advocacy SHIELD ROUTINE: Direct HTML extraction loop used if template scraper gets blocked
 async function fetchDirectHtmlFallback(decodoUrl: string, decodoToken: string, source: 'amazon' | 'walmart', query: string) {
     try {
         const targetUrl = source === 'amazon'
@@ -89,7 +87,6 @@ export async function GET(request: Request) {
     const decodoUrl = "https://scraper-api.decodo.com/v2/scrape";
     const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
 
-    // Channel Track A: Fire high-speed concurrent structured templates
     const [amazonTemplateItems, walmartTemplateItems] = await Promise.all([
         fetchTemplateTask(decodoUrl, decodoToken, 'amazon', query),
         fetchTemplateTask(decodoUrl, decodoToken, 'walmart', query)
@@ -123,12 +120,18 @@ export async function GET(request: Request) {
             totalAmount = normalized.totalValue;
         }
 
+        // RECOVERY SHIELD LAYER: If an item has no parsed units, force a 'count' of 1 instead of breaking the sort loop
+        if (unit === 'unknown' || !unit || totalAmount <= 0) {
+            unit = 'count';
+            totalAmount = 1;
+        }
+
         const cleanUrl = general.url || item.url
             ? (String(general.url || item.url).startsWith('http') ? String(general.url || item.url) : `https://www.walmart.com${general.url || item.url}`)
             : (source === 'amazon' ? `https://www.amazon.com/dp/${productId}` : `https://www.walmart.com/ip/${productId}`);
 
         rawResults.push({
-            id: `${source.substring(0, 4)}-${productId}`,
+            id: source === 'amazon' ? `amzn-${productId}` : `wmt-${productId}`,
             sku: productId,
             price,
             title,
@@ -149,11 +152,9 @@ export async function GET(request: Request) {
         });
     };
 
-    // Hydrate elements if template sets return structured assets
     if (amazonTemplateItems.length > 0) amazonTemplateItems.forEach(i => processItem(i, 'amazon'));
     if (walmartTemplateItems.length > 0) walmartTemplateItems.forEach(i => processItem(i, 'walmart'));
 
-    // FORCE-THROUGH WORKAROUND LAYER: Trigger raw HTML fallbacks if template responses are empty
     if (rawResults.length === 0) {
         const [amazonHtml, walmartHtml] = await Promise.all([
             fetchDirectHtmlFallback(decodoUrl, decodoToken, 'amazon', query),
@@ -186,21 +187,31 @@ export async function GET(request: Request) {
         }
 
         if (walmartHtml) {
-            const blocks = walmartHtml.split('data-item-id="');
-            blocks.shift();
-            blocks.forEach((block: string) => {
-                const idMatch = block.match(/^([^"]+)"/);
+            // FIXED SELCTOR SCHEMAS: Extract items using stable data attributes instead of variable CSS classes
+            const blocks = walmartHtml.split('data-testid="list-pyam"');
+            const fallbackBlocks = walmartHtml.includes('data-item-id=') ? walmartHtml.split('data-item-id="') : walmartHtml.split('href="/ip/');
+            
+            const targetedBlocks = blocks.length > 1 ? blocks : fallbackBlocks;
+            targetedBlocks.shift();
+            
+            targetedBlocks.forEach((block: string) => {
+                const idMatch = block.match(/^([^"/\s?]+)/);
                 if (!idMatch) return;
-                const id = idMatch[1];
+                const id = idMatch[1].replace(/[^0-9A-Za-z]/g, '');
+                if (id.length < 4) return;
 
-                const titleMatch = block.match(/<span class="w_iUH7">([^<]+)<\/h3>/) || 
-                                   block.match(/data-automation-id="product-title"[^>]*>([^<]+)/);
+                // Grab titles from clean hyperlink alt tags or structural text nodes safely
+                const titleMatch = block.match(/title="([^"]+)"/) || 
+                                   block.match(/Link to\s*([^"]+)"/) ||
+                                   block.match(/<span class="[^"]*">([^<]{10,90})<\/span>/);
                 if (!titleMatch) return;
                 const title = titleMatch[1].replace(/<[^>]*>/g, '').trim();
 
-                const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/);
+                const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/);
                 const price = priceMatch ? parseFloat(priceMatch[1]) : 12.99;
-                const image = block.match(/src="([^"]+walmartimages\.com[^"]+)"/)?.[1] || "";
+                
+                const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/) || block.match(/srcset="([^"\s]+)/);
+                const image = imageMatch ? imageMatch[1] : "";
 
                 processItem({ title, product_id: id, price, image, rating: 4.5, reviews: 184 }, 'walmart');
             });
@@ -215,15 +226,15 @@ export async function GET(request: Request) {
         let targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
 
         if (!targetUnit || targetUnit === 'unknown') {
-            const sampleUnit = rawResults.find(r => r.unit && r.unit !== 'unknown')?.unit;
-            targetUnit = sampleUnit ? toCanonicalUnit(sampleUnit) : 'unknown';
+            const sampleUnit = rawResults.find(r => r.unit && r.unit !== 'count' && r.unit !== 'unknown')?.unit;
+            targetUnit = sampleUnit ? toCanonicalUnit(sampleUnit) : 'count';
         }
 
         const processedResults = rawResults.map(p => {
             if (!p) return null;
             
-            const currentUnit = toCanonicalUnit(p.unit || 'unknown');
-            const currentAmount = parseFloat(p.totalAmount || 0);
+            const currentUnit = toCanonicalUnit(p.unit || 'count');
+            const currentAmount = parseFloat(p.totalAmount || 1);
             const unitPrice = parseFloat(p.price || 0);
             
             let finalAmount = currentAmount;
@@ -231,7 +242,7 @@ export async function GET(request: Request) {
 
             if (targetUnit !== 'unknown' && currentUnit !== 'unknown' && currentUnit !== targetUnit) {
                 const converted = convertValue(currentAmount, currentUnit, targetUnit);
-                if (converted !== null) {
+                if (converted !== null && converted > 0) {
                     finalAmount = converted;
                     finalUnit = targetUnit;
                 }
