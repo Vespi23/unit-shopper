@@ -86,8 +86,12 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
         const newQuery = (formData.get('searchQuery') as string).trim();
+        
+        if (!newQuery) return;
+
+        setLoading(true); // Provide immediate feedback
         const params = new URLSearchParams(searchParams.toString());
-        if (newQuery) params.set('q', newQuery); else params.delete('q');
+        params.set('q', newQuery);
         router.push(`/?${params.toString()}`, { scroll: false });
     };
 
@@ -99,7 +103,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     };
 
     useEffect(() => {
-        if (!urlQueryParam) { setResults([]); setSearched(false); return; }
+        if (!urlQueryParam) { setResults([]); setSearched(false); setLoading(false); return; }
         setLoading(true);
         fetch(`/api/search?q=${encodeURIComponent(urlQueryParam)}`)
             .then(res => res.json())
@@ -116,6 +120,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             if (!selectedUnit || selectedUnit === 'unknown') {
                 return { ...product, pricePerUnitNumeric: product.score ?? (product.price / baseAmount), totalPriceNumeric: product.price };
             }
+
             const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any, product.title);
             const ppu = convertedAmount && convertedAmount > 0 ? (product.price / convertedAmount) : 999999;
             return { 
@@ -146,8 +151,20 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     <div className="relative w-full max-w-3xl group z-10">
                         <form onSubmit={handleSearch} className="flex items-center bg-card shadow-2xl rounded-3xl border border-border p-3 gap-2">
                             <Search className="h-7 w-7 text-muted-foreground ml-3" />
-                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products (e.g. Toilet Paper)..." className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" />
-                            <button type="submit" className="px-8 py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all">Search</button>
+                            <input 
+                                name="searchQuery" 
+                                defaultValue={urlQueryParam} 
+                                disabled={loading}
+                                placeholder={loading ? "Deep Scraping..." : "Search products (e.g. Toilet Paper)..."} 
+                                className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" 
+                            />
+                            <button 
+                                type="submit" 
+                                disabled={loading}
+                                className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all ${loading ? 'bg-muted text-muted-foreground' : 'bg-primary text-white hover:bg-emerald-700'}`}
+                            >
+                                {loading ? <Loader2 className="animate-spin h-6 w-6" /> : "Search"}
+                            </button>
                         </form>
 
                         {!urlQueryParam && !loading && (
