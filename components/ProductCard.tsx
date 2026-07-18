@@ -12,7 +12,7 @@ interface ProductCardProps {
     onClick: (product: Product) => void;
     onSelect: (productId: string, selected: boolean) => void;
     isSelected: boolean;
-    index?: number; // Added index to determine image priority
+    index?: number;
 }
 
 export function ProductCardSkeleton() {
@@ -35,8 +35,6 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
     const { variant, trackConversion, isReady } = useABTest('cta_color');
     const { toast } = useToast();
 
-    // The first 4 items are visible above the fold on most devices. 
-    // They get highest fetch priority to maximize Core Web Vitals (LCP).
     const isPriority = index < 4;
 
     const handleCardClick = useCallback(() => {
@@ -53,17 +51,15 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
     };
 
     const handleShareSavings = async (e: React.MouseEvent) => {
-        e.stopPropagation(); // Stops card selection and modal triggers
+        e.stopPropagation();
 
-        // Seamless programmatic link construction for real-time stateless execution
         const trackingUrl = `${window.location.origin}/?q=${encodeURIComponent(product.title)}&ref=sharesavings`;
-        const shareSnippet = `🎯 Deal Alert via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.pricePerUnit} (${product.unitInfo?.formatted || 'N/A'})\n💵 Total Cost: $${product.price.toFixed(2)}\n\nCheck the unit value calculation here:\n👇👇👇\n${trackingUrl}`;
+        const shareSnippet = `🎯 Deal Alert via BudgetLynx.com!\n📦 Product: ${product.title}\n💎 Unit Price: ${product.ppuFormatted || product.pricePerUnit} (${product.unitInfo?.formatted || 'N/A'})\n💵 Total Cost: $${product.price.toFixed(2)}\n\nCheck the unit value calculation here:\n👇👇👇\n${trackingUrl}`;
 
         try {
             if (navigator.clipboard && window.isSecureContext) {
                 await navigator.clipboard.writeText(shareSnippet);
             } else {
-                // FORCE-THROUGH FALLBACK FOR MOBILE EMBEDDED SOCIAL CHANNELS
                 const element = document.createElement('textarea');
                 element.value = shareSnippet;
                 element.style.position = 'fixed';
@@ -112,7 +108,6 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
             }}
             aria-label={product.title}
         >
-            {/* Selection Checkbox */}
             <div className="absolute top-1 left-1 z-20 p-2" onClick={(e) => e.stopPropagation()}>
                 <input
                     type="checkbox"
@@ -123,26 +118,31 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                 />
             </div>
 
-            {/* Image Section */}
             <div className="relative aspect-square w-full overflow-hidden bg-white p-6">
                 <img
                     src={product.image}
                     alt={product.title}
                     loading={isPriority ? "eager" : "lazy"}
-                    fetchPriority={isPriority ? "high" : "auto"}
-                    decoding="async"
+                    data-fetchpriority={isPriority ? "high" : "auto"}
                     className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                 />
 
-                {/* Unit Price Badge (Hero) */}
+                {/* FIXED: Swapped out unformatted string token metrics for real-time rounded `ppuFormatted` attributes */}
                 <div className="absolute bottom-3 right-3 bg-emerald-600 text-white dark:bg-emerald-500 shadow-xl shadow-emerald-900/20 px-4 py-2 rounded-2xl text-sm font-extrabold backdrop-blur-md border border-emerald-400/30 z-10 transition-all duration-300 group-hover:scale-110 group-hover:shadow-emerald-900/40 flex items-center gap-1.5">
-                    <span className="drop-shadow-md">{product.pricePerUnit}</span>
+                    <span className="drop-shadow-md">{product.ppuFormatted || product.pricePerUnit}</span>
                 </div>
+                
+                {/* Store Branding Identifier Ribbon */}
+                <span className={`absolute top-3 right-3 px-2.5 py-0.5 text-[9px] font-black font-mono tracking-widest uppercase rounded-md shadow-sm text-white border z-10 ${
+                    product.retailer === 'amazon' 
+                        ? 'bg-orange-500 border-orange-400/30 shadow-orange-500/10' 
+                        : 'bg-blue-600 border-blue-400/30 shadow-blue-600/10'
+                }`}>
+                    {product.retailer}
+                </span>
             </div>
 
-            {/* Content Section */}
             <div className="flex flex-1 flex-col p-5 bg-gradient-to-b from-transparent to-muted/20">
-                {/* AI Verified Badge */}
                 {product.aiVerified && (
                     <div className="mb-3 flex items-center gap-1.5 w-fit rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-400/20">
                         <Sparkles className="h-3 w-3 animate-pulse" />
@@ -171,13 +171,12 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                     </div>
 
                     <div className="text-right">
-                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded font-mono">
                             {product.unitInfo?.formatted || 'N/A'}
                         </span>
                     </div>
                 </div>
 
-                {/* Inline Split Layout Execution Action Array */}
                 <div className="mt-5 flex items-center gap-2">
                     <button
                         onClick={handleShareSavings}

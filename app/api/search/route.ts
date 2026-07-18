@@ -26,10 +26,10 @@ async function executeScrapeTask(decodoUrl: string, decodoToken: string, source:
         
         const outerBlock = data.results?.[0]?.content || data.content || {};
         
-        // RE-CALIBRATED TARGET COORDINATES: Split data path evaluations by store to fix empty lookups
+        // FIXED SCHEMA CO-ORDINATES: Target direct organic listing arrays for both platforms
         let items: any[] = [];
         if (source === 'amazon') {
-            items = outerBlock?.search_results || outerBlock?.products || outerBlock?.results || [];
+            items = outerBlock?.organic || outerBlock?.search_results || outerBlock?.products || outerBlock?.results || [];
         } else {
             items = outerBlock?.results?.results || outerBlock?.results?.organic || outerBlock?.results || [];
         }
@@ -89,7 +89,6 @@ export async function GET(request: Request) {
 
             if (parsedUnitInfo) {
                 const normalized = normalizeUnit(parsedUnitInfo);
-                // STANDARD BADGE NORMALIZATION: Ensure units always match your library's exact canonical options
                 unit = toCanonicalUnit(normalized.unit);
                 totalAmount = normalized.totalValue;
             }
@@ -151,16 +150,13 @@ export async function GET(request: Request) {
             }
 
             const numericPPU = finalAmount > 0 ? (unitPrice / finalAmount) : unitPrice;
-            
-            // Standardize output short labels for UI elements
             let displayUnitLabel = finalUnit === 'count' ? 'ea' : finalUnit;
 
             return {
                 ...p,
                 price: unitPrice,
-                score: numericPPU, 
+                score: numericPPU, // Crucial float reference mapping to secure clean sorting routines
                 pricePerUnit: numericPPU,
-                // FIXED: Enforce accurate currency symbol string injection and force rounding rules to the second decimal place
                 ppuFormatted: `$${numericPPU.toFixed(2)}/${displayUnitLabel}`,
                 unitInfo: {
                     value: finalAmount, 
@@ -173,10 +169,7 @@ export async function GET(request: Request) {
         }).filter(Boolean);
 
         processedResults.sort((a: any, b: any) => {
-            const valA = a.pricePerUnit || 0;
-            const valB = b.pricePerUnit || 0;
-            if (valA !== valB) return valA - valB;
-            return (a.price || 0) - (b.price || 0);
+            return (a.score || 0) - (b.score || 0);
         });
 
         return NextResponse.json(processedResults);
