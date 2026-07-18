@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { parseUnit, normalizeUnit, toCanonicalUnit, convertValue, calculatePricePerUnit } from '@/lib/unit-parser';
 
+// ABSOLUTE SCRIPT RUNTIME ISOLATION DIRECTIVES
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export const revalidate = 0;
 export const maxDuration = 60; 
 
@@ -22,9 +24,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || searchParams.get('query') || '';
 
-    if (!query.trim()) return NextResponse.json([]);
+    if (!query.trim()) {
+        return new NextResponse(JSON.stringify([]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
 
-    // FIXED: Encapsulated strictly inside the execution context to prevent cross-request pollution leaks
     const rawResults: any[] = [];
     const decodoUrl = "https://scraper-api.decodo.com/v2/scrape";
     const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
@@ -103,11 +109,16 @@ export async function GET(request: Request) {
         const batchOperations: Promise<void>[] = [];
 
         targetPages.forEach((pageNumber) => {
+            // High-entropy cache busting tokens generated on each cycle
+            const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
             // Amazon Template
-            const amznTemplateTask = fetch(decodoUrl, {
+            const amznTemplateTask = fetch(`${decodoUrl}?${cacheBuster}`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ target: "amazon_search", query: `${query}&page=${pageNumber}`, parse: true })
+                body: JSON.stringify({ target: "amazon_search", query: `${query}&page=${pageNumber}`, parse: true }),
+                cache: 'no-store',
+                next: { revalidate: 0 }
             })
             .then(r => r.json())
             .then(d => locateDataArray(d.results?.[0]?.content || d.content || {}))
@@ -116,10 +127,12 @@ export async function GET(request: Request) {
             batchOperations.push(amznTemplateTask);
 
             // Amazon HTML
-            const amznHtmlTask = fetch(decodoUrl, {
+            const amznHtmlTask = fetch(`${decodoUrl}?${cacheBuster}`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${pageNumber}`, proxy_pool: "premium", headless: "html" })
+                body: JSON.stringify({ url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${pageNumber}`, proxy_pool: "premium", headless: "html" }),
+                cache: 'no-store',
+                next: { revalidate: 0 }
             })
             .then(r => r.json())
             .then(d => d.results?.[0]?.content || d.content || "")
@@ -154,10 +167,12 @@ export async function GET(request: Request) {
             batchOperations.push(amznHtmlTask);
 
             // Walmart Template
-            const wmtTemplateTask = fetch(decodoUrl, {
+            const wmtTemplateTask = fetch(`${decodoUrl}?${cacheBuster}`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ target: "walmart_search", query: `${query}&page=${pageNumber}`, parse: true })
+                body: JSON.stringify({ target: "walmart_search", query: `${query}&page=${pageNumber}`, parse: true }),
+                cache: 'no-store',
+                next: { revalidate: 0 }
             })
             .then(r => r.json())
             .then(d => locateDataArray(d.results?.[0]?.content || d.content || {}))
@@ -165,15 +180,17 @@ export async function GET(request: Request) {
             .catch(() => {});
             batchOperations.push(wmtTemplateTask);
 
-            // Walmart HTML via Next.js Hydrated Script Block Map
-            const wmtHtmlTask = fetch(decodoUrl, {
+            // Walmart HTML
+            const wmtHtmlTask = fetch(`${decodoUrl}?${cacheBuster}`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ 
                     url: `https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${pageNumber}`, 
                     proxy_pool: "premium", 
                     headless: "html"
-                })
+                }),
+                cache: 'no-store',
+                next: { revalidate: 0 }
             })
             .then(r => r.json())
             .then(d => d.results?.[0]?.content || d.content || "")
@@ -192,7 +209,6 @@ export async function GET(request: Request) {
                     } catch {}
                 }
 
-                // Inline Selector Fallback Pass
                 const fallbackBlocks = html.split('data-item-id="');
                 fallbackBlocks.shift();
                 fallbackBlocks.forEach((block: string) => {
@@ -231,60 +247,74 @@ export async function GET(request: Request) {
         console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations completed up to time limit.`);
     }
 
-    if (rawResults.length === 0) return NextResponse.json([]);
+    let finalPayload: any[] = [];
 
-    try {
-        let targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
-        if (!targetUnit || targetUnit === 'unknown') {
-            const sampleUnit = rawResults.find(r => r.unit && r.unit !== 'count' && r.unit !== 'unknown')?.unit;
-            targetUnit = sampleUnit ? toCanonicalUnit(sampleUnit) : 'count';
-        }
-
-        const processedResults = rawResults.map(p => {
-            if (!p) return null;
-            const currentUnit = toCanonicalUnit(p.unit || 'count');
-            const currentAmount = parseFloat(p.totalAmount || 1);
-            const unitPrice = parseFloat(p.price || 0);
-            
-            let finalAmount = currentAmount;
-            let finalUnit = currentUnit;
-
-            if (targetUnit !== 'unknown' && currentUnit !== 'unknown' && currentUnit !== targetUnit) {
-                const converted = convertValue(currentAmount, currentUnit, targetUnit);
-                if (converted !== null && converted > 0) {
-                    finalAmount = converted;
-                    finalUnit = targetUnit;
-                }
+    if (rawResults.length > 0) {
+        try {
+            let targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
+            if (!targetUnit || targetUnit === 'unknown') {
+                const sampleUnit = rawResults.find(r => r.unit && r.unit !== 'count' && r.unit !== 'unknown')?.unit;
+                targetUnit = sampleUnit ? toCanonicalUnit(sampleUnit) : 'count';
             }
 
-            const numericPPU = finalAmount > 0 ? (unitPrice / finalAmount) : unitPrice;
-            let displayUnitLabel = finalUnit === 'count' ? 'ea' : finalUnit;
+            const processedResults = rawResults.map(p => {
+                if (!p) return null;
+                const currentUnit = toCanonicalUnit(p.unit || 'count');
+                const currentAmount = parseFloat(p.totalAmount || 1);
+                const unitPrice = parseFloat(p.price || 0);
+                
+                let finalAmount = currentAmount;
+                let finalUnit = currentUnit;
 
-            return {
-                ...p,
-                price: unitPrice,
-                score: numericPPU, 
-                pricePerUnit: calculatePricePerUnit(unitPrice, finalAmount, finalUnit),
-                ppuFormatted: `$${numericPPU.toFixed(2)}/${displayUnitLabel}`,
-                unitInfo: {
-                    value: finalAmount, 
-                    unit: finalUnit,
-                    quantity: 1, 
-                    totalValue: finalAmount,
-                    formatted: `${parseFloat(finalAmount.toFixed(2))} ${finalUnit === 'count' ? 'count' : finalUnit}`
+                if (targetUnit !== 'unknown' && currentUnit !== 'unknown' && currentUnit !== targetUnit) {
+                    const converted = convertValue(currentAmount, currentUnit, targetUnit);
+                    if (converted !== null && converted > 0) {
+                        finalAmount = converted;
+                        finalUnit = targetUnit;
+                    }
                 }
-            };
-        }).filter(Boolean);
 
-        processedResults.sort((a: any, b: any) => {
-            const valA = a.score || 0;
-            const valB = b.score || 0;
-            if (valA !== valB) return valA - valB;
-            return (a.price || 0) - (b.price || 0);
-        });
+                const numericPPU = finalAmount > 0 ? (unitPrice / finalAmount) : unitPrice;
+                let displayUnitLabel = finalUnit === 'count' ? 'ea' : finalUnit;
 
-        return NextResponse.json(processedResults);
-    } catch {
-        return NextResponse.json(rawResults);
+                return {
+                    ...p,
+                    price: unitPrice,
+                    score: numericPPU, 
+                    pricePerUnit: calculatePricePerUnit(unitPrice, finalAmount, finalUnit),
+                    ppuFormatted: `$${numericPPU.toFixed(2)}/${displayUnitLabel}`,
+                    unitInfo: {
+                        value: finalAmount, 
+                        unit: finalUnit,
+                        quantity: 1, 
+                        totalValue: finalAmount,
+                        formatted: `${parseFloat(finalAmount.toFixed(2))} ${finalUnit === 'count' ? 'count' : finalUnit}`
+                    }
+                };
+            }).filter(Boolean);
+
+            processedResults.sort((a: any, b: any) => {
+                const valA = a.score || 0;
+                const valB = b.score || 0;
+                if (valA !== valB) return valA - valB;
+                return (a.price || 0) - (b.price || 0);
+            });
+
+            finalPayload = processedResults;
+        } catch {
+            finalPayload = rawResults;
+        }
     }
+
+    // FIXED: Enforce absolute downstream cache busting response headers explicitly
+    return new NextResponse(JSON.stringify(finalPayload), {
+        status: 200,
+        headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Surrogate-Control': 'no-store'
+        }
+    });
 }
