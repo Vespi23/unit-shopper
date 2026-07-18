@@ -3,7 +3,7 @@ import { parseUnit, normalizeUnit, toCanonicalUnit, convertValue, calculatePrice
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 25; // Keep function execution comfortably within serverless safety boundaries
+export const maxDuration = 30;
 
 function locateDataArray(obj: any): any[] {
     if (Array.isArray(obj)) return obj;
@@ -18,7 +18,7 @@ function locateDataArray(obj: any): any[] {
     return [];
 }
 
-async function fetchTemplateTask(decodoUrl: string, decodoToken: string, source: 'amazon' | 'walmart', query: string) {
+async function fetchTemplateTask(decodoUrl: string, decodoToken: string, source: 'amazon' | 'walmart', query: string): Promise<any[]> {
     try {
         const body = source === 'amazon' 
             ? { target: "amazon_search", query: query, parse: true }
@@ -35,7 +35,7 @@ async function fetchTemplateTask(decodoUrl: string, decodoToken: string, source:
     } catch { return []; }
 }
 
-async function fetchDirectHtmlFallback(decodoUrl: string, decodoToken: string, source: 'amazon' | 'walmart', query: string) {
+async function fetchDirectHtmlFallback(decodoUrl: string, decodoToken: string, source: 'amazon' | 'walmart', query: string): Promise<string> {
     try {
         const targetUrl = source === 'amazon'
             ? `https://www.amazon.com/s?k=${encodeURIComponent(query)}`
@@ -61,11 +61,6 @@ export async function GET(request: Request) {
     const rawResults: any[] = [];
     const decodoUrl = "https://scraper-api.decodo.com/v2/scrape";
     const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
-
-    // TIMEOUT CIRCUIT BREAKER GUARD: Fails fast at 12 seconds to prevent function timeouts
-    const executionTimeoutGuard = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('CircuitBreakerTimeout')), 12000)
-    );
 
     const processItem = (item: any, source: 'amazon' | 'walmart') => {
         const general = item.general || item || {};
@@ -119,66 +114,78 @@ export async function GET(request: Request) {
         });
     };
 
+    // =========================================================================
+    // TIER 1 TRACK: JSON PARSED TEMPLATE OPTIMIZATION (Capped at 4.5 Seconds)
+    // =========================================================================
     try {
-        // Concurrently run template extraction tasks and fallback tracks in parallel
-        await Promise.race([
-            Promise.all([
-                fetchTemplateTask(decodoUrl, decodoToken, 'amazon', query),
-                fetchTemplateTask(decodoUrl, decodoToken, 'walmart', query),
+        const tier1Timeout = new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Tier1Timeout')), 4500));
+        const templatesPromise = Promise.all([
+            fetchTemplateTask(decodoUrl, decodoToken, 'amazon', query),
+            fetchTemplateTask(decodoUrl, decodoToken, 'walmart', query)
+        ]);
+
+        const [amznTemplate, wmtTemplate] = await Promise.race([templatesPromise, tier1Timeout]);
+        if (Array.isArray(amznTemplate) && amznTemplate.length > 0) amznTemplate.forEach(i => processItem(i, 'amazon'));
+        if (Array.isArray(wmtTemplate) && wmtTemplate.length > 0) wmtTemplate.forEach(i => processItem(i, 'walmart'));
+    } catch {
+        console.warn(`[SEARCH_ROUTER_TIER_1_SHORT]: JSON templates delayed or blocked. Escalating to Tier 2.`);
+    }
+
+    // =========================================================================
+    // TIER 2 TRACK: DIRECT HTML STRIPPER ADVERSARIAL FALLBACK (Capped at 6.5 Seconds)
+    // =========================================================================
+    if (rawResults.length === 0) {
+        try {
+            const tier2Timeout = new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Tier2Timeout')), 6500));
+            const htmlPromise = Promise.all([
                 fetchDirectHtmlFallback(decodoUrl, decodoToken, 'amazon', query),
                 fetchDirectHtmlFallback(decodoUrl, decodoToken, 'walmart', query)
-            ]).then(([amznTemplate, wmtTemplate, amznHtml, wmtHtml]) => {
-                
-                // Process structured items first if templates succeeded
-                if (Array.isArray(amznTemplate) && amznTemplate.length > 0) amznTemplate.forEach(i => processItem(i, 'amazon'));
-                if (Array.isArray(wmtTemplate) && wmtTemplate.length > 0) wmtTemplate.forEach(i => processItem(i, 'walmart'));
+            ]);
 
-                // Failover straight to raw HTML selectors if template pools returned empty collections
-                if (rawResults.length === 0) {
-                    if (amznHtml) {
-                        const blocks = (amznHtml as string).split('data-asin="');
-                        blocks.shift();
-                        blocks.forEach((block: string) => {
-                            const asin = block.substring(0, 10);
-                            if (!/^[A-Z0-9]{10}$/.test(asin)) return;
-                            const titleMatch = block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/) || 
-                                               block.match(/<span class="a-size-medium a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/);
-                            if (!titleMatch) return;
-                            const priceWhole = block.match(/<span class="a-price-whole">([^<]+)<span/);
-                            const priceFraction = block.match(/<span class="a-price-fraction">([^<]+)<\/span>/);
-                            let price = 14.99;
-                            if (priceWhole) price = parseFloat(priceWhole[1].replace(/[^0-9]/g, '')) + (priceFraction ? parseFloat('0.' + priceFraction[1]) : 0);
-                            const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/)?.[1] || "";
-                            processItem({ title: titleMatch[1].trim(), asin, price, image }, 'amazon');
-                        });
-                    }
+            const [amznHtml, wmtHtml] = await Promise.race([htmlPromise, tier2Timeout]);
 
-                    if (wmtHtml) {
-                        const fallbackBlocks = (wmtHtml as string).includes('data-item-id=') ? (wmtHtml as string).split('data-item-id="') : (wmtHtml as string).split('href="/ip/');
-                        fallbackBlocks.shift();
-                        fallbackBlocks.forEach((block: string) => {
-                            const idMatch = block.match(/^([^"/\s?]+)/);
-                            if (!idMatch) return;
-                            const id = idMatch[1].replace(/[^0-9A-Za-z]/g, '');
-                            if (id.length < 4) return;
-                            const titleMatch = block.match(/title="([^"]+)"/) || block.match(/Link to\s*([^"]+)"/) || block.match(/<span class="[^"]*">([^<]{10,90})<\/span>/);
-                            if (!titleMatch) return;
-                            const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/);
-                            const price = priceMatch ? parseFloat(priceMatch[1]) : 12.99;
-                            const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/) || block.match(/srcset="([^"\s]+)/);
-                            processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "" }, 'walmart');
-                        });
-                    }
-                }
-            }),
-            executionTimeoutGuard
-        ]);
-    } catch (err) {
-        console.warn(`[SEARCH_ROUTER_CIRCUIT_SHORT]: Execution timed out or cut short. Processing partial raw records.`);
+            if (amznHtml) {
+                const blocks = (amznHtml as string).split('data-asin="');
+                blocks.shift();
+                blocks.forEach((block: string) => {
+                    const asin = block.substring(0, 10);
+                    if (!/^[A-Z0-9]{10}$/.test(asin)) return;
+                    const titleMatch = block.match(/<span class="a-size-base-plus a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/) || 
+                                       block.match(/<span class="a-size-medium a-color-base a-text-normal"[^>]*>([^<]+)<\/span>/);
+                    if (!titleMatch) return;
+                    const priceWhole = block.match(/<span class="a-price-whole">([^<]+)<span/);
+                    const priceFraction = block.match(/<span class="a-price-fraction">([^<]+)<\/span>/);
+                    let price = 14.99;
+                    if (priceWhole) price = parseFloat(priceWhole[1].replace(/[^0-9]/g, '')) + (priceFraction ? parseFloat('0.' + priceFraction[1]) : 0);
+                    const image = block.match(/src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/)?.[1] || "";
+                    processItem({ title: titleMatch[1].trim(), asin, price, image }, 'amazon');
+                });
+            }
+
+            if (wmtHtml) {
+                const fallbackBlocks = (wmtHtml as string).includes('data-item-id=') ? (wmtHtml as string).split('data-item-id="') : (wmtHtml as string).split('href="/ip/');
+                fallbackBlocks.shift();
+                fallbackBlocks.forEach((block: string) => {
+                    const idMatch = block.match(/^([^"/\s?]+)/);
+                    if (!idMatch) return;
+                    const id = idMatch[1].replace(/[^0-9A-Za-z]/g, '');
+                    if (id.length < 4) return;
+                    const titleMatch = block.match(/title="([^"]+)"/) || block.match(/Link to\s*([^"]+)"/) || block.match(/<span class="[^"]*">([^<]{10,90})<\/span>/);
+                    if (!titleMatch) return;
+                    const priceMatch = block.match(/\$(\d+(?:\.\d{2})?)/) || block.match(/current price\s*\$?(\d+(?:\.\d{2})?)/);
+                    const price = priceMatch ? parseFloat(priceMatch[1]) : 12.99;
+                    const imageMatch = block.match(/src="([^"]+walmartimages\.com[^"]+)"/) || block.match(/srcset="([^"\s]+)/);
+                    processItem({ title: titleMatch[1].replace(/<[^>]*>/g, '').trim(), product_id: id, price, image: imageMatch ? imageMatch[1] : "" }, 'walmart');
+                });
+            }
+        } catch {
+            console.error(`[SEARCH_ROUTER_FATAL_TIMEOUT]: All scraping tiers exceeded allocation parameters.`);
+        }
     }
 
     if (rawResults.length === 0) return NextResponse.json([]);
 
+    // LAYER 3: GLOBAL VALUE SORT AND UNIT ALIGNMENT MATRIX
     try {
         let targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
         if (!targetUnit || targetUnit === 'unknown') {
