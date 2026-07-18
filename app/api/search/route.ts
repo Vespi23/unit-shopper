@@ -24,6 +24,7 @@ export async function GET(request: Request) {
 
     if (!query.trim()) return NextResponse.json([]);
 
+    // FIXED: Encapsulated strictly inside the execution context to prevent cross-request pollution leaks
     const rawResults: any[] = [];
     const decodoUrl = "https://scraper-api.decodo.com/v2/scrape";
     const decodoToken = process.env.DECODO_AUTH_TOKEN || "";
@@ -35,7 +36,6 @@ export async function GET(request: Request) {
         let title = String(general.title || item.title || item.name || "").trim();
         if (!title || title === "undefined") return;
 
-        // EXTRACT TRUE METRICS: Accept only verified numeric values
         const parsedRating = parseFloat(String(ratingObj.averageRating || ratingObj.rating || item.averageRating || item.rating || "0"));
         const parsedCount = parseInt(String(ratingObj.numberOfReviews || ratingObj.count || item.numberOfReviews || item.reviews || item.review_count || "0"), 10);
 
@@ -103,9 +103,7 @@ export async function GET(request: Request) {
         const batchOperations: Promise<void>[] = [];
 
         targetPages.forEach((pageNumber) => {
-            // =================================================================
-            // AMAZON CONCURRENT BATCH PIPELINES
-            // =================================================================
+            // Amazon Template
             const amznTemplateTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
@@ -117,6 +115,7 @@ export async function GET(request: Request) {
             .catch(() => {});
             batchOperations.push(amznTemplateTask);
 
+            // Amazon HTML
             const amznHtmlTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
@@ -154,9 +153,7 @@ export async function GET(request: Request) {
             .catch(() => {});
             batchOperations.push(amznHtmlTask);
 
-            // =================================================================
-            // WALMART NATIVE DATA EXTRACTOR (Parses Hidden Next.js Payload Maps)
-            // =================================================================
+            // Walmart Template
             const wmtTemplateTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
@@ -168,6 +165,7 @@ export async function GET(request: Request) {
             .catch(() => {});
             batchOperations.push(wmtTemplateTask);
 
+            // Walmart HTML via Next.js Hydrated Script Block Map
             const wmtHtmlTask = fetch(decodoUrl, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${decodoToken}`, "Content-Type": "application/json" },
@@ -182,22 +180,19 @@ export async function GET(request: Request) {
             .then(html => {
                 if (!html) return;
 
-                // FIXED: Extract true verified object fields from Next.js payload script tags
                 const jsonBlockMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
                 if (jsonBlockMatch) {
                     try {
                         const parsedData = JSON.parse(jsonBlockMatch[1]);
-                        
-                        // Drill down inside the data schema to pull items safely
                         const itemGrid = parsedData.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
                         if (Array.isArray(itemGrid) && itemGrid.length > 0) {
                             itemGrid.forEach(item => processItem(item, 'walmart'));
-                            return; // Target found, exit block
+                            return;
                         }
                     } catch {}
                 }
 
-                // Inline Fallback: Parse item segments if the Next.js block is missing
+                // Inline Selector Fallback Pass
                 const fallbackBlocks = html.split('data-item-id="');
                 fallbackBlocks.shift();
                 fallbackBlocks.forEach((block: string) => {
@@ -236,9 +231,7 @@ export async function GET(request: Request) {
         console.warn(`[MULTI_PAGE_TIME_GATE_ALERT]: Aggregations completed up to time limit.`);
     }
 
-    if (rawResults.length === 0) {
-        return NextResponse.json([]);
-    }
+    if (rawResults.length === 0) return NextResponse.json([]);
 
     try {
         let targetUnit = toCanonicalUnit(searchParams.get('u') || searchParams.get('unit') || '');
