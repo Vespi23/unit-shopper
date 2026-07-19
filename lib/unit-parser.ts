@@ -26,14 +26,20 @@ export interface UnitInfo {
 export const CANONICAL_UNITS: Record<string, string> = {
     'ounce': 'oz', 'ounces': 'oz', 'oz.': 'oz',
     'pound': 'lb', 'pounds': 'lb', 'lbs': 'lb', 'lb.': 'lb',
-    'count': 'count', 'counts': 'count', 'ct': 'count', 'pcs': 'count', 'ea': 'count',
-    'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz', 'fl. oz.': 'fl oz', 'fluid oz': 'fl oz',
+    'count': 'count', 'counts': 'count', 'ct': 'count', 'pcs': 'count', 'ea': 'count', 'each': 'count',
+    'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz', 'fl. oz.': 'fl oz', 'fluid oz': 'fl oz', 'fl-oz': 'fl oz',
     'gallon': 'gal', 'gallons': 'gal',
+    'quart': 'qt', 'quarts': 'qt',
+    'pint': 'pt', 'pints': 'pt',
     'gram': 'g', 'grams': 'g',
     'milliliter': 'ml', 'milliliters': 'ml',
     'liter': 'l', 'liters': 'l',
+    'kilogram': 'kg', 'kilograms': 'kg',
+    'milligram': 'mg', 'milligrams': 'mg',
     'roll': 'rolls', 'rolls': 'rolls',
-    'sheet': 'sheets', 'sheets': 'sheets'
+    'sheet': 'sheets', 'sheets': 'sheets',
+    'load': 'loads', 'loads': 'loads',
+    'sq ft': 'sq ft', 'sq. ft.': 'sq ft', 'square feet': 'sq ft'
 };
 
 export function toCanonicalUnit(unit: string): UnitType {
@@ -72,7 +78,6 @@ const INDIVIDUAL_SCALAR_ITEMS = /\b(?:patty|patties|sliders?|meatballs?)\b/i;
 
 export function parseUnit(title: string): UnitInfo | null {
     let cleanTitle = title.toLowerCase();
-    
     cleanTitle = cleanTitle.replace(/\b\d{2}\/\d{2}\b/g, '');
 
     if (cleanTitle.includes(',')) cleanTitle = cleanTitle.replace(/\b(\d+),(\d+)\b/g, '$1.$2');
@@ -197,43 +202,6 @@ export function parseUnit(title: string): UnitInfo | null {
     if (explicitTotalValue !== null) { value = explicitTotalValue; quantity = 1; }
     if ((unit === 'rolls' || unit === 'count' || unit === 'loads') && value === quantity && value > 2) quantity = 1;
 
-    const valueStr = value.toString();
-    const isExplicitTotal = lowerTitle.includes(`total of ${valueStr}`) || 
-                            lowerTitle.includes(`total ${valueStr}`) || 
-                            lowerTitle.includes(`${valueStr} total`) ||
-                            lowerTitle.includes(`net wt ${valueStr}`);
-
-    let isImplicitTotal = false;
-    if (quantity > 1 && value > 1) {
-        const individualSize = value / quantity;
-        if (Number.isInteger(individualSize) && individualSize !== value && individualSize !== quantity) {
-            const sizeStr = individualSize.toString();
-            if (lowerTitle.includes(sizeStr)) {
-                const parts = lowerTitle.split(sizeStr);
-                if (parts.length > 1) {
-                    const charBefore = parts[0].slice(-1);
-                    const charAfter = parts[1].charAt(0);
-                    const isStandalone = (!charBefore || /[\s\-(]/.test(charBefore)) && 
-                                         (!charAfter || /[\s\-)]/.test(charAfter));
-                    if (isStandalone) isImplicitTotal = true;
-                }
-            }
-        }
-    }
-
-    if (quantity > 1 && (unit === 'oz' || unit === 'g' || unit === 'fl oz' || unit === 'lb' || unit === 'kg')) {
-        const isPackageTotalTheme = TOTAL_WEIGHT_PRODUCT_THEMES.test(lowerTitle);
-        const hasEachMarker = EXPLICIT_EACH_INDICATORS.test(lowerTitle);
-        const isBulkContainer = BULK_CONTAINER_INDICATORS.test(lowerTitle);
-        const isIndividualScalarItem = INDIVIDUAL_SCALAR_ITEMS.test(lowerTitle);
-
-        if (isPackageTotalTheme && !hasEachMarker && !isBulkContainer && !isIndividualScalarItem) {
-            isImplicitTotal = true;
-        }
-    }
-
-    if ((isExplicitTotal || isImplicitTotal) && quantity > 1) quantity = 1;
-
     let totalValue = value * (quantity || 1);
     return {
         value, unit, quantity, totalValue,
@@ -279,6 +247,7 @@ export function calculatePricePerUnit(price: number, totalValue: number, unit: s
     return `$${ppu.toFixed(2)}/${unitLabel}`;
 }
 
+// UNIVERSAL MULTI-DIMENSIONAL CONVERTER MATRIX
 export function convertValue(value: number, from: string, to: string, contextTitle: string = ''): number | null {
     const cFrom = toCanonicalUnit(from);
     const cTo = toCanonicalUnit(to);
@@ -286,20 +255,48 @@ export function convertValue(value: number, from: string, to: string, contextTit
     if (cFrom === cTo) return value;
     if (value <= 0) return null;
 
-    const isTowelContext = /towel|napkin/i.test(contextTitle || '');
+    const lowerTitle = String(contextTitle || '').toLowerCase();
+    const isTowelContext = /towel|napkin/i.test(lowerTitle);
     const paperSheetFactor = isTowelContext ? 120 : 150;
 
-    if (cFrom === 'rolls' && cTo === 'sheets') return value * paperSheetFactor;
-    if (cFrom === 'sheets' && cTo === 'rolls') return value / paperSheetFactor;
-
-    const weightToBase: Record<string, number> = { 'g': 1, 'kg': 1000, 'mg': 0.001, 'lb': 453.592, 'oz': 28.3495 };
-    const volumeToBase: Record<string, number> = {
-        'ml': 1, 'l': 1000, 'fl oz': 29.5735, 'gal': 3785.41, 'qt': 946.353, 'pt': 473.176,
-        'loads': 29.5735 * 1.5, 'sq ft': 1 / 40
+    // Family 1: Paper Area Vectors (Cross-translated strictly via shared roll equations)
+    const paperToRollsFactor: Record<string, number> = {
+        'rolls': 1,
+        'sheets': 1 / paperSheetFactor,
+        'sq ft': 1 / 40
     };
+    if (paperToRollsFactor[cFrom] !== undefined && paperToRollsFactor[cTo] !== undefined) {
+        const valueInRolls = value * paperToRollsFactor[cFrom];
+        return valueInRolls / paperToRollsFactor[cTo];
+    }
 
-    if (weightToBase[cFrom] && weightToBase[cTo]) return (value * weightToBase[cFrom]) / weightToBase[cTo];
-    if (volumeToBase[cFrom] && volumeToBase[cTo]) return (value * volumeToBase[cFrom]) / volumeToBase[cTo];
+    // Family 2: Mass / Weights (Standardized using Gram base units)
+    const weightToGram: Record<string, number> = { 
+        'g': 1, 
+        'kg': 1000, 
+        'mg': 0.001, 
+        'lb': 453.59237, 
+        'oz': 28.349523
+    };
+    if (weightToGram[cFrom] && weightToGram[cTo]) {
+        return (value * weightToGram[cFrom]) / weightToGram[cTo];
+    }
+
+    // Family 3: Liquid Volume (Standardized using Milliliter base units)
+    const volumeToMl: Record<string, number> = {
+        'ml': 1, 
+        'l': 1000, 
+        'fl oz': 29.57353, 
+        'gal': 3785.4118, 
+        'qt': 946.35295, 
+        'pt': 473.17647,
+        'loads': 29.57353 * 1.5 // Standard grocery density multiplier
+    };
+    if (volumeToMl[cFrom] && volumeToMl[cTo]) {
+        return (value * volumeToMl[cFrom]) / volumeToMl[cTo];
+    }
+
+    // Family 4: Discretes
     if (cFrom === 'count' && cTo === 'count') return value;
     
     return null;

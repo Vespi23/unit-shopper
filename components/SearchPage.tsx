@@ -67,8 +67,6 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const urlQueryParam = searchParams.get('q') || '';
     const initialUnit = searchParams.get('u') || '';
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
-
-    const inputRef = useRef<HTMLInputElement>(null);
     
     const [results, setResults] = useState<EnhancedSortingProduct[]>(initialResults);
     const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
@@ -80,6 +78,13 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const [showComparison, setShowComparison] = useState(false);
     const [page, setPage] = useState(1);
 
+    // Sync state changes on prop navigation passes cleanly
+    useEffect(() => {
+        if (initialResults && initialResults.length > 0) {
+            setResults(initialResults);
+        }
+    }, [initialResults]);
+
     useEffect(() => { setPage(1); }, [urlQueryParam, sortBy, selectedUnit]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -89,7 +94,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         if (!newQuery) return;
         
         setLoading(true);
-        setResults([]);
+        setResults([]); // Flush layout vectors instantly to kill sticky card artifacts
         
         const params = new URLSearchParams(searchParams.toString());
         params.set('q', newQuery);
@@ -112,6 +117,28 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             .catch(() => setResults([]))
             .finally(() => setLoading(false));
     }, [urlQueryParam]); 
+
+    // DYNAMIC METRIC DISCOVERY LAYER: Assembles all detected unique parameters safely
+    const detectedAvailableUnits = useMemo(() => {
+        const units = results
+            .map(p => toCanonicalUnit(p.unitInfo?.unit ?? p.unit ?? p.unit_type ?? ''))
+            .filter(u => u !== 'unknown') as string[];
+            
+        const uniqueSet = new Set(units);
+        const qLower = urlQueryParam.toLowerCase();
+        
+        // Auto-inject contextual vectors if paper indices are matched inside search text
+        if (/\b(?:toilet|paper|tissue|towel|napkin|wipe)\b/.test(qLower)) {
+            uniqueSet.add('rolls');
+            uniqueSet.add('sheets');
+            uniqueSet.add('sq ft');
+        }
+        if (/\b(?:detergent|soap|pods|wash|laundry)\b/.test(qLower)) {
+            uniqueSet.add('loads');
+            uniqueSet.add('fl oz');
+        }
+        return Array.from(uniqueSet).sort();
+    }, [results, urlQueryParam]);
 
     const displayData = useMemo(() => {
         let processed = results.map(product => {
@@ -152,27 +179,14 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     <div className="relative w-full max-w-3xl z-10">
                         <form onSubmit={handleSearch} className="flex items-center bg-card shadow-2xl rounded-3xl border border-border p-3 gap-2">
                             <Search className="h-7 w-7 text-muted-foreground ml-3" />
-                            <input 
-                                name="searchQuery" 
-                                defaultValue={urlQueryParam} 
-                                disabled={loading}
-                                placeholder="Search products (e.g. Toilet Paper)..." 
-                                className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" 
-                            />
-                            <button 
-                                type="submit" 
-                                disabled={loading}
-                                className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all ${loading ? 'bg-muted text-muted-foreground' : 'bg-primary text-white hover:bg-emerald-700'}`}
-                            >
-                                {loading ? <Loader2 className="animate-spin h-6 w-6" /> : "Search"}
-                            </button>
+                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products (e.g. Toilet Paper)..." className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" />
+                            <button type="submit" className="px-8 py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all">Search</button>
                         </form>
 
-                        {/* Persistent Status Indicator */}
                         <div className="h-8 mt-2 flex items-center justify-center">
                             {loading && (
-                                <p className="text-emerald-600 font-medium text-sm animate-pulse flex items-center gap-2">
-                                    <Loader2 className="h-4 w-4 animate-spin" /> Deep Scraping in progress... Our math is based on Amazon and Walmart product titles. We can make mistakes.
+                                <p className="text-emerald-600 font-semibold text-sm animate-pulse flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" /> Deep Scraping in progress... Our math is based on product titles. We can make mistakes.
                                 </p>
                             )}
                         </div>
@@ -205,12 +219,47 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                             Found <span className="font-bold text-foreground">{results.length}</span> results for <span className="font-bold text-foreground">"{urlQueryParam}"</span>
                         </p>
                         <div className="flex gap-4">
-                            <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm outline-none">
+                            {/* UNIFIED DYNAMIC DROPDOWN MENU: Groups all valid dimensions perfectly */}
+                            <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="px-5 py-3 rounded-full border border-border bg-card font-semibold text-sm outline-none cursor-pointer hover:bg-accent text-foreground transition-colors">
                                 <option value="">Original Units</option>
-                                <option value="rolls">Rolls</option>
-                                <option value="sheets">Sheets</option>
+                                
+                                {detectedAvailableUnits.length > 0 && (
+                                    <optgroup label="Detected in Active Results">
+                                        {detectedAvailableUnits.map(u => (
+                                            <option key={`detected-${u}`} value={u}>
+                                                {u === 'count' ? 'Each (ea)' : u.toUpperCase()}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                                
+                                <optgroup label="Dry Weight Baselines">
+                                    <option value="oz">Ounces (oz)</option>
+                                    <option value="lb">Pounds (lb)</option>
+                                    <option value="g">Grams (g)</option>
+                                    <option value="kg">Kilograms (kg)</option>
+                                    <option value="mg">Milligrams (mg)</option>
+                                </optgroup>
+                                
+                                <optgroup label="Liquid Volume Baselines">
+                                    <option value="fl oz">Fluid Oz (fl oz)</option>
+                                    <option value="ml">Milliliters (ml)</option>
+                                    <option value="l">Liters (l)</option>
+                                    <option value="gal">Gallons (gal)</option>
+                                    <option value="qt">Quarts (qt)</option>
+                                    <option value="pt">Pints (pt)</option>
+                                </optgroup>
+
+                                <optgroup label="Household / Packaging Baselines">
+                                    <option value="count">Count (ea)</option>
+                                    <option value="rolls">Rolls (roll)</option>
+                                    <option value="sheets">Sheets (sh)</option>
+                                    <option value="sq ft">Square Feet (sq ft)</option>
+                                    <option value="loads">Loads (load)</option>
+                                </optgroup>
                             </select>
-                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-5 py-3 rounded-full border border-border bg-card font-medium text-sm outline-none">
+
+                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-5 py-3 rounded-full border border-border bg-card font-semibold text-sm outline-none cursor-pointer hover:bg-accent text-foreground transition-colors">
                                 <option value="score_asc">Best Unit Value</option>
                                 <option value="price_asc">Lowest Total Price</option>
                                 <option value="price_desc">Highest Total Price</option>
