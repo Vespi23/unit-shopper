@@ -14,22 +14,15 @@ const targetClient = createClient({
 const SITEMAP_MAX_SIZE = 50000;
 
 export async function generateSitemaps() {
-  // Returns shard ids mapping cleanly to the system sitemap splitter
+  // Back to exactly two clean shards handling core site assets and pSEO keywords
   return [{ id: 0 }, { id: 1 }];
 }
 
-interface SitemapProps {
-  id: number | string | Promise<string | number>;
-}
+export default async function sitemap({ id }: { id: any }): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = 'https://www.budgetlynx.com';
+  const shardId = parseInt(String(id || '0'), 10) || 0;
 
-export default async function sitemap(props: { id: any }): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://budgetlynx.com';
-  
-  // FIXED: Resolve the Next.js runtime parameter promise safely and parse as an integer base-10 number
-  const resolvedParams = await props;
-  const rawId = typeof resolvedParams === 'object' && resolvedParams !== null ? resolvedParams.id : resolvedParams;
-  const shardId = parseInt(String(rawId || '0'), 10) || 0;
-
+  // Shard 0 Core Static App Pages
   const staticRoutes: MetadataRoute.Sitemap = shardId === 0 ? [
     { url: baseUrl, lastModified: new Date(), priority: 1.0 },
     { url: `${baseUrl}/ledger`, lastModified: new Date(), priority: 0.8 },
@@ -53,10 +46,8 @@ export default async function sitemap(props: { id: any }): Promise<MetadataRoute
       }
     }
 
-    // Math operation executes safely against an absolute number variable
     const skipValue = shardId * SITEMAP_MAX_SIZE;
     
-    // Fetch data using optimized sliding limits
     const productQueries = await targetClient.fetch(
       `*[_type in ["productQuery", "pSeoKeyword"]] | order(_createdAt desc) [$skip...$skip + $limit] {
         "slug": coalesce(keywordSlug, slug.current, keywordValue),

@@ -1,15 +1,6 @@
 // next.config.ts
 import type { NextConfig } from "next";
 
-// RUNTIME SERVER CHUNK RECOVERY SHIELD (Executes during build initialization)
-process.env.UPSTASH_DISABLE_TELEMETRY = "1";
-if (!process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL.startsWith("/")) {
-  process.env.UPSTASH_REDIS_REST_URL = "https://disabled-telemetry.localhost";
-}
-if (!process.env.UPSTASH_REDIS_REST_TOKEN) {
-  process.env.UPSTASH_REDIS_REST_TOKEN = "mock_runtime_token_bypass";
-}
-
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -44,15 +35,6 @@ const nextConfig: NextConfig = {
       }
     ];
   },
-  
-  async rewrites() {
-    return [
-      {
-        source: "/sitemap.xml",
-        destination: "/api/sitemap-index",
-      },
-    ];
-  },
 
   images: {
     unoptimized: true,
@@ -71,7 +53,6 @@ const nextConfig: NextConfig = {
   },
   
   experimental: {
-    // FIXED: Removed instrumentationHook line since it is natively stable on your Next.js 16 build core
     optimizePackageImports: ['lucide-react'],
   },
 };
