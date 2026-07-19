@@ -172,7 +172,7 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                         <div className="h-8 mt-2 flex items-center justify-center">
                             {loading && (
                                 <p className="text-emerald-600 font-medium text-sm animate-pulse flex items-center gap-2">
-                                    <Loader2 className="h-4 w-4 animate-spin" /> Deep Scraping in progress...
+                                    <Loader2 className="h-4 w-4 animate-spin" /> Deep Scraping in progress... Our math is based on Amazon and Walmart product titles. We can make mistakes.
                                 </p>
                             )}
                         </div>
