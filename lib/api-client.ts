@@ -14,135 +14,142 @@ if (typeof process !== 'undefined' && process.env) {
 // =========================================================================
 
 import { Product } from './types';
-import { parseUnit, calculatePricePerUnit, toCanonicalUnit } from './unit-parser';
+import { parseUnit, calculatePricePerUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
+import { randomUUID } from 'crypto';
 
 const RATING_REGEX = /(\d+\.?\d*)\s*(?:out of 5|stars)/i;
 
-export async function searchProducts(query: string): Promise<Product[]> {
-  const GLOBAL_DEADLINE = 55000; 
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+];
+
+async function scrapePage(url: string, retailer: 'Amazon' | 'Walmart'): Promise<Product[]> {
+  const token = process.env.DECODO_AUTH_TOKEN || "";
+  const authHeader = token.startsWith("Basic ") || token.startsWith("Bearer ") ? token : `Bearer ${token}`;
 
   try {
-    const apiSearchTerm = query;
-    const baseUrl = `https://www.amazon.com/s?k=${encodeURIComponent(apiSearchTerm)}`;
-
-    const fetchPage = async (p: number, delay: number, signal: AbortSignal): Promise<Product[]> => {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      if (signal.aborted) return [];
-
-      try {
-        const token = process.env.DECODO_AUTH_TOKEN || "";
-        const authHeader = token.startsWith("Basic ") || token.startsWith("Bearer ") 
-          ? token 
-          : `Bearer ${token}`;
-
-        const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
-          method: 'POST',
-          headers: { 
-            'Authorization': authHeader, 
-            'Content-Type': 'application/json' 
-          },
-          body: JSON.stringify({ 
-            url: p === 1 ? baseUrl : `${baseUrl}&page=${p}`, 
-            proxy_pool: "premium", 
-            headless: "html" 
-          }),
-          signal 
-        });
-        
-        if (!res.ok) return [];
-
-        const json = await res.json();
-        const html = json.results?.[0]?.content || json.content || null;
-        return html ? parseAmazonHTML(html) : [];
-      } catch (err) { 
-        return []; 
-      }
-    };
-
-    const globalController = new AbortController();
-    const timeoutId = setTimeout(() => globalController.abort(), GLOBAL_DEADLINE);
-
-    const pageNumbers = [1, 2, 3];
-    const pagePromises = pageNumbers.map((p, index) => 
-      fetchPage(p, index * 400, globalController.signal)
-    );
-    
-    const settleResults = await Promise.allSettled(pagePromises);
-    clearTimeout(timeoutId);
-    
-    let rawPool: Product[] = [];
-    settleResults.forEach(res => { 
-        if (res.status === 'fulfilled') rawPool = [...rawPool, ...res.value]; 
+    const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
+      method: 'POST',
+      headers: { 
+        'Authorization': authHeader, 
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify({ 
+        url, 
+        proxy_pool: "premium", 
+        render_js: true, // Mandatory for bypassing bot challenges
+        session_id: randomUUID(), // Prevent session tracking
+        user_agent: USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
+      })
     });
 
-    let masterPool = Array.from(new Map(rawPool.map(p => [p.id, p])).values());
-    
-    const filtered = masterPool.filter(p => 
-        p.price > 0 && (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100
-    );
+    if (!res.ok) return [];
 
-    filtered.sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
-    return filtered;
-  } catch (error) { 
-    console.error(`[API_CLIENT_CRITICAL_EXCEPTION]: ${error}`);
+    const json = await res.json();
+    const html = json.results?.[0]?.content || json.content || "";
+    
+    return retailer === 'Amazon' ? parseAmazonHTML(html) : parseWalmartHTML(html);
+  } catch (err) { 
     return []; 
   }
+}
+
+export async function searchProducts(query: string): Promise<Product[]> {
+  const pages = [1, 2, 3, 4, 5, 6, 7];
+  const allResults: Product[] = [];
+  const BATCH_SIZE = 2; // Keep concurrent requests low to avoid 403 blocks
+
+  for (let i = 0; i < pages.length; i += BATCH_SIZE) {
+    const batch = pages.slice(i, i + BATCH_SIZE);
+    const batchPromises = batch.map(p => Promise.all([
+      scrapePage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${p}`, 'Amazon'),
+      scrapePage(`https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${p}`, 'Walmart')
+    ]));
+
+    const results = await Promise.allSettled(batchPromises);
+    results.forEach(res => {
+        if (res.status === 'fulfilled') {
+            allResults.push(...res.value[0], ...res.value[1]);
+        }
+    });
+    
+    // Controlled sleep to prevent rate limiting (Decodo limit 10req/s)
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  // Final In-Memory Deduplication & Sorting
+  const masterPool = Array.from(new Map(allResults.map(p => [p.id, p])).values());
+  return masterPool
+    .filter(p => p.price > 0 && (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100)
+    .sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 }
 
 function parseAmazonHTML(html: string): Product[] {
   const $ = cheerio.load(html);
   const products: Product[] = [];
-
-  let affiliateExtractor: any = null;
-  try {
-    affiliateExtractor = require('./affiliate');
-  } catch (_) {}
-
+  
   $('div[data-component-type="s-search-result"]').each((i, element) => {
     const item = $(element);
     const asin = item.attr('data-asin');
-    if (!asin || asin.length !== 10) return;
+    if (!asin) return;
 
     const title = item.find('h2 a span, h2 span, span.a-text-normal').first().text().trim();
     const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
 
-    const ratingRaw = item.find('i[class*="a-star-"], [aria-label*="out of 5 stars"], .a-icon-star-small .a-icon-alt').first().text();
-    const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
-
-    const reviewsText = item.find('span.a-size-base.s-underline-text, [aria-label*="ratings"], .a-size-small .a-size-base').first().text().toLowerCase().replace(/,/g, '');
-    let reviews = 0;
-    const reviewMatch = reviewsText.match(/(\d+\.?\d*)\s*([km])?/);
-    if (reviewMatch) {
-        reviews = parseFloat(reviewMatch[1]);
-        if (reviewMatch[2] === 'k') reviews *= 1000;
-        if (reviewMatch[2] === 'm') reviews *= 1000000;
-    }
-
-    const unitInfo = parseUnit(title);
-
-    let redirectLink = `https://www.amazon.com/dp/${asin}`;
-    if (affiliateExtractor && typeof affiliateExtractor.getAmazonAffiliateLink === 'function') {
-      try {
-        redirectLink = affiliateExtractor.getAmazonAffiliateLink(asin);
-      } catch (_) {}
-    }
-
     if (price > 0) {
+        const unitInfo = parseUnit(title);
         products.push({
-            id: asin, title, price, source: 'Amazon', rating, reviews: Math.floor(reviews),
+            id: asin, title, price, source: 'Amazon',
+            rating: parseFloat(item.find('.a-icon-star-small .a-icon-alt').first().text().match(RATING_REGEX)?.[1] || "0"),
+            reviews: 0,
             image: item.find('img.s-image').attr('src') || '',
             unit: unitInfo?.unit || 'unknown',
             amount: unitInfo?.value || 0,
             totalAmount: unitInfo?.totalValue || 0,
             unitInfo: unitInfo || undefined,
             pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
-            link: redirectLink,
+            link: `https://www.amazon.com/dp/${asin}`,
             currency: 'USD', originalPrice: 0,
             score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
         });
     }
   });
   return products;
+}
+
+function parseWalmartHTML(html: string): Product[] {
+  const $ = cheerio.load(html);
+  const nextData = $('script#__NEXT_DATA__').text();
+  if (!nextData) return [];
+  
+  try {
+    const json = JSON.parse(nextData);
+    const items = json.props.pageProps.initialData.searchResult.itemStacks[0].items;
+    
+    return items.map((item: any) => {
+        const price = item.priceInfo?.currentPrice?.price || 0;
+        const unitInfo = parseUnit(item.name || '');
+        return {
+            id: item.usItemId,
+            title: item.name || '',
+            price,
+            source: 'Walmart',
+            rating: item.rating?.averageRating || 0,
+            reviews: item.rating?.reviewCount || 0,
+            image: item.imageInfo?.thumbnailUrl || '',
+            unit: unitInfo?.unit || 'unknown',
+            amount: unitInfo?.value || 0,
+            totalAmount: unitInfo?.totalValue || 0,
+            unitInfo: unitInfo || undefined,
+            pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
+            link: `https://www.walmart.com${item.canonicalUrl}`,
+            currency: 'USD',
+            originalPrice: 0,
+            score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
+        };
+    }).filter((p: Product) => p.price > 0);
+  } catch (e) { return []; }
 }
