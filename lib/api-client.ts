@@ -1,3 +1,4 @@
+// lib/api-client.ts
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, normalizeUnit, toCanonicalUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
@@ -10,9 +11,16 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
 ];
 
+/**
+ * Scrapes a single page from a retailer. 
+ * Implements a 12s hard timeout to ensure Vercel route stability.
+ */
 export async function scrapePage(url: string, source: 'amazon' | 'walmart'): Promise<Product[]> {
   const token = process.env.DECODO_AUTH_TOKEN || "";
   const authHeader = token.startsWith("Basic ") || token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+  
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
 
   try {
     const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
@@ -27,9 +35,11 @@ export async function scrapePage(url: string, source: 'amazon' | 'walmart'): Pro
         render_js: true,
         session_id: randomUUID(), 
         user_agent: USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
-      })
+      }),
+      signal: controller.signal
     });
 
+    clearTimeout(timeout);
     if (!res.ok) return [];
 
     const json = await res.json();
@@ -37,40 +47,40 @@ export async function scrapePage(url: string, source: 'amazon' | 'walmart'): Pro
     
     return source === 'amazon' ? parseAmazon(html) : parseWalmart(html);
   } catch (err) { 
+    clearTimeout(timeout);
     return []; 
   }
 }
 
+/**
+ * Orchestrates batch scraping to remain within Vercel execution limits.
+ */
 export async function searchProducts(query: string): Promise<Product[]> {
-  const pages = [1, 2, 3, 4, 5, 6, 7];
+  // Limited to 2 pages per retailer (4 total) to guarantee success under 60s
+  const pages = [1, 2];
   const allResults: Product[] = [];
-  const BATCH_SIZE = 2; 
 
-  for (let i = 0; i < pages.length; i += BATCH_SIZE) {
-    const batch = pages.slice(i, i + BATCH_SIZE);
-    const batchPromises = batch.map(p => Promise.all([
-      scrapePage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${p}`, 'amazon'),
-      scrapePage(`https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${p}`, 'walmart')
-    ]));
+  const batchPromises = pages.flatMap(p => [
+    scrapePage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${p}`, 'amazon'),
+    scrapePage(`https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${p}`, 'walmart')
+  ]);
 
-    const results = await Promise.allSettled(batchPromises);
-    results.forEach(res => {
-        if (res.status === 'fulfilled') {
-            allResults.push(...res.value[0], ...res.value[1]);
-        }
-    });
-    
-    await new Promise(r => setTimeout(r, 800));
-  }
+  const results = await Promise.allSettled(batchPromises);
+  results.forEach(res => {
+      if (res.status === 'fulfilled') {
+          allResults.push(...res.value);
+      }
+  });
 
   const masterPool = Array.from(new Map(allResults.map(p => [p.id, p])).values());
 
   return masterPool
-    .filter((p: Product) => p.price > 0 && (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100)
+    .filter((p: Product) => p.price > 0)
     .map((p: Product) => {
         const unitInfo = parseUnit(p.title);
         const norm = unitInfo ? normalizeUnit(unitInfo) : { unit: 'count', totalValue: 1 };
         const ppu = parseFloat(String(calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit)))) || p.price;
+        
         return { 
             ...p, 
             score: ppu
@@ -97,6 +107,7 @@ function parseAmazon(html: string): Product[] {
         products.push({ 
             id: `amzn-${asin}`, 
             title, 
+            name: title,
             price, 
             rating, 
             reviews, 
@@ -104,6 +115,7 @@ function parseAmazon(html: string): Product[] {
             url: `https://www.amazon.com/dp/${asin}`,
             link: `https://www.amazon.com/dp/${asin}`,
             image: item.find('img.s-image').attr('src') || '',
+            thumbnail: item.find('img.s-image').attr('src') || '',
             unit: 'count',
             amount: 1,
             totalAmount: 1,
@@ -128,6 +140,7 @@ function parseWalmart(html: string): Product[] {
     return items.map((i: any): Product => ({
         id: `wmt-${i.usItemId}`,
         title: i.name,
+        name: i.name,
         price: i.priceInfo?.currentPrice?.price || 0,
         source: 'walmart',
         rating: i.rating?.averageRating || 0,
@@ -135,6 +148,7 @@ function parseWalmart(html: string): Product[] {
         url: `https://www.walmart.com${i.canonicalUrl}`,
         link: `https://www.walmart.com${i.canonicalUrl}`,
         image: i.imageInfo?.thumbnailUrl || '',
+        thumbnail: i.imageInfo?.thumbnailUrl || '',
         unit: 'count',
         amount: 1,
         totalAmount: 1,
