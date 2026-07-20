@@ -22,6 +22,7 @@ type EnhancedSortingProduct = Product & {
 
 interface SearchPageProps {
     initialResults?: EnhancedSortingProduct[];
+    initialQuery?: string;
 }
 
 const ITEMS_PER_PAGE = 40;
