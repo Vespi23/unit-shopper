@@ -1,20 +1,5 @@
-// =========================================================================
-// RUNTIME SERVER CHUNK RECOVERY INNER SHIELD (LINE 1 DEPLOYMENT)
-// =========================================================================
-if (typeof process !== 'undefined' && process.env) {
-  process.env.UPSTASH_DISABLE_TELEMETRY = "1";
-  
-  if (!process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL.startsWith("/")) {
-    process.env.UPSTASH_REDIS_REST_URL = "https://disabled-telemetry.localhost";
-  }
-  if (!process.env.UPSTASH_REDIS_REST_TOKEN) {
-    process.env.UPSTASH_REDIS_REST_TOKEN = "mock_runtime_token_bypass";
-  }
-}
-// =========================================================================
-
 import { Product } from './types';
-import { parseUnit, calculatePricePerUnit } from './unit-parser';
+import { parseUnit, calculatePricePerUnit, normalizeUnit, toCanonicalUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
 import { randomUUID } from 'crypto';
 
@@ -25,7 +10,7 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
 ];
 
-async function scrapePage(url: string, retailer: 'Amazon' | 'Walmart'): Promise<Product[]> {
+export async function scrapePage(url: string, source: 'amazon' | 'walmart'): Promise<Product[]> {
   const token = process.env.DECODO_AUTH_TOKEN || "";
   const authHeader = token.startsWith("Basic ") || token.startsWith("Bearer ") ? token : `Bearer ${token}`;
 
@@ -39,8 +24,8 @@ async function scrapePage(url: string, retailer: 'Amazon' | 'Walmart'): Promise<
       body: JSON.stringify({ 
         url, 
         proxy_pool: "premium", 
-        render_js: true, // Mandatory for bypassing bot challenges
-        session_id: randomUUID(), // Prevent session tracking
+        render_js: true,
+        session_id: randomUUID(), 
         user_agent: USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
       })
     });
@@ -50,7 +35,7 @@ async function scrapePage(url: string, retailer: 'Amazon' | 'Walmart'): Promise<
     const json = await res.json();
     const html = json.results?.[0]?.content || json.content || "";
     
-    return retailer === 'Amazon' ? parseAmazonHTML(html) : parseWalmartHTML(html);
+    return source === 'amazon' ? parseAmazon(html) : parseWalmart(html);
   } catch (err) { 
     return []; 
   }
@@ -59,13 +44,13 @@ async function scrapePage(url: string, retailer: 'Amazon' | 'Walmart'): Promise<
 export async function searchProducts(query: string): Promise<Product[]> {
   const pages = [1, 2, 3, 4, 5, 6, 7];
   const allResults: Product[] = [];
-  const BATCH_SIZE = 2; // Keep concurrent requests low to avoid 403 blocks
+  const BATCH_SIZE = 2; 
 
   for (let i = 0; i < pages.length; i += BATCH_SIZE) {
     const batch = pages.slice(i, i + BATCH_SIZE);
     const batchPromises = batch.map(p => Promise.all([
-      scrapePage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${p}`, 'Amazon'),
-      scrapePage(`https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${p}`, 'Walmart')
+      scrapePage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=${p}`, 'amazon'),
+      scrapePage(`https://www.walmart.com/search?q=${encodeURIComponent(query)}&page=${p}`, 'walmart')
     ]));
 
     const results = await Promise.allSettled(batchPromises);
@@ -75,81 +60,92 @@ export async function searchProducts(query: string): Promise<Product[]> {
         }
     });
     
-    // Controlled sleep to prevent rate limiting (Decodo limit 10req/s)
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 800));
   }
 
-  // Final In-Memory Deduplication & Sorting
   const masterPool = Array.from(new Map(allResults.map(p => [p.id, p])).values());
+
   return masterPool
-    .filter(p => p.price > 0 && (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100)
+    .filter((p: Product) => p.price > 0 && (p.rating ?? 0) >= 4.0 && (p.reviews ?? 0) >= 100)
+    .map((p: Product) => {
+        const unitInfo = parseUnit(p.title);
+        const norm = unitInfo ? normalizeUnit(unitInfo) : { unit: 'count', totalValue: 1 };
+        const ppu = parseFloat(String(calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit)))) || p.price;
+        return { 
+            ...p, 
+            score: ppu
+        } as Product;
+    })
     .sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
 }
 
-function parseAmazonHTML(html: string): Product[] {
+function parseAmazon(html: string): Product[] {
   const $ = cheerio.load(html);
   const products: Product[] = [];
   
-  $('div[data-component-type="s-search-result"]').each((i, element) => {
-    const item = $(element);
+  $('div[data-component-type="s-search-result"]').each((_, el) => {
+    const item = $(el);
     const asin = item.attr('data-asin');
-    if (!asin) return;
-
-    const title = item.find('h2 a span, h2 span, span.a-text-normal').first().text().trim();
-    const priceText = item.find('.a-price span.a-offscreen').first().text().replace(/[^0-9.]/g, '');
+    const title = item.find('h2 span').first().text().trim();
+    const priceText = item.find('.a-price-whole').text().replace(/[^0-9.]/g, '');
     const price = parseFloat(priceText) || 0;
-
-    if (price > 0) {
-        const unitInfo = parseUnit(title);
-        products.push({
-            id: asin, title, price, source: 'Amazon',
-            rating: parseFloat(item.find('.a-icon-star-small .a-icon-alt').first().text().match(RATING_REGEX)?.[1] || "0"),
-            reviews: 0,
-            image: item.find('img.s-image').attr('src') || '',
-            unit: unitInfo?.unit || 'unknown',
-            amount: unitInfo?.value || 0,
-            totalAmount: unitInfo?.totalValue || 0,
-            unitInfo: unitInfo || undefined,
-            pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
+    const ratingRaw = item.find('.a-icon-star-small .a-icon-alt').text();
+    const rating = parseFloat(ratingRaw.match(RATING_REGEX)?.[1] || "0");
+    const reviews = parseInt(item.find('span.a-size-base').text().replace(/,/g, ''), 10) || 0;
+    
+    if (asin && price > 0) {
+        products.push({ 
+            id: `amzn-${asin}`, 
+            title, 
+            name: title,
+            price, 
+            rating, 
+            reviews, 
+            source: 'amazon',
+            url: `https://www.amazon.com/dp/${asin}`,
             link: `https://www.amazon.com/dp/${asin}`,
-            currency: 'USD', originalPrice: 0,
-            score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
-        });
+            unit: 'count',
+            unit_type: 'count',
+            totalAmount: 1,
+            amount: 1,
+            image: item.find('img.s-image').attr('src') || '',
+            thumbnail: item.find('img.s-image').attr('src') || '',
+            currency: 'USD',
+            originalPrice: price,
+            score: price
+        } as Product);
     }
   });
   return products;
 }
 
-function parseWalmartHTML(html: string): Product[] {
-  const $ = cheerio.load(html);
-  const nextData = $('script#__NEXT_DATA__').text();
-  if (!nextData) return [];
+function parseWalmart(html: string): Product[] {
+  const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (!match) return [];
   
   try {
-    const json = JSON.parse(nextData);
-    const items = json.props.pageProps.initialData.searchResult.itemStacks[0].items;
+    const json = JSON.parse(match[1]);
+    const items = json.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
     
-    return items.map((item: any) => {
-        const price = item.priceInfo?.currentPrice?.price || 0;
-        const unitInfo = parseUnit(item.name || '');
-        return {
-            id: item.usItemId,
-            title: item.name || '',
-            price,
-            source: 'Walmart',
-            rating: item.rating?.averageRating || 0,
-            reviews: item.rating?.reviewCount || 0,
-            image: item.imageInfo?.thumbnailUrl || '',
-            unit: unitInfo?.unit || 'unknown',
-            amount: unitInfo?.value || 0,
-            totalAmount: unitInfo?.totalValue || 0,
-            unitInfo: unitInfo || undefined,
-            pricePerUnit: calculatePricePerUnit(price, unitInfo?.totalValue || 0, unitInfo?.unit || 'unknown'),
-            link: `https://www.walmart.com${item.canonicalUrl}`,
-            currency: 'USD',
-            originalPrice: 0,
-            score: (unitInfo?.totalValue || 0) > 0 ? price / unitInfo!.totalValue : price
-        };
-    }).filter((p: Product) => p.price > 0);
-  } catch (e) { return []; }
+    return items.map((i: any): Product => ({
+        id: `wmt-${i.usItemId}`,
+        title: i.name,
+        name: i.name,
+        price: i.priceInfo?.currentPrice?.price || 0,
+        source: 'walmart',
+        rating: i.rating?.averageRating || 0,
+        reviews: i.rating?.reviewCount || 0,
+        url: `https://www.walmart.com${i.canonicalUrl}`,
+        link: `https://www.walmart.com${i.canonicalUrl}`,
+        unit: 'count',
+        unit_type: 'count',
+        totalAmount: 1,
+        amount: 1,
+        image: i.imageInfo?.thumbnailUrl || '',
+        thumbnail: i.imageInfo?.thumbnailUrl || '',
+        currency: 'USD',
+        originalPrice: i.priceInfo?.currentPrice?.price || 0,
+        score: i.priceInfo?.currentPrice?.price || 0
+    }) as Product).filter((p: Product) => p.price > 0);
+  } catch { return []; }
 }
