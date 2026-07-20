@@ -1,3 +1,4 @@
+// lib/api-client.ts
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, normalizeUnit, toCanonicalUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
@@ -70,10 +71,12 @@ export async function searchProducts(query: string): Promise<Product[]> {
     .map((p: Product) => {
         const unitInfo = parseUnit(p.title);
         const norm = unitInfo ? normalizeUnit(unitInfo) : { unit: 'count', totalValue: 1 };
-        const ppu = parseFloat(String(calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit)))) || p.price;
+        const ppu = calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit));
+        const numericPpu = typeof ppu === 'number' ? ppu : parseFloat(String(ppu)) || p.price;
+        
         return { 
             ...p, 
-            score: ppu
+            score: numericPpu
         } as Product;
     })
     .sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
@@ -97,19 +100,13 @@ function parseAmazon(html: string): Product[] {
         products.push({ 
             id: `amzn-${asin}`, 
             title, 
-            name: title,
             price, 
             rating, 
             reviews, 
             source: 'amazon',
             url: `https://www.amazon.com/dp/${asin}`,
             link: `https://www.amazon.com/dp/${asin}`,
-            unit: 'count',
-            unit_type: 'count',
-            totalAmount: 1,
-            amount: 1,
             image: item.find('img.s-image').attr('src') || '',
-            thumbnail: item.find('img.s-image').attr('src') || '',
             currency: 'USD',
             originalPrice: price,
             score: price
@@ -130,19 +127,13 @@ function parseWalmart(html: string): Product[] {
     return items.map((i: any): Product => ({
         id: `wmt-${i.usItemId}`,
         title: i.name,
-        name: i.name,
         price: i.priceInfo?.currentPrice?.price || 0,
         source: 'walmart',
         rating: i.rating?.averageRating || 0,
         reviews: i.rating?.reviewCount || 0,
         url: `https://www.walmart.com${i.canonicalUrl}`,
         link: `https://www.walmart.com${i.canonicalUrl}`,
-        unit: 'count',
-        unit_type: 'count',
-        totalAmount: 1,
-        amount: 1,
         image: i.imageInfo?.thumbnailUrl || '',
-        thumbnail: i.imageInfo?.thumbnailUrl || '',
         currency: 'USD',
         originalPrice: i.priceInfo?.currentPrice?.price || 0,
         score: i.priceInfo?.currentPrice?.price || 0

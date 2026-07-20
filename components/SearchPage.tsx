@@ -1,34 +1,27 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Product } from '@/lib/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
-import { Search, Loader2, AlertCircle, ChevronDown, ArrowRight } from 'lucide-react';
-import { ProductDetailModal } from '@/components/ProductDetailModal';
-import { ComparisonDrawer } from '@/components/ComparisonDrawer';
-import { ComparisonView } from '@/components/ComparisonView';
+import { Search, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-
 import { 
     convertValue, 
     calculatePricePerUnit, 
     toCanonicalUnit 
 } from '@/lib/unit-parser';
-import { generateProductSchema } from '@/lib/schema';
 
 type EnhancedSortingProduct = Product & {
     pricePerUnitNumeric?: number;
     totalPriceNumeric?: number;
-    unit_type?: string;
-    totalAmount?: number;
+    ppuFormatted?: string;
     [key: string]: any;
 };
 
 interface SearchPageProps {
     initialResults?: EnhancedSortingProduct[];
-    initialQuery?: string;
 }
 
 const ITEMS_PER_PAGE = 40;
@@ -60,7 +53,7 @@ function LedgerPromo() {
     );
 }
 
-export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPageProps) {
+export function SearchPage({ initialResults = [] }: SearchPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -69,23 +62,20 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
     const isExtension = searchParams.get('utm_source') === 'chrome_extension';
     
     const [results, setResults] = useState<EnhancedSortingProduct[]>(initialResults);
-    const [sortBy, setSortBy] = useState<'score_asc' | 'price_asc' | 'price_desc'>('score_asc');
+    const [sortBy, setSortBy] = useState<'ppu' | 'price_asc' | 'price_desc'>('ppu');
     const [selectedUnit, setSelectedUnit] = useState<string>(initialUnit);
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(!!urlQueryParam);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [compareList, setCompareList] = useState<string[]>([]);
-    const [showComparison, setShowComparison] = useState(false);
-    const [page, setPage] = useState(1);
+    const [page] = useState(1);
 
-    // Sync state changes on prop navigation passes cleanly
     useEffect(() => {
         if (initialResults && initialResults.length > 0) {
             setResults(initialResults);
+            setSearched(true);
         }
     }, [initialResults]);
-
-    useEffect(() => { setPage(1); }, [urlQueryParam, sortBy, selectedUnit]);
 
     const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -94,7 +84,8 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
         if (!newQuery) return;
         
         setLoading(true);
-        setResults([]); // Flush layout vectors instantly to kill sticky card artifacts
+        setResults([]);
+        setSearched(true);
         
         const params = new URLSearchParams(searchParams.toString());
         params.set('q', newQuery);
@@ -118,35 +109,19 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
             .finally(() => setLoading(false));
     }, [urlQueryParam]); 
 
-    // DYNAMIC METRIC DISCOVERY LAYER: Assembles all detected unique parameters safely
     const detectedAvailableUnits = useMemo(() => {
-        const units = results
-            .map(p => toCanonicalUnit(p.unitInfo?.unit ?? p.unit ?? p.unit_type ?? ''))
-            .filter(u => u !== 'unknown') as string[];
-            
+        const units = results.map(p => toCanonicalUnit(p.unit ?? p.unit_type ?? '')).filter(u => u !== 'unknown') as string[];
         const uniqueSet = new Set(units);
-        const qLower = urlQueryParam.toLowerCase();
-        
-        // Auto-inject contextual vectors if paper indices are matched inside search text
-        if (/\b(?:toilet|paper|tissue|towel|napkin|wipe)\b/.test(qLower)) {
-            uniqueSet.add('rolls');
-            uniqueSet.add('sheets');
-            uniqueSet.add('sq ft');
-        }
-        if (/\b(?:detergent|soap|pods|wash|laundry)\b/.test(qLower)) {
-            uniqueSet.add('loads');
-            uniqueSet.add('fl oz');
-        }
         return Array.from(uniqueSet).sort();
-    }, [results, urlQueryParam]);
+    }, [results]);
 
     const displayData = useMemo(() => {
         let processed = results.map(product => {
-            const baseAmount = product.unitInfo?.value ?? product.unitInfo?.totalValue ?? product.amount ?? product.totalAmount ?? 1;
-            const currentUnitType = toCanonicalUnit(product.unitInfo?.unit ?? product.unit ?? product.unit_type ?? 'count');
+            const baseAmount = product.totalAmount ?? 1;
+            const currentUnitType = toCanonicalUnit(product.unit ?? 'count');
             
             if (!selectedUnit || selectedUnit === 'unknown') {
-                return { ...product, pricePerUnitNumeric: product.score ?? (product.price / baseAmount), totalPriceNumeric: product.price };
+                return { ...product, pricePerUnitNumeric: product.score ?? product.price, totalPriceNumeric: product.price };
             }
 
             const convertedAmount = convertValue(baseAmount, currentUnitType as any, selectedUnit as any, product.title);
@@ -179,108 +154,60 @@ export function SearchPage({ initialResults = [], initialQuery = '' }: SearchPag
                     <div className="relative w-full max-w-3xl z-10">
                         <form onSubmit={handleSearch} className="flex items-center bg-card shadow-2xl rounded-3xl border border-border p-3 gap-2">
                             <Search className="h-7 w-7 text-muted-foreground ml-3" />
-                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products (e.g. Toilet Paper)..." className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" />
+                            <input name="searchQuery" defaultValue={urlQueryParam} placeholder="Search products..." className="flex-1 bg-transparent p-4 text-xl outline-none text-foreground placeholder:text-muted-foreground" />
                             <button type="submit" className="px-8 py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all">Search</button>
                         </form>
-
-                        <div className="h-8 mt-2 flex items-center justify-center">
-                            {loading && (
-                                <p className="text-emerald-600 font-semibold text-sm animate-pulse flex items-center gap-2">
-                                    <Loader2 className="h-4 w-4 animate-spin" /> Deep Scraping in progress... Our math is based on product titles. We can make mistakes.
-                                </p>
-                            )}
-                        </div>
-
-                        {!urlQueryParam && !loading && (
-                            <div className="mt-8 animate-in fade-in zoom-in duration-500">
-                                <div className="bg-card rounded-3xl border border-border p-6 flex items-center justify-between shadow-lg">
-                                    <div className="flex items-center gap-5">
-                                        <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center border shadow-sm">
-                                            <Image src="/extension-logo.png" alt="Lynx" width={48} height={48} />
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="text-lg font-bold text-foreground">Lynx Vision Extension</p>
-                                            <p className="text-sm text-muted-foreground">Compare unit prices automatically while browsing.</p>
-                                        </div>
-                                    </div>
-                                    <a href="https://chromewebstore.google.com/detail/lynx-vision/eoihkpljhmakhpecnobkcnjofidebmhl" className="bg-primary text-white font-bold px-8 py-3 rounded-xl hover:bg-emerald-700 transition-all">Add to Chrome</a>
-                                </div>
-                                <LedgerPromo />
-                            </div>
-                        )}
                     </div>
                 </section>
             )}
 
             <section className="container px-6 mt-8 w-full max-w-7xl">
-                {searched && results.length > 0 && (
-                    <div className="flex flex-col sm:flex-row gap-6 mb-10 items-center justify-between">
-                        <p className="text-lg text-muted-foreground font-medium">
-                            Found <span className="font-bold text-foreground">{results.length}</span> results for <span className="font-bold text-foreground">"{urlQueryParam}"</span>
-                        </p>
-                        <div className="flex gap-4">
-                            {/* UNIFIED DYNAMIC DROPDOWN MENU: Groups all valid dimensions perfectly */}
-                            <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="px-5 py-3 rounded-full border border-border bg-card font-semibold text-sm outline-none cursor-pointer hover:bg-accent text-foreground transition-colors">
-                                <option value="">Original Units</option>
-                                
-                                {detectedAvailableUnits.length > 0 && (
-                                    <optgroup label="Detected in Active Results">
-                                        {detectedAvailableUnits.map(u => (
-                                            <option key={`detected-${u}`} value={u}>
-                                                {u === 'count' ? 'Each (ea)' : u.toUpperCase()}
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                )}
-                                
-                                <optgroup label="Dry Weight Baselines">
-                                    <option value="oz">Ounces (oz)</option>
-                                    <option value="lb">Pounds (lb)</option>
-                                    <option value="g">Grams (g)</option>
-                                    <option value="kg">Kilograms (kg)</option>
-                                    <option value="mg">Milligrams (mg)</option>
-                                </optgroup>
-                                
-                                <optgroup label="Liquid Volume Baselines">
-                                    <option value="fl oz">Fluid Oz (fl oz)</option>
-                                    <option value="ml">Milliliters (ml)</option>
-                                    <option value="l">Liters (l)</option>
-                                    <option value="gal">Gallons (gal)</option>
-                                    <option value="qt">Quarts (qt)</option>
-                                    <option value="pt">Pints (pt)</option>
-                                </optgroup>
-
-                                <optgroup label="Household / Packaging Baselines">
-                                    <option value="count">Count (ea)</option>
-                                    <option value="rolls">Rolls (roll)</option>
-                                    <option value="sheets">Sheets (sh)</option>
-                                    <option value="sq ft">Square Feet (sq ft)</option>
-                                    <option value="loads">Loads (load)</option>
-                                </optgroup>
-                            </select>
-
-                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-5 py-3 rounded-full border border-border bg-card font-semibold text-sm outline-none cursor-pointer hover:bg-accent text-foreground transition-colors">
-                                <option value="score_asc">Best Unit Value</option>
-                                <option value="price_asc">Lowest Total Price</option>
-                                <option value="price_desc">Highest Total Price</option>
-                            </select>
-                        </div>
+                {loading && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
+                        {Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />)}
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
-                    {loading ? Array.from({ length: 10 }).map((_, i) => <ProductCardSkeleton key={i} />) : 
-                     displayData.map((p, i) => (
-                        <ProductCard 
-                            key={`${p.id}-${i}`} 
-                            product={p as any} 
-                            index={i} 
-                            onClick={setSelectedProduct}
-                            onSelect={(id, sel) => setCompareList(prev => sel ? [...prev, id] : prev.filter(item => item !== id))}
-                            isSelected={compareList.includes(p.id)}
-                        />
-                    ))}
-                </div>
+                {searched && !loading && results.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                        <AlertCircle className="h-16 w-16 text-muted-foreground mb-4" />
+                        <h2 className="text-2xl font-bold text-foreground">No results found</h2>
+                        <p className="text-muted-foreground mt-2">Try adjusting your search terms.</p>
+                    </div>
+                )}
+
+                {searched && !loading && results.length > 0 && (
+                    <>
+                        <div className="flex flex-col sm:flex-row gap-6 mb-10 items-center justify-between">
+                            <p className="text-lg text-muted-foreground font-medium">
+                                Found <span className="font-bold text-foreground">{results.length}</span> results for <span className="font-bold text-foreground">"{urlQueryParam}"</span>
+                            </p>
+                            <div className="flex gap-4">
+                                <select value={selectedUnit} onChange={(e) => handleUnitChange(e.target.value)} className="px-5 py-3 rounded-full border border-border bg-card font-semibold text-sm outline-none cursor-pointer hover:bg-accent text-foreground transition-colors">
+                                    <option value="">Original Units</option>
+                                    {detectedAvailableUnits.map(u => <option key={u} value={u}>{u.toUpperCase()}</option>)}
+                                </select>
+                                <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-5 py-3 rounded-full border border-border bg-card font-semibold text-sm outline-none cursor-pointer hover:bg-accent text-foreground transition-colors">
+                                    <option value="ppu">Best Unit Value</option>
+                                    <option value="price_asc">Lowest Total Price</option>
+                                    <option value="price_desc">Highest Total Price</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
+                            {displayData.map((p, i) => (
+                                <ProductCard 
+                                    key={`${p.id}-${i}`} 
+                                    product={p as any} 
+                                    index={i}
+                                    onClick={setSelectedProduct}
+                                    onSelect={(id, sel) => setCompareList(prev => sel ? [...prev, id] : prev.filter(item => item !== id))}
+                                    isSelected={compareList.includes(p.id)}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
             </section>
         </div>
     );
