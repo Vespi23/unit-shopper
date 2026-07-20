@@ -1,4 +1,3 @@
-// lib/api-client.ts
 import { Product } from './types';
 import { parseUnit, calculatePricePerUnit, normalizeUnit, toCanonicalUnit } from './unit-parser';
 import * as cheerio from 'cheerio';
@@ -71,12 +70,10 @@ export async function searchProducts(query: string): Promise<Product[]> {
     .map((p: Product) => {
         const unitInfo = parseUnit(p.title);
         const norm = unitInfo ? normalizeUnit(unitInfo) : { unit: 'count', totalValue: 1 };
-        const ppu = calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit));
-        const numericPpu = typeof ppu === 'number' ? ppu : parseFloat(String(ppu)) || p.price;
-        
+        const ppu = parseFloat(String(calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit)))) || p.price;
         return { 
             ...p, 
-            score: numericPpu
+            score: ppu
         } as Product;
     })
     .sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
@@ -107,6 +104,10 @@ function parseAmazon(html: string): Product[] {
             url: `https://www.amazon.com/dp/${asin}`,
             link: `https://www.amazon.com/dp/${asin}`,
             image: item.find('img.s-image').attr('src') || '',
+            unit: 'count',
+            amount: 1,
+            totalAmount: 1,
+            pricePerUnit: `$${price.toFixed(2)}/ea`,
             currency: 'USD',
             originalPrice: price,
             score: price
@@ -134,6 +135,10 @@ function parseWalmart(html: string): Product[] {
         url: `https://www.walmart.com${i.canonicalUrl}`,
         link: `https://www.walmart.com${i.canonicalUrl}`,
         image: i.imageInfo?.thumbnailUrl || '',
+        unit: 'count',
+        amount: 1,
+        totalAmount: 1,
+        pricePerUnit: `$${(i.priceInfo?.currentPrice?.price || 0).toFixed(2)}/ea`,
         currency: 'USD',
         originalPrice: i.priceInfo?.currentPrice?.price || 0,
         score: i.priceInfo?.currentPrice?.price || 0
