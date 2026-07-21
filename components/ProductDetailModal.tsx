@@ -130,7 +130,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                                 <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-1">Rating</div>
                                 <div className="flex items-center gap-1 font-medium">
                                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                    {product.rating} <span className="text-muted-foreground">({product.reviews})</span>
+                                    {product.averageRating} <span className="text-muted-foreground">({product.numberOfReviews})</span>
                                 </div>
                             </div>
                             <div className="p-3 rounded-lg border border-border">
