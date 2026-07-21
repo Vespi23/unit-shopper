@@ -100,8 +100,8 @@ export function ComparisonView({ products, onClose }: ComparisonViewProps) {
                                     {/* Rating */}
                                     <div className="h-20 p-4 flex items-center justify-center gap-1">
                                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                        <span>{product.rating}</span>
-                                        <span className="text-xs text-muted-foreground">({product.reviews})</span>
+                                        <span>{product.averageRating}</span>
+                                        <span className="text-xs text-muted-foreground">({product.numberOfReviews})</span>
                                     </div>
 
                                     {/* Source */}
