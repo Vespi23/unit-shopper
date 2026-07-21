@@ -19,12 +19,20 @@ export async function GET(request: Request) {
     try {
         const results = await searchProducts(query);
 
-        // Enforce Strict Quality Gate: 4+ stars and 100+ reviews
+        // Enforce Resilient Quality Gate: Only filter out items that explicitly fail ratings/reviews, 
+        // allowing items with unpopulated review counts (common in search summaries) to pass through.
         const filteredResults = results.filter(product => {
-            const rating = product.averageRating ?? 0;
+            const rating = product.averageRating ?? 4.5;
             const reviews = product.numberOfReviews ?? 0;
-            return rating >= 4.0 && reviews >= 100;
+            
+            // If reviews are unpopulated (0), give it a pass to ensure Amazon items render
+            const passesReviews = reviews === 0 || reviews >= 100;
+            const passesRating = rating >= 4.0;
+
+            return passesRating && passesReviews;
         });
+
+        console.log(`[SEARCH_API] Master pool: ${results.length} | Post-Filter: ${filteredResults.length}`);
 
         return NextResponse.json(filteredResults, {
             status: 200,

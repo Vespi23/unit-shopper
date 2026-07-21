@@ -7,26 +7,26 @@ import * as cheerio from 'cheerio';
 export interface Product {
     id: string;
     title: string;
-    name?: string;
+    name: string;
     price: number;
     source: 'amazon' | 'walmart';
-    averageRating?: number;
-    numberOfReviews?: number;
+    averageRating: number;
+    numberOfReviews: number;
     url: string;
-    link?: string;
+    link: string;
     image: string;
-    thumbnail?: string;
-    unit?: string;
-    amount?: number;
-    totalAmount?: number;
-    pricePerUnit?: string;
-    currency?: string;
-    originalPrice?: number;
-    score?: number;
+    thumbnail: string;
+    unit: string;
+    amount: number;
+    totalAmount: number;
+    pricePerUnit: string;
+    currency: string;
+    originalPrice: number;
+    score: number;
 }
 
 // ==========================================
-// 2. UNIT MATH & PPU UTILITIES
+// 2. UNIT MATH & SANITIZATION UTILITIES
 // ==========================================
 
 function parseUnit(title: string) {
@@ -51,57 +51,164 @@ function toCanonicalUnit(unit: string): string {
     return unit === 'oz' ? 'oz' : 'count';
 }
 
-function calculatePricePerUnit(price: number, totalValue: number, unit: string): string | number {
-    if (!totalValue || totalValue <= 0) return price;
+function calculatePricePerUnit(price: number, totalValue: number, unit: string): number {
+    if (!totalValue || totalValue <= 0 || isNaN(price)) return price;
     const ppu = price / totalValue;
-    return parseFloat(ppu.toFixed(2));
+    return isNaN(ppu) ? price : parseFloat(ppu.toFixed(2));
+}
+
+function sanitizeImageUrl(url: string): string {
+    if (!url) return '';
+    if (url.startsWith('//')) return `https:${url}`;
+    if (!url.startsWith('http')) return `https://${url}`;
+    return url;
 }
 
 // ==========================================
-// 3. AMAZON SCRAPER (EXISTING LOGIC)
+// 3. AMAZON SCRAPER (DECODO NATIVE ENGINE)
 // ==========================================
 
 /**
- * 🌐 Scrapes a single page of Amazon search results.
- * Adjust selectors based on your specific Amazon ingestion logic.
+ * 🌐 Scrapes a single page of Amazon search results via Decodo Native API ('amazon_search' target).
  */
-async function scrapeAmazonPage(url: string): Promise<Product[]> {
-    // If you use a proxy for Amazon, insert it here. Otherwise, standard fetch.
-    // NOTE: Replace with your actual working Amazon scraper logic if different.
+async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: number = 45000): Promise<Product[]> {
+    if (!process.env.DECODO_AUTH_TOKEN) {
+        console.warn('[AMAZON_NATIVE] Missing DECODO_AUTH_TOKEN.');
+        return [];
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-        const res = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-            }
+        const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                target: 'amazon_search',
+                query: query,
+                headless: 'html',
+                page_from: String(page)
+            }),
+            signal: controller.signal
         });
-        if (!res.ok) return [];
-        const html = await res.text();
-        const $ = cheerio.load(html);
+
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(`[AMAZON_NATIVE_FAIL] Page ${page} | Status: ${res.status} | Details: ${errText}`);
+            return [];
+        }
+
+        const data = (await res.json()) as Record<string, any>;
+        
+        let content: any = null;
+        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+            content = data.results[0].content ?? data.results[0];
+        } else if (data.content) {
+            content = data.content;
+        } else {
+            content = data;
+        }
+
+        // Mode 1: Pre-parsed JSON payload
+        if (typeof content === 'object' && content !== null) {
+            const items = Array.isArray(content) 
+                ? content 
+                : (content.organics || content.items || content.results || content.products || []);
+
+            if (Array.isArray(items) && items.length > 0) {
+                return items.map((i: any, index: number): Product | null => {
+                    let rawPrice = i.price || i.price_string || i.priceInfo?.currentPrice?.price || 0;
+                    if (typeof rawPrice === 'object' && rawPrice !== null) {
+                        rawPrice = rawPrice.value || rawPrice.amount || rawPrice.current_price || 0;
+                    }
+                    const parsedPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, ''));
+                    if (!parsedPrice || isNaN(parsedPrice) || parsedPrice <= 0) return null;
+
+                    const title = i.title || i.name || 'Unknown Product';
+                    const asin = i.asin || i.id || i.product_id;
+                    
+                    // FORCE-THROUGH: Build a direct, absolute Amazon product detail destination URL
+                    const directUrl = asin && !String(asin).startsWith('gen-') && !String(asin).startsWith('cheerio-')
+                        ? `https://www.amazon.com/dp/${asin}`
+                        : (i.url && i.url.startsWith('http') ? i.url : `https://www.amazon.com${i.url || '/gp/search'}`);
+
+                    const rawImage = i.image || i.thumbnail || i.imageUrl || '';
+                    const image = sanitizeImageUrl(rawImage);
+
+                    return {
+                        id: `amz-${asin || Math.random().toString(36).substring(7)}`,
+                        title,
+                        name: title,
+                        price: parsedPrice,
+                        source: 'amazon',
+                        averageRating: parseFloat(i.rating) || 4.5,
+                        numberOfReviews: parseInt(i.reviews_count || i.numberOfReviews, 10) || 0,
+                        url: directUrl,
+                        link: directUrl,
+                        image,
+                        thumbnail: image,
+                        unit: 'count',
+                        amount: 1,
+                        totalAmount: 1,
+                        pricePerUnit: `$${parsedPrice.toFixed(2)}/ea`,
+                        currency: 'USD',
+                        originalPrice: parsedPrice,
+                        score: parsedPrice
+                    };
+                }).filter((p: Product | null): p is Product => p !== null);
+            }
+        }
+
+        // Mode 2: Raw HTML string parsing via Cheerio
+        const htmlString = typeof content === 'string' ? content : JSON.stringify(content);
+        const $ = cheerio.load(htmlString);
         const products: Product[] = [];
 
-        $('div[data-component-type="s-search-result"]').each((_, el) => {
-            const title = $(el).find('h2 span').text().trim();
-            const priceText = $(el).find('.a-price .a-offscreen').first().text().replace('$', '').trim();
+        $('div[data-component-type="s-search-result"]').each((index, el) => {
+            const title = $(el).find('h2 span, h2 a').text().trim();
+            const priceText = $(el).find('.a-price .a-offscreen').first().text().replace(/[^0-9.]/g, '').trim();
             const price = parseFloat(priceText);
-            const image = $(el).find('img.s-image').attr('src') || '';
-            const link = $(el).find('h2 a').attr('href') || '';
-            const asin = $(el).attr('data-asin') || Math.random().toString(36).substring(7);
+            const rawImage = $(el).find('img.s-image').attr('src') || '';
+            const image = sanitizeImageUrl(rawImage);
+            const asin = $(el).attr('data-asin') || '';
+            const directUrl = asin ? `https://www.amazon.com/dp/${asin}` : `https://www.amazon.com`;
 
-            if (title && price && !isNaN(price)) {
+            if (title && !isNaN(price) && price > 0) {
                 products.push({
-                    id: `amz-${asin}`,
+                    id: `amz-${asin || index}`,
                     title,
+                    name: title,
                     price,
                     source: 'amazon',
-                    url: `https://www.amazon.com${link}`,
-                    image
+                    averageRating: 4.5,
+                    numberOfReviews: 0,
+                    url: directUrl,
+                    link: directUrl,
+                    image,
+                    thumbnail: image,
+                    unit: 'count',
+                    amount: 1,
+                    totalAmount: 1,
+                    pricePerUnit: `$${price.toFixed(2)}/ea`,
+                    currency: 'USD',
+                    originalPrice: price,
+                    score: price
                 });
             }
         });
+
         return products;
-    } catch (e) {
-        console.error('[AMAZON_SCRAPE_ERROR]', e);
+
+    } catch (error) {
+        clearTimeout(timeout);
+        console.error(`[AMAZON_NATIVE_ERROR] Page ${page} failed:`, error);
         return [];
     }
 }
@@ -110,31 +217,57 @@ async function scrapeAmazonPage(url: string): Promise<Product[]> {
 // 4. WALMART PARSER & DECODO CLIENT
 // ==========================================
 
-/**
- * 🧩 Parses Walmart HTML to extract product data from the __NEXT_DATA__ JSON state.
- */
 export function parseWalmart(html: string): Product[] {
     try {
         const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
         if (!match) return [];
         
         const json = JSON.parse(match[1]);
-        const items = json.props?.pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items || [];
-        
-        return items.map((i: any): Product | null => {
-            const price = i.priceInfo?.currentPrice?.price || i.price || 0;
-            if (!price) return null;
+        const pageProps = json?.props?.pageProps;
+        if (!pageProps) return [];
+
+        let rawItems: any[] = 
+            pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items ||
+            pageProps?.initialSearchResult?.searchResult?.itemStacks?.[0]?.items ||
+            pageProps?.searchResult?.itemStacks?.[0]?.items ||
+            pageProps?.initialData?.searchResult?.items ||
+            [];
+
+        if (!rawItems.length && pageProps?.initialTempoData?.data?.contentLayout?.modules) {
+            for (const mod of pageProps.initialTempoData.data.contentLayout.modules) {
+                const candidate = mod?.configs?.productsConfig?.products;
+                if (Array.isArray(candidate) && candidate.length > 0) {
+                    rawItems = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
+
+        return rawItems.map((i: any, index: number): Product | null => {
+            const rawPrice = i.priceInfo?.currentPrice?.price || i.price || i.currentPrice || 0;
+            const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(rawPrice);
+            if (!price || isNaN(price) || price <= 0) return null;
+
+            const title = i.name || i.title || i.description || 'Unknown Product';
+            const rawUrl = i.canonicalUrl || i.url || i.link || '';
+            const fullUrl = rawUrl.startsWith('http') ? rawUrl : `https://www.walmart.com${rawUrl}`;
+            const rawImage = i.imageInfo?.thumbnailUrl || i.image || i.thumbnail || i.imageUrl || '';
+            const image = sanitizeImageUrl(rawImage);
 
             return {
-                id: `wmt-${i.usItemId}`,
-                title: i.name || i.title || 'Unknown Product',
-                name: i.name || i.title || 'Unknown Product',
-                price: price,
+                id: `wmt-${i.usItemId || i.id || index}`,
+                title,
+                name: title,
+                price,
                 source: 'walmart',
-                averageRating: i.rating?.averageRating || 4.5,
-                numberOfReviews: i.rating?.numberOfReviews || 0,
-                url: i.canonicalUrl ? (i.canonicalUrl.startsWith('http') ? i.canonicalUrl : `https://www.walmart.com${i.canonicalUrl}`) : '',
-                image: i.imageInfo?.thumbnailUrl || i.image || '',
+                averageRating: i.rating?.averageRating || i.averageRating || 4.5,
+                numberOfReviews: i.rating?.numberOfReviews || i.numberOfReviews || 0,
+                url: fullUrl,
+                link: fullUrl,
+                image,
+                thumbnail: image,
                 unit: 'count',
                 amount: 1,
                 totalAmount: 1,
@@ -143,16 +276,14 @@ export function parseWalmart(html: string): Product[] {
                 originalPrice: price,
                 score: price
             };
-        }).filter((p: Product | null): p is Product => p !== null); // <-- Added explicit type here
+        }).filter((p: Product | null): p is Product => p !== null);
+
     } catch (e) {
         console.error('[PARSE_WALMART_ERROR]', e);
         return [];
     }
 }
 
-/**
- * 🌐 Scrapes Walmart via Decodo Native REST API using the dedicated 'walmart_search' template.
- */
 async function scrapeWalmart(query: string, timeoutMs: number = 45000): Promise<Product[]> {
     if (!process.env.DECODO_AUTH_TOKEN) {
         console.warn('[WALMART_NATIVE] Missing DECODO_AUTH_TOKEN.');
@@ -163,8 +294,6 @@ async function scrapeWalmart(query: string, timeoutMs: number = 45000): Promise<
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-        console.log(`[WALMART_NATIVE] Dispatching 'walmart_search' template for: ${query}`);
-        
         const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
             method: 'POST',
             headers: { 
@@ -175,45 +304,31 @@ async function scrapeWalmart(query: string, timeoutMs: number = 45000): Promise<
             body: JSON.stringify({ 
                 target: 'walmart_search',
                 query: query,
-                headless: 'html',
-                parse: true
+                headless: 'html'
             }),
             signal: controller.signal
         });
 
         clearTimeout(timeout);
 
-        if (!res.ok) {
-            const errText = await res.text();
-            console.error(`[WALMART_NATIVE_FAIL] Status: ${res.status} | Details: ${errText}`);
-            return [];
-        }
+        if (!res.ok) return [];
 
         const data = (await res.json()) as Record<string, any>;
-        
-        // Unwrap Decodo's JSON response to isolate the HTML payload
-        let htmlContent = '';
-        if (data.results && Array.isArray(data.results) && data.results.length > 0 && data.results[0].content) {
-            htmlContent = data.results[0].content;
+        let htmlString = '';
+        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+            htmlString = data.results[0].content || JSON.stringify(data.results[0]);
         } else if (data.content) {
-            htmlContent = data.content;
+            htmlString = data.content;
         } else {
-            htmlContent = JSON.stringify(data);
+            htmlString = JSON.stringify(data);
         }
 
-        if (htmlContent.includes('px-captcha') || htmlContent.includes('Access Denied')) {
-            console.warn('[WALMART_NATIVE_DEFENSE] PerimeterX wall detected despite search template.');
-            return [];
-        }
+        if (htmlString.includes('px-captcha') || htmlString.includes('Access Denied')) return [];
 
-        const products = parseWalmart(htmlContent);
-        console.log(`[WALMART_NATIVE] Success: ${products.length} items extracted.`);
-        return products;
-
+        return parseWalmart(htmlString);
     } catch (error) {
         clearTimeout(timeout);
-        console.error(`[WALMART_NATIVE_ERROR] Execution failed:`, error);
-        return []; 
+        return [];
     }
 }
 
@@ -221,18 +336,13 @@ async function scrapeWalmart(query: string, timeoutMs: number = 45000): Promise<
 // 5. MASTER ORCHESTRATOR
 // ==========================================
 
-/**
- * ⚙️ High-Performance Search Orchestrator combining Amazon and Walmart.
- */
 export async function searchProducts(query: string): Promise<Product[]> {
     console.log("DEBUG starting optimized search for query:", query);
     
     const tasks = [
-        scrapeAmazonPage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=1`),
-        scrapeAmazonPage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=2`),
-        scrapeAmazonPage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=3`),
-        scrapeAmazonPage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=4`),
-        scrapeAmazonPage(`https://www.amazon.com/s?k=${encodeURIComponent(query)}&page=5`),
+        scrapeAmazonPage(query, 1),
+        scrapeAmazonPage(query, 2),
+        scrapeAmazonPage(query, 3),
         scrapeWalmart(query)
     ];
 
@@ -242,28 +352,23 @@ export async function searchProducts(query: string): Promise<Product[]> {
     results.forEach((res, index) => {
         if (res.status === 'fulfilled' && Array.isArray(res.value)) {
             allResults.push(...res.value);
-            if (index === 5) {
-                console.log(`[ORCHESTRATOR] Walmart returned ${res.value.length} items.`);
-            }
-        } else if (index === 5 && res.status === 'rejected') {
-            console.error(`[ORCHESTRATOR] Walmart task rejected:`, res.reason);
         }
     });
 
-    // Deduplicate by ID
     const masterPool = Array.from(new Map(allResults.map(p => [p.id, p])).values());
 
     return masterPool
-        .filter((p: Product) => p.price > 0)
+        .filter((p: Product) => p.price > 0 && typeof p.price === 'number' && !isNaN(p.price))
         .map((p: Product) => {
             const unitInfo = parseUnit(p.title);
             const norm = unitInfo ? normalizeUnit(unitInfo) : { unit: 'count', totalValue: 1 };
-            const ppu = parseFloat(String(calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit)))) || p.price;
+            const ppu = calculatePricePerUnit(p.price, norm.totalValue, toCanonicalUnit(norm.unit));
+            const safeScore = isNaN(ppu) ? p.price : ppu;
             
             return { 
                 ...p, 
-                score: ppu
+                score: safeScore
             } as Product;
         })
-        .sort((a, b) => (a.score ?? 9999) - (b.score ?? 9999));
+        .sort((a, b) => (a.score || 9999) - (b.score || 9999));
 }

@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://*.amazon.com; img-src 'self' https: data: blob:;"
+            value: "frame-ancestors 'self' https://*.amazon.com; img-src 'self' https: data: blob: *.amazon.com *.walmartimages.com;"
           },
           {
             key: 'X-DNS-Prefetch-Control',
@@ -48,7 +48,10 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
       { protocol: 'https', hostname: '*.gstatic.com' },
       { protocol: 'https', hostname: 'm.media-amazon.com' },
-      { protocol: 'https', hostname: 'i5.walmartimages.com' }
+      { protocol: 'https', hostname: '*.amazon.com' },
+      { protocol: 'https', hostname: 'images-na.ssl-images-amazon.com' },
+      { protocol: 'https', hostname: 'i5.walmartimages.com' },
+      { protocol: 'https', hostname: '*.walmartimages.com' }
     ],
   },
   
