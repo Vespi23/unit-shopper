@@ -64,6 +64,23 @@ function sanitizeImageUrl(url: string): string {
     return url;
 }
 
+function parseReviewCount(text: string): number {
+    if (!text) return 0;
+    const clean = text.replace(/[^0-9.,KkMm]/g, '').trim();
+    if (!clean) return 0;
+
+    const upper = clean.toUpperCase();
+    let multiplier = 1;
+    if (upper.endsWith('K')) {
+        multiplier = 1000;
+    } else if (upper.endsWith('M')) {
+        multiplier = 1000000;
+    }
+
+    const numericVal = parseFloat(upper.replace(/[KM]/g, '').replace(/,/g, ''));
+    return isNaN(numericVal) ? 0 : Math.round(numericVal * multiplier);
+}
+
 // ==========================================
 // 3. AMAZON SCRAPER (DECODO NATIVE ENGINE)
 // ==========================================
@@ -134,13 +151,14 @@ async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: numb
                     const title = i.title || i.name || 'Unknown Product';
                     const asin = i.asin || i.id || i.product_id;
                     
-                    // FORCE-THROUGH: Build a direct, absolute Amazon product detail destination URL
                     const directUrl = asin && !String(asin).startsWith('gen-') && !String(asin).startsWith('cheerio-')
                         ? `https://www.amazon.com/dp/${asin}`
                         : (i.url && i.url.startsWith('http') ? i.url : `https://www.amazon.com${i.url || '/gp/search'}`);
 
                     const rawImage = i.image || i.thumbnail || i.imageUrl || '';
                     const image = sanitizeImageUrl(rawImage);
+                    const rating = parseFloat(i.rating || i.averageRating) || 4.5;
+                    const reviews = parseReviewCount(String(i.reviews_count || i.numberOfReviews || '0'));
 
                     return {
                         id: `amz-${asin || Math.random().toString(36).substring(7)}`,
@@ -148,8 +166,8 @@ async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: numb
                         name: title,
                         price: parsedPrice,
                         source: 'amazon',
-                        averageRating: parseFloat(i.rating) || 4.5,
-                        numberOfReviews: parseInt(i.reviews_count || i.numberOfReviews, 10) || 0,
+                        averageRating: isNaN(rating) ? 4.5 : rating,
+                        numberOfReviews: reviews,
                         url: directUrl,
                         link: directUrl,
                         image,
@@ -166,7 +184,7 @@ async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: numb
             }
         }
 
-        // Mode 2: Raw HTML string parsing via Cheerio
+        // Mode 2: Raw HTML string parsing via Cheerio (with real rating/review extraction)
         const htmlString = typeof content === 'string' ? content : JSON.stringify(content);
         const $ = cheerio.load(htmlString);
         const products: Product[] = [];
@@ -180,6 +198,13 @@ async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: numb
             const asin = $(el).attr('data-asin') || '';
             const directUrl = asin ? `https://www.amazon.com/dp/${asin}` : `https://www.amazon.com`;
 
+            const ratingText = $(el).find('div[data-cy="reviews-block"] .a-size-small .a-color-base, .a-icon-alt').first().text();
+            const ratingMatch = ratingText.match(/(\d+(?:\.\d+)?)/);
+            const averageRating = ratingMatch ? parseFloat(ratingMatch[1]) : 4.5;
+
+            const reviewText = $(el).find('div[data-cy="reviews-block"] a[href*="#customerReviews"] span, .s-csa-instrumentation-wrapper a span').last().text();
+            const numberOfReviews = parseReviewCount(reviewText);
+
             if (title && !isNaN(price) && price > 0) {
                 products.push({
                     id: `amz-${asin || index}`,
@@ -187,8 +212,8 @@ async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: numb
                     name: title,
                     price,
                     source: 'amazon',
-                    averageRating: 4.5,
-                    numberOfReviews: 0,
+                    averageRating: isNaN(averageRating) ? 4.5 : averageRating,
+                    numberOfReviews: numberOfReviews,
                     url: directUrl,
                     link: directUrl,
                     image,
@@ -349,7 +374,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
     const results = await Promise.allSettled(tasks);
     const allResults: Product[] = [];
     
-    results.forEach((res, index) => {
+    results.forEach((res) => {
         if (res.status === 'fulfilled' && Array.isArray(res.value)) {
             allResults.push(...res.value);
         }
