@@ -6,8 +6,8 @@ export interface Product {
     image: string;
     link: string;
     source: string; // Used directly as your retailer indicator string ('amazon' | 'walmart')
-    rating?: number;
-    reviews?: number;
+    averageRating?: number;
+    numberOfReviews?: number;
 
     // Computed Fields
     unitInfo?: {

@@ -148,8 +148,8 @@ export const ProductCard = memo(function ProductCard({ product, onClick, onSelec
                 
                 <div className="mb-2 flex items-center gap-1 text-xs text-amber-500 font-medium">
                     <Star className="h-3 w-3 fill-current" />
-                    <span>{product.rating || 0}</span>
-                    <span className="text-muted-foreground font-normal">({product.reviews || 0})</span>
+                    <span>{product.averageRating ?? (product as any).rating ?? (product as any).stars ?? 0}</span>
+                    <span className="text-muted-foreground font-normal">({product.numberOfReviews ?? (product as any).reviews ?? 0})</span>
                 </div>
 
                 <h3 className="line-clamp-2 text-sm font-semibold leading-tight min-h-[2.5rem] tracking-tight text-pretty" title={product.title}>

@@ -5,15 +5,10 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-/**
- * API route to aggregate search results from Amazon and Walmart.
- * Delegated to searchProducts() for batching and rate-limiting.
- */
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';
 
-    // Guard against empty queries
     if (!query.trim()) {
         return NextResponse.json([], { 
             status: 200,
@@ -22,10 +17,16 @@ export async function GET(request: Request) {
     }
 
     try {
-        // searchProducts handles the internal batch limits and per-request timeouts
         const results = await searchProducts(query);
 
-        return NextResponse.json(results, {
+        // Enforce Strict Quality Gate: 4+ stars and 100+ reviews
+        const filteredResults = results.filter(product => {
+            const rating = product.averageRating ?? 0;
+            const reviews = product.numberOfReviews ?? 0;
+            return rating >= 4.0 && reviews >= 100;
+        });
+
+        return NextResponse.json(filteredResults, {
             status: 200,
             headers: {
                 'Content-Type': 'application/json',
