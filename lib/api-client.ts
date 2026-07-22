@@ -245,30 +245,47 @@ async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: numb
 export function parseWalmart(html: string): Product[] {
     try {
         const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
-        if (!match) return [];
+        if (!match) {
+            console.warn('[PARSE_WALMART] __NEXT_DATA__ script tag not found in HTML payload.');
+            return [];
+        }
         
         const json = JSON.parse(match[1]);
         const pageProps = json?.props?.pageProps;
-        if (!pageProps) return [];
+        if (!pageProps) {
+            console.warn('[PARSE_WALMART] pageProps missing from __NEXT_DATA__.');
+            return [];
+        }
 
+        // Expanded fallback map for Walmart's changing search schema paths
         let rawItems: any[] = 
             pageProps?.initialData?.searchResult?.itemStacks?.[0]?.items ||
             pageProps?.initialSearchResult?.searchResult?.itemStacks?.[0]?.items ||
             pageProps?.searchResult?.itemStacks?.[0]?.items ||
             pageProps?.initialData?.searchResult?.items ||
+            pageProps?.initialData?.staticContent?.searchResult?.itemStacks?.[0]?.items ||
+            pageProps?.initialData?.searchResults?.itemStacks?.[0]?.items ||
             [];
 
-        if (!rawItems.length && pageProps?.initialTempoData?.data?.contentLayout?.modules) {
-            for (const mod of pageProps.initialTempoData.data.contentLayout.modules) {
-                const candidate = mod?.configs?.productsConfig?.products;
-                if (Array.isArray(candidate) && candidate.length > 0) {
-                    rawItems = candidate;
-                    break;
+        // Deep module scan fallback if primary paths are empty
+        if (!Array.isArray(rawItems) || rawItems.length === 0) {
+            const modules = pageProps?.initialTempoData?.data?.contentLayout?.modules || 
+                            pageProps?.contentLayout?.modules;
+            if (Array.isArray(modules)) {
+                for (const mod of modules) {
+                    const candidate = mod?.configs?.productsConfig?.products || mod?.data?.products;
+                    if (Array.isArray(candidate) && candidate.length > 0) {
+                        rawItems = candidate;
+                        break;
+                    }
                 }
             }
         }
 
-        if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
+        if (!Array.isArray(rawItems) || rawItems.length === 0) {
+            console.warn('[PARSE_WALMART] All multi-path lookups yielded 0 items. Schema drift detected.');
+            return [];
+        }
 
         return rawItems.map((i: any, index: number): Product | null => {
             const rawPrice = i.priceInfo?.currentPrice?.price || i.price || i.currentPrice || 0;
@@ -279,7 +296,7 @@ export function parseWalmart(html: string): Product[] {
             const rawUrl = i.canonicalUrl || i.url || i.link || '';
             const fullUrl = rawUrl.startsWith('http') ? rawUrl : `https://www.walmart.com${rawUrl}`;
             const rawImage = i.imageInfo?.thumbnailUrl || i.image || i.thumbnail || i.imageUrl || '';
-            const image = sanitizeImageUrl(rawImage);
+            const image = rawImage.startsWith('//') ? `https:${rawImage}` : (rawImage.startsWith('http') ? rawImage : '');
 
             return {
                 id: `wmt-${i.usItemId || i.id || index}`,
