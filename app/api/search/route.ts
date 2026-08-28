@@ -22,10 +22,6 @@ export async function GET(request: Request) {
         // Enforce Resilient Quality Gate: Only filter out items that explicitly fail ratings/reviews, 
         // allowing items with unpopulated review counts (common in search summaries) to pass through.
         const filteredResults = results.filter(product => {
-            const rating = product.averageRating ?? 4.5;
-            const reviews = product.numberOfReviews ?? 0;
-            
-            // If reviews are unpopulated (0), give it a pass to ensure Amazon items render
             const passesReviews = reviews >= 100;
             const passesRating = rating >= 4.0;
 
