@@ -9,7 +9,7 @@ export interface Product {
     title: string;
     name: string;
     price: number;
-    source: 'amazon' | 'walmart';
+    source: 'amazon';
     averageRating: number;
     numberOfReviews: number;
     url: string;
@@ -239,206 +239,6 @@ async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: numb
 }
 
 // ==========================================
-// DUAL-ENGINE RESILIENT WALMART PARSER
-// ==========================================
-
-export function parseWalmart(content: any): Product[] {
-    try {
-        let rawItems: any[] = [];
-
-        // 1. Try JSON / Next.js extraction first
-        const findProductArray = (obj: any, depth = 0): any[] => {
-            if (!obj || typeof obj !== 'object' || depth > 4) return [];
-            if (Array.isArray(obj)) {
-                if (obj.length > 0 && (obj[0]?.price || obj[0]?.currentPrice || obj[0]?.name || obj[0]?.title)) {
-                    return obj;
-                }
-                for (const item of obj) {
-                    const found = findProductArray(item, depth + 1);
-                    if (found.length > 0) return found;
-                }
-            } else {
-                for (const key of Object.keys(obj)) {
-                    const found = findProductArray(obj[key], depth + 1);
-                    if (found.length > 0) return found;
-                }
-            }
-            return [];
-        };
-
-        if (typeof content === 'object' && content !== null) {
-            rawItems = findProductArray(content);
-        } else if (typeof content === 'string') {
-            try {
-                const parsed = JSON.parse(content);
-                rawItems = findProductArray(parsed);
-            } catch (e) {
-                const match = content.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
-                if (match) {
-                    const json = JSON.parse(match[1]);
-                    rawItems = findProductArray(json);
-                }
-            }
-        }
-
-        if (Array.isArray(rawItems) && rawItems.length > 0) {
-            return rawItems.map((i: any, index: number): Product | null => {
-                let rawPrice = i.priceInfo?.currentPrice?.price || i.price || i.currentPrice || i.price_string || 0;
-                if (typeof rawPrice === 'object' && rawPrice !== null) {
-                    rawPrice = rawPrice.value || rawPrice.amount || rawPrice.current_price || 0;
-                }
-                const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, ''));
-                if (!price || isNaN(price) || price <= 0) return null;
-
-                const title = i.name || i.title || i.description || 'Unknown Product';
-                const rawUrl = i.canonicalUrl || i.url || i.link || '';
-                const fullUrl = rawUrl.startsWith('http') ? rawUrl : `https://www.walmart.com${rawUrl}`;
-                const rawImage = i.imageInfo?.thumbnailUrl || i.image || i.thumbnail || i.imageUrl || '';
-                const image = sanitizeImageUrl(rawImage);
-
-                return {
-                    id: `wmt-${i.usItemId || i.id || index}`,
-                    title,
-                    name: title,
-                    price,
-                    source: 'walmart',
-                    averageRating: i.rating?.averageRating || i.averageRating || 4.5,
-                    numberOfReviews: i.rating?.numberOfReviews || i.numberOfReviews || 0,
-                    url: fullUrl,
-                    link: fullUrl,
-                    image,
-                    thumbnail: image,
-                    unit: 'count',
-                    amount: 1,
-                    totalAmount: 1,
-                    pricePerUnit: `$${price.toFixed(2)}/ea`,
-                    currency: 'USD',
-                    originalPrice: price,
-                    score: price
-                };
-            }).filter((p: Product | null): p is Product => p !== null);
-        }
-
-        // 2. Fallback Engine: Broadened Cheerio HTML DOM Card Scraping
-        if (typeof content === 'string') {
-            const $ = cheerio.load(content);
-            const domProducts: Product[] = [];
-
-            // Expanded selector targeting all grid cells, list items, and data-item-id wrappers
-            $('div[data-item-id], div[data-testid="list-view-item"], div[class*="mb0"], article').each((index, el) => {
-                const title = $(el).find('span[data-automation-id="product-title"], a[link-identifier], h2, span[class*="f6"]').first().text().trim();
-                if (!title || title.length < 3) return;
-
-                const priceText = $(el).find('div[data-automation-id="product-price"], span[class*="f2"], div[class*="price"]').first().text().replace(/[^0-9.]/g, '').trim();
-                const price = parseFloat(priceText);
-                if (isNaN(price) || price <= 0) return;
-
-                const rawImage = $(el).find('img').attr('src') || $(el).find('img').attr('data-src') || '';
-                const image = sanitizeImageUrl(rawImage);
-                const relativeUrl = $(el).find('a[href*="/ip/"]').attr('href') || '';
-                const directUrl = relativeUrl ? (relativeUrl.startsWith('http') ? relativeUrl : `https://www.walmart.com${relativeUrl}`) : 'https://www.walmart.com';
-                const itemId = $(el).attr('data-item-id') || `wmt-dom-${index}`;
-
-                // Deduplicate by title/id
-                if (!domProducts.some(p => p.title === title)) {
-                    domProducts.push({
-                        id: `wmt-${itemId}`,
-                        title,
-                        name: title,
-                        price,
-                        source: 'walmart',
-                        averageRating: 4.5,
-                        numberOfReviews: 0,
-                        url: directUrl,
-                        link: directUrl,
-                        image,
-                        thumbnail: image,
-                        unit: 'count',
-                        amount: 1,
-                        totalAmount: 1,
-                        pricePerUnit: `$${price.toFixed(2)}/ea`,
-                        currency: 'USD',
-                        originalPrice: price,
-                        score: price
-                    });
-                }
-            });
-
-            if (domProducts.length > 0) {
-                return domProducts;
-            }
-        }
-
-        return [];
-
-    } catch (e) {
-        console.error('[PARSE_WALMART_ERROR]', e);
-        return [];
-    }
-}
-
-async function scrapeWalmart(query: string, timeoutMs: number = 45000): Promise<Product[]> {
-    if (!process.env.DECODO_AUTH_TOKEN) {
-        console.warn('[WALMART_NATIVE] Missing DECODO_AUTH_TOKEN.');
-        return [];
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-        const searchUrl = `https://www.walmart.com/search?q=${encodeURIComponent(query)}`;
-        console.log(`[WALMART_NATIVE] Dispatching universal scrape for URL: ${searchUrl}`);
-        
-        const res = await fetch(`https://scraper-api.decodo.com/v2/scrape`, {
-            method: 'POST',
-            headers: { 
-                'Authorization': `Basic ${process.env.DECODO_AUTH_TOKEN}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ 
-                target: 'universal',
-                url: searchUrl,
-                headless: 'html'
-            }),
-            signal: controller.signal
-        });
-
-        clearTimeout(timeout);
-
-        if (!res.ok) {
-            const errDetails = await res.text();
-            console.error(`[WALMART_NATIVE_FAIL] Status: ${res.status} | Details: ${errDetails}`);
-            return [];
-        }
-
-        const data = (await res.json()) as Record<string, any>;
-        let content: any = null;
-        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
-            content = data.results[0].content ?? data.results[0];
-        } else if (data.content) {
-            content = data.content;
-        } else {
-            content = data;
-        }
-
-        if (typeof content === 'string' && (content.includes('px-captcha') || content.includes('Access Denied'))) {
-            console.warn('[WALMART_NATIVE] Blocked by PerimeterX challenge.');
-            return [];
-        }
-
-        const products = parseWalmart(content);
-        console.log(`[WALMART_NATIVE] Successfully extracted ${products.length} items.`);
-        return products;
-    } catch (error) {
-        clearTimeout(timeout);
-        console.error('[WALMART_NATIVE_ERROR]', error);
-        return [];
-    }
-}
-
-// ==========================================
 // 5. MASTER ORCHESTRATOR
 // ==========================================
 
@@ -449,7 +249,10 @@ export async function searchProducts(query: string): Promise<Product[]> {
         scrapeAmazonPage(query, 1),
         scrapeAmazonPage(query, 2),
         scrapeAmazonPage(query, 3),
-        scrapeWalmart(query)
+        scrapeAmazonPage(query, 4),
+        scrapeAmazonPage(query, 5),
+        scrapeAmazonPage(query, 6),
+        scrapeAmazonPage(query, 7)
     ];
 
     const results = await Promise.allSettled(tasks);
