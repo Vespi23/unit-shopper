@@ -26,7 +26,7 @@ export async function GET(request: Request) {
             const reviews = product.numberOfReviews ?? 0;
             
             // If reviews are unpopulated (0), give it a pass to ensure Amazon items render
-            const passesReviews = reviews === 0 || reviews >= 100;
+            const passesReviews = reviews >= 100;
             const passesRating = rating >= 4.0;
 
             return passesRating && passesReviews;
