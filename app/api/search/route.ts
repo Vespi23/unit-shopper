@@ -18,9 +18,6 @@ export async function GET(request: Request) {
 
     try {
         const results = await searchProducts(query);
-
-        // Enforce Resilient Quality Gate: Only filter out items that explicitly fail ratings/reviews, 
-        // allowing items with unpopulated review counts (common in search summaries) to pass through.
         const filteredResults = results.filter(product => {
             const passesReviews = reviews >= 100;
             const passesRating = rating >= 4.0;
