@@ -88,7 +88,7 @@ function parseReviewCount(text: string): number {
 /**
  * 🌐 Scrapes a single page of Amazon search results via Decodo Native API ('amazon_search' target).
  */
-async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: number = 20000): Promise<Product[]> {
+async function scrapeAmazonPage(query: string, page: number = 1, timeoutMs: number = 55000): Promise<Product[]> {
     if (!process.env.DECODO_AUTH_TOKEN) {
         console.warn('[AMAZON_NATIVE] Missing DECODO_AUTH_TOKEN.');
         return [];
