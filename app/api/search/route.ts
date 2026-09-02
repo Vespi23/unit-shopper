@@ -17,7 +17,15 @@ export async function GET(request: Request) {
     }
 
     try {
+        const results = await searchProducts(query);
 
+            const filteredResults = results.filter(product => {
+            const rating = product.averageRating ?? 4.5;
+            const reviews = product.numberOfReviews ?? 0;
+
+            return rating && reviews;
+        });
+        
         console.log(`[SEARCH_API] Master pool: ${results.length} | Post-Filter: ${filteredResults.length}`);
 
         return NextResponse.json(filteredResults, {
