@@ -17,17 +17,6 @@ export async function GET(request: Request) {
     }
 
     try {
-        const results = await searchProducts(query);
-
-            const filteredResults = results.filter(product => {
-            const rating = product.averageRating ?? 4.5;
-            const reviews = product.numberOfReviews ?? 0;
-            
-            const passesReviews = reviews >= 100;
-            const passesRating = rating >= 4.0;
-
-            return passesRating && passesReviews;
-        });
 
         console.log(`[SEARCH_API] Master pool: ${results.length} | Post-Filter: ${filteredResults.length}`);
 
